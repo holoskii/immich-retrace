@@ -1,0 +1,19 @@
+[
+  {
+    "id": "c0000000-0000-4000-8000-000000000001",
+    "albumName": "Fake Trip",
+    "shared": false,
+    "startDate": "2026-07-10T09:00:00.000Z",
+    "endDate": "2026-08-06T22:45:30.250Z",
+    "assetCount": 9,
+    "updatedAt": "2026-08-10T00:00:00.000Z",
+    "lastModifiedAssetTimestamp": "2026-08-06T22:45:30.250Z"
+  },
+  {
+    "id": "c0000000-0000-4000-8000-000000000002",
+    "albumName": "Empty Album",
+    "shared": false,
+    "assetCount": 0,
+    "updatedAt": "2026-01-01T00:00:00.000Z"
+  }
+]

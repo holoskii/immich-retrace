@@ -7,5 +7,5 @@
   --f-mono: "IBM Plex Mono", ui-monospace, monospace;
 }
 * { box-sizing: border-box; }
-html, body { height: 100%; margin: 0; }
+html, body, #app { height: 100%; margin: 0; }
 body { background: var(--ground); color: var(--ink); font: 14px/1.5 var(--f-body); }

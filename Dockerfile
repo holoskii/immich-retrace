@@ -13,6 +13,7 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist/web ./dist/web
 COPY package.json ./
 COPY server ./server
+COPY shared ./shared
 USER node
 EXPOSE 8080
 HEALTHCHECK --interval=5m --timeout=5s --start-period=10s --start-interval=2s \

@@ -1,0 +1,53 @@
+{
+  "id": [
+    "a0000000-0000-4000-8000-000000000001",
+    "a0000000-0000-4000-8000-000000000002",
+    "a0000000-0000-4000-8000-000000000003",
+    "a0000000-0000-4000-8000-000000000004",
+    "a0000000-0000-4000-8000-000000000005",
+    "a0000000-0000-4000-8000-000000000006",
+    "a0000000-0000-4000-8000-000000000007"
+  ],
+  "duration": [null, 15000, null, null, null, null, null],
+  "visibility": ["timeline", "timeline", "timeline", "archive", "timeline", "timeline", "timeline"],
+  "isFavorite": [false, false, false, false, false, false, true],
+  "isImage": [true, false, true, true, true, true, true],
+  "isTrashed": [false, false, true, false, false, false, false],
+  "livePhotoVideoId": [null, null, null, null, null, null, null],
+  "fileCreatedAt": [
+    "2026-08-01T10:15:00.000",
+    "2026-08-02T18:30:12.500",
+    "2026-08-03T09:00:00.000",
+    "2026-08-04T12:00:00.000",
+    "2026-08-05T08:00:00.000",
+    "2026-08-06T22:45:30.250",
+    "2026-08-07T06:20:00.000"
+  ],
+  "localOffsetHours": [3, 2, 0, 0, 0, 0, 5.5],
+  "createdAt": [
+    "2026-08-01T10:16:00.000Z",
+    "2026-08-02T18:31:00.000Z",
+    "2026-08-03T09:01:00.000Z",
+    "2026-08-04T12:01:00.000Z",
+    "2026-08-05T08:01:00.000Z",
+    "2026-08-06T22:46:00.000Z",
+    "2026-08-07T06:21:00.000Z"
+  ],
+  "ownerId": [
+    "u0000000-0000-4000-8000-000000000001",
+    "u0000000-0000-4000-8000-000000000001",
+    "u0000000-0000-4000-8000-000000000001",
+    "u0000000-0000-4000-8000-000000000001",
+    "u0000000-0000-4000-8000-000000000001",
+    "u0000000-0000-4000-8000-000000000001",
+    "u0000000-0000-4000-8000-000000000001"
+  ],
+  "projectionType": [null, null, null, null, null, null, null],
+  "ratio": [1.5, 1.777, 1.5, 0.75, 1.5, 1.5, 1.333],
+  "status": ["active", "active", "active", "locked", "active", "active", "active"],
+  "thumbhash": ["aaaa", "bbbb", "cccc", "dddd", "eeee", "ffff", null],
+  "city": ["Faketown", "Fakeville", "Faketown", "Nowhere", null, "Zerotown", "Madeuptown"],
+  "country": ["Fakeland", "Fakeland", "Fakeland", "Nowhereland", null, "Zeroland", "Madeupland"],
+  "latitude": [12.34, 12.4, 0, 0, null, 0, 56.78],
+  "longitude": [23.45, 23.5, 0, 0, null, 0, 67.89]
+}

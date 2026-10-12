@@ -1,0 +1,350 @@
+<script lang="ts">
+  // Overview O-A: all-years context strip with a viewport window, zoomed √-density wave with the
+  // selection brush, album rail. Writes `selection.sel` (and the URL), hover writes `selection.cursor`.
+  import {untrack} from 'svelte';
+  import {library} from '../index/store.svelte.ts';
+  import {offsetNear, selection, writeUrl, type Selection} from '../selection.svelte.ts';
+  import {
+    clamp, countRows, DAY, daysFromIndex, daysFromMonths, defaultView, dragTo, fDay, fNum, hitGrip, railAlbums,
+    snapDay, viewAround, viewToShow, zoomAt, type Grip, type RailAlbum, type Span,
+  } from './data.ts';
+  import {CTX, drawContext, drawMain, MAIN, type RailHit} from './draw.ts';
+
+  let ctxCv = $state<HTMLCanvasElement>(), mainCv = $state<HTMLCanvasElement>();
+  let size = $state(0);
+  let showAll = $state(false);
+  let focus = $state(false);
+  let hoverAlbum = $state<string | null>(null);
+  let tip = $state<{x: number; y: number; title: string; text: string} | null>(null);
+  let view = $state.raw<Span | null>(null);
+  /** Final view of a running animation; null when idle. */
+  let goal: Span | null = null;
+  let hits: RailHit[] = [];
+
+  // Histogram once per index (or per manifest while the first index builds).
+  const days = $derived(library.index ? daysFromIndex(library.index) : library.provisional ? daysFromMonths(library.provisional) : null);
+  const dom = $derived<Span | null>(days ? [days.t0, days.t0 + days.nd * DAY] : null);
+  const rail = $derived(railAlbums(library.albums, showAll));
+  const selSpan = $derived<Span | null>(selection.sel ? [selection.sel.t0, selection.sel.t1] : null);
+  const album = $derived.by(() => {
+    const s = selection.sel;
+    return s?.kind === 'album' ? library.albums.find(a => a.id === s.albumId) ?? null : null;
+  });
+
+  // Default viewport: the last ~12 months; re-clamped when the domain changes (provisional → real).
+  $effect(() => {
+    if (!dom) return;
+    const v = untrack(() => view);
+    if (!v) { view = defaultView(dom[0], dom[1]); return; }
+    const span = Math.min(v[1] - v[0], dom[1] - dom[0]), v0 = clamp(v[0], dom[0], dom[1] - span);
+    if (v0 !== v[0] || v0 + span !== v[1]) view = [v0, v0 + span];
+  });
+
+  // Keep the selection in view when it changes from outside the brush (URL, back/forward, keyboard).
+  $effect(() => {
+    const s = selSpan;
+    if (!s || !dom) return;
+    untrack(() => {
+      const v = goal ?? view;
+      if (!v || drag) return;
+      const t = viewToShow(v, s[0], s[1], dom[0], dom[1]);
+      if (t !== v) animateView(t);
+    });
+  });
+
+  const reduced = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
+  let anim = 0;
+  function animateView(target: Span) {
+    cancelAnimationFrame(anim);
+    const from = view;
+    if (!from || reduced?.matches) { goal = null; view = target; return; }
+    goal = target;
+    const t0 = performance.now(), ms = 220;
+    const step = (now: number) => {
+      const k = Math.min(1, (now - t0) / ms), e = 1 - (1 - k) ** 3;
+      view = [from[0] + (target[0] - from[0]) * e, from[1] + (target[1] - from[1]) * e];
+      if (k < 1) anim = requestAnimationFrame(step); else goal = null;
+    };
+    anim = requestAnimationFrame(step);
+  }
+  function setView(v: Span) { cancelAnimationFrame(anim); goal = null; view = v; }
+
+  // Redraw on any input change, at most once per frame.
+  let raf = 0;
+  $effect(() => {
+    const st = {days, view, sel: selSpan, cursor: selection.cursor, cursorOff: offsetNear(selection.cursor), albums: rail, activeAlbum: album?.id ?? null, hoverAlbum, focus};
+    void size;
+    if (!ctxCv || !mainCv || !st.view) return;
+    const c = ctxCv, m = mainCv, v = st.view;
+    cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(() => {
+      drawContext(c, st.days, v, st.sel);
+      hits = drawMain(m, {...st, view: v});
+    });
+  });
+
+  $effect(() => {
+    if (!mainCv) return;
+    const ro = new ResizeObserver(() => size++);
+    ro.observe(mainCv);
+    return () => ro.disconnect();
+  });
+
+  // ---- pointer: main canvas (selection brush + album rail) ----
+
+  const local = (ev: MouseEvent, el: HTMLElement) => { const r = el.getBoundingClientRect(); return [ev.clientX - r.left, ev.clientY - r.top]; };
+  const mainT = (x: number) => view ? view[0] + x / mainCv!.clientWidth * (view[1] - view[0]) : 0;
+  const mainX = (t: number) => view ? (t - view[0]) / (view[1] - view[0]) * mainCv!.clientWidth : 0;
+  const inWave = (y: number) => y <= MAIN.base + 4;
+  const railHit = (x: number, y: number) => y > MAIN.base + 4 ? hits.find(h => x >= h.x0 - 2 && x <= h.x1 + 2 && y >= h.y - 4 && y <= h.y + MAIN.pitch - 2) ?? null : null;
+
+  let drag: {grip: Grip; anchor: number; cur: Span; x: number; moved: boolean} | null = null;
+  /** Cursor before hover took it over (e.g. the map scrubber's), restored on leave. */
+  let before: number | null | undefined;
+
+  function selectRange(s: Span, how: 'live' | 'commit') {
+    void selection.select({kind: 'range', t0: s[0], t1: s[1]});
+    writeUrl(how);
+  }
+
+  function onMainDown(ev: PointerEvent) {
+    if (!view || ev.button !== 0) return;
+    const [x, y] = local(ev, mainCv!);
+    if (!inWave(y)) return;
+    const s = selSpan, t = mainT(x);
+    const grip = s ? hitGrip(x, mainX(s[0]), mainX(s[1])) : 'n';
+    // Edges snap to UTC days (the URL format), so an album's exact span becomes whole days once touched.
+    const cur: Span = s ? [snapDay(s[0]), Math.max(snapDay(s[0]) + DAY, snapDay(s[1]))] : [t, t];
+    drag = {grip, anchor: grip === 'm' ? t - cur[0] : t, cur, x, moved: false};
+    mainCv!.setPointerCapture(ev.pointerId);
+  }
+
+  function onMainMove(ev: PointerEvent) {
+    if (!view) return;
+    const [x, y] = local(ev, mainCv!), t = mainT(x);
+    if (drag) {
+      if (!drag.moved && Math.abs(x - drag.x) < 3) return;
+      drag.moved = true;
+      const r = dragTo(drag.grip, drag.anchor, t, drag.cur, view[0], view[1], DAY, snapDay);
+      drag.grip = r.grip; drag.cur = r.span;
+      selection.cursor = clamp(t, view[0], view[1]);
+      selectRange(r.span, 'live');
+      return;
+    }
+    const hit = railHit(x, y);
+    hoverAlbum = hit?.a.id ?? null;
+    tip = hit ? {x: ev.clientX, y: ev.clientY, title: hit.a.name, text: `${fDay(hit.a.start)} → ${fDay(hit.a.end)} · ${fNum(hit.a.count)} items`} : null;
+    if (inWave(y)) {
+      if (before === undefined) before = selection.cursor;
+      selection.cursor = t;
+      const s = selSpan, g = s ? hitGrip(x, mainX(s[0]), mainX(s[1])) : 'n';
+      mainCv!.style.cursor = g === 'l' || g === 'r' ? 'ew-resize' : g === 'm' ? 'grab' : 'crosshair';
+    } else {
+      restoreCursor();
+      mainCv!.style.cursor = hit ? 'pointer' : 'default';
+    }
+  }
+
+  function onMainUp(ev: PointerEvent) {
+    const d = drag;
+    drag = null;
+    if (d) {
+      if (d.moved) writeUrl('commit');
+      // A plain click outside the selection clears it; inside or on an edge does nothing.
+      else if (d.grip === 'n' && selection.sel) { void selection.select(null); writeUrl('commit'); }
+      return;
+    }
+    const [x, y] = local(ev, mainCv!), hit = railHit(x, y);
+    if (hit) pickAlbum(hit.a);
+  }
+
+  function restoreCursor() {
+    if (before !== undefined) { selection.cursor = before; before = undefined; }
+  }
+
+  function onMainLeave() {
+    if (drag) return;
+    hoverAlbum = null; tip = null;
+    restoreCursor();
+  }
+
+  function pickAlbum(a: RailAlbum) {
+    if (dom) animateView(viewAround(a.start, a.end + 1, dom[0], dom[1]));
+    selection.select({kind: 'album', albumId: a.id, mode: 'members', t0: a.start, t1: a.end + 1}).catch(e => console.warn('album members:', e));
+    writeUrl('commit');
+  }
+
+  function setMode(mode: 'members' | 'range') {
+    const s = selection.sel;
+    if (s?.kind !== 'album' || s.mode === mode) return;
+    selection.select({...s, mode}).catch(e => console.warn('album members:', e));
+    writeUrl('commit');
+  }
+
+  function onWheel(ev: WheelEvent, cv: HTMLCanvasElement, overall: boolean) {
+    if (!view || !dom) return;
+    ev.preventDefault();
+    const [x] = local(ev, cv), w = cv.clientWidth, f = x / w;
+    const t = overall ? dom[0] + f * (dom[1] - dom[0]) : view[0] + f * (view[1] - view[0]);
+    const g = overall ? (t - view[0]) / (view[1] - view[0]) : f;
+    setView(zoomAt(view, t, overall ? clamp(g, 0, 1) : g, Math.exp(ev.deltaY * 0.0015), dom[0], dom[1]));
+  }
+
+  // ---- pointer: context strip (viewport window) ----
+
+  let vdrag: {grip: Grip; anchor: number; cur: Span; x: number; moved: boolean} | null = null;
+  const ctxT = (x: number) => dom ? dom[0] + x / ctxCv!.clientWidth * (dom[1] - dom[0]) : 0;
+  const ctxX = (t: number) => dom ? (t - dom[0]) / (dom[1] - dom[0]) * ctxCv!.clientWidth : 0;
+
+  function onCtxDown(ev: PointerEvent) {
+    if (!view || !dom || ev.button !== 0) return;
+    const [x] = local(ev, ctxCv!), t = ctxT(x), grip = hitGrip(x, ctxX(view[0]), ctxX(view[1]));
+    vdrag = {grip, anchor: grip === 'm' ? t - view[0] : t, cur: view, x, moved: false};
+    ctxCv!.setPointerCapture(ev.pointerId);
+  }
+  function onCtxMove(ev: PointerEvent) {
+    if (!view || !dom) return;
+    const [x] = local(ev, ctxCv!);
+    if (!vdrag) {
+      const g = hitGrip(x, ctxX(view[0]), ctxX(view[1]));
+      ctxCv!.style.cursor = g === 'l' || g === 'r' ? 'ew-resize' : g === 'm' ? 'grab' : 'crosshair';
+      return;
+    }
+    if (!vdrag.moved && Math.abs(x - vdrag.x) < 3) return;
+    vdrag.moved = true;
+    const r = dragTo(vdrag.grip, vdrag.anchor, ctxT(x), vdrag.cur, dom[0], dom[1], 7 * DAY);
+    vdrag.grip = r.grip; vdrag.cur = r.span;
+    setView(r.span);
+  }
+  function onCtxUp(ev: PointerEvent) {
+    const d = vdrag;
+    vdrag = null;
+    if (!d || d.moved || !view || !dom) return;
+    // A click recenters the window there.
+    const [x] = local(ev, ctxCv!), span = view[1] - view[0], v0 = clamp(ctxT(x) - span / 2, dom[0], dom[1] - span);
+    animateView([v0, v0 + span]);
+  }
+
+  // ---- keyboard on the wave ----
+
+  function onKey(ev: KeyboardEvent) {
+    if (ev.key === 'Escape') {
+      if (!selection.sel) return;
+      ev.preventDefault();
+      void selection.select(null); writeUrl('commit');
+      return;
+    }
+    if (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight') return;
+    if (!view || !dom) return;
+    ev.preventDefault();
+    const dir = ev.key === 'ArrowLeft' ? -1 : 1, step = (ev.shiftKey ? 7 : 1) * DAY * dir, s = selSpan;
+    if (!s) {
+      // Nothing selected yet: start with the day in the middle of the view.
+      const d = Math.floor((view[0] + view[1]) / 2 / DAY) * DAY;
+      selectRange([d, d + DAY], 'live');
+      return;
+    }
+    let t0 = snapDay(s[0]), t1 = Math.max(t0 + DAY, snapDay(s[1]));
+    if (ev.altKey) t1 = Math.max(t0 + DAY, Math.min(dom[1], t1 + step));
+    else { const w = t1 - t0; t0 = clamp(t0 + step, dom[0], dom[1] - w); t1 = t0 + w; }
+    selectRange([t0, t1], 'live');
+  }
+  function onKeyUp(ev: KeyboardEvent) {
+    if (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight') writeUrl('commit');
+  }
+
+  // ---- readout & status ----
+
+  const readout = $derived.by(() => {
+    const s: Selection | null = selection.sel;
+    if (!s) return null;
+    const name = s.kind === 'album' ? (album?.name ?? 'Album') : null;
+    const head = `${fDay(s.t0)} → ${fDay(s.t1 - 1)} · ${Math.floor((s.t1 - 1) / DAY) - Math.floor(s.t0 / DAY) + 1} d`;
+    const a = selection.active;
+    if (!a) return {name, head, rest: s.kind === 'album' && s.mode === 'members' ? 'loading members…' : '…'};
+    const c = countRows(a.ix, a.lo, a.hi);
+    return {name, head, rest: `${fNum(c.photos)} photos · ${fNum(c.videos)} videos · ${fNum(c.gps)} with GPS`};
+  });
+
+  const status = $derived.by(() => {
+    const {done, total} = library.progress, prog = total ? ` · ${done}/${total} months` : '';
+    switch (library.status) {
+      case 'building': return `building index${prog}`;
+      case 'refreshing': return `refreshing${prog}`;
+      case 'cached': return 'cached · checking for changes';
+      case 'ready': return library.index ? `${fNum(library.index.n)} items` : 'ready';
+      case 'error': return `error: ${library.error ?? 'unknown'}`;
+    }
+  });
+</script>
+
+<section class="overview" aria-label="Overview">
+  <div class="bar">
+    <div class="readout mono" aria-live="polite">
+      {#if readout}
+        {#if readout.name}<b>{readout.name}</b>{' · '}{/if}{readout.head} · <span class="ink2">{readout.rest}</span>
+      {:else}
+        <span class="muted">No selection: drag on the wave or click an album</span>
+      {/if}
+    </div>
+    {#if selection.sel?.kind === 'album'}
+      <div class="seg" role="group" aria-label="Album selection mode">
+        <button aria-pressed={selection.sel.mode === 'members'} onclick={() => setMode('members')}>members only</button>
+        <button aria-pressed={selection.sel.mode === 'range'} onclick={() => setMode('range')}>everything in range</button>
+      </div>
+    {/if}
+    <div class="seg" role="group" aria-label="Albums on the rail">
+      <button aria-pressed={!showAll} onclick={() => (showAll = false)} title="Albums spanning at most 45 days">trips</button>
+      <button aria-pressed={showAll} onclick={() => (showAll = true)}>all albums</button>
+    </div>
+    <div class="status mono" class:err={library.status === 'error'}>
+      {status}
+      <button class="link" onclick={() => library.clearCache()} title="Drop the cached index and rebuild it">clear cache</button>
+    </div>
+  </div>
+
+  <canvas
+    bind:this={ctxCv} class="ctx" style:height="{CTX.h}px"
+    aria-label="All years; drag the window to choose the zoomed period"
+    onpointerdown={onCtxDown} onpointermove={onCtxMove} onpointerup={onCtxUp} onpointercancel={() => (vdrag = null)}
+    onwheel={ev => onWheel(ev, ctxCv!, true)}
+  ></canvas>
+  <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+  <canvas
+    bind:this={mainCv} class="main" style:height="{MAIN.h}px" tabindex="0"
+    aria-label="Zoomed timeline. Drag to select a range; arrow keys move it by a day (Shift: a week), Alt+arrows resize it, Escape clears"
+    onpointerdown={onMainDown} onpointermove={onMainMove} onpointerup={onMainUp}
+    onpointercancel={() => { drag = null; writeUrl('commit'); }} onpointerleave={onMainLeave}
+    onwheel={ev => onWheel(ev, mainCv!, false)}
+    onkeydown={onKey} onkeyup={onKeyUp}
+    onfocus={() => (focus = true)} onblur={() => { focus = false; writeUrl('commit'); }}
+  ></canvas>
+  <div class="hint">scroll = zoom · drag = select · edges = resize · bars = albums · ←/→ move · Alt+←/→ resize · Esc clear</div>
+
+  {#if tip}
+    <div class="tip" style:left="{tip.x + 14}px" style:top="{tip.y + 14}px"><strong>{tip.title}</strong><span>{tip.text}</span></div>
+  {/if}
+</section>
+
+<style>
+  .overview { background: var(--surface); border-bottom: 1px solid var(--line); padding: 8px 16px 6px; display: grid; gap: 4px; }
+  .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; font-size: 12px; color: var(--muted); min-height: 26px; }
+  .readout { color: var(--ink); flex: 1 1 420px; min-width: 0; font-size: 12px; }
+  .readout b { font-weight: 500; color: var(--photo-hi); }
+  .mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+  .ink2 { color: var(--ink2); }
+  .muted { color: var(--muted); }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+  .seg button { background: none; border: 0; color: var(--muted); font: 12px var(--f-body); padding: 2px 9px; cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button[aria-pressed='true'] { background: var(--raised); color: var(--ink); }
+  .status { font-size: 11px; color: var(--muted); display: inline-flex; gap: 10px; align-items: baseline; }
+  .status.err { color: #e07a6a; }
+  .link { background: none; border: 0; padding: 0; color: var(--ink2); font: inherit; text-decoration: underline dotted; cursor: pointer; }
+  .link:hover { color: var(--ink); }
+  canvas { display: block; width: 100%; touch-action: none; }
+  canvas:focus-visible, button:focus-visible { outline: 2px solid var(--photo-hi); outline-offset: 2px; }
+  .hint { font-size: 11px; color: var(--muted); }
+  .tip { position: fixed; z-index: 10; pointer-events: none; background: #0B0C0E; border: 1px solid var(--line); border-radius: 5px; padding: 6px 9px; font-size: 12px; color: var(--ink2); display: grid; gap: 2px; max-width: 280px; box-shadow: 0 6px 24px rgba(0,0,0,.5); }
+  .tip strong { color: var(--ink); font: 500 12px var(--f-mono); }
+</style>

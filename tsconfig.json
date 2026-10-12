@@ -10,5 +10,5 @@
     "skipLibCheck": true,
     "types": ["vite/client"]
   },
-  "include": ["web/src/**/*.ts", "web/src/**/*.svelte"]
+  "include": ["web/src/**/*.ts", "web/src/**/*.svelte", "shared/**/*.ts"]
 }

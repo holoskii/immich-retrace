@@ -6,10 +6,11 @@
     "strict": true,
     "noEmit": true,
     "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
     "erasableSyntaxOnly": true,
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,
-    "types": ["node"]
+    "types": ["node", "svelte"]
   },
-  "include": ["server", "tests"]
+  "include": ["server", "tests", "shared"]
 }

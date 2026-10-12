@@ -1,0 +1,22 @@
+[
+  {
+    "id": "c0000000-0000-4000-8000-000000000001",
+    "albumName": "Fake Trip",
+    "shared": false,
+    "startDate": "2026-07-10T09:00:00.000Z",
+    "endDate": "2026-08-06T22:45:30.250Z",
+    "assetCount": 9,
+    "updatedAt": "2026-08-10T00:00:00.000Z",
+    "lastModifiedAssetTimestamp": "2026-08-06T22:45:30.250Z"
+  },
+  {
+    "id": "c0000000-0000-4000-8000-000000000003",
+    "albumName": "Shared With Me",
+    "shared": true,
+    "startDate": "2026-05-01T00:00:00.000Z",
+    "endDate": "2026-05-02T00:00:00.000Z",
+    "assetCount": 3,
+    "updatedAt": "2026-05-03T00:00:00.000Z",
+    "lastModifiedAssetTimestamp": "2026-05-02T00:00:00.000Z"
+  }
+]

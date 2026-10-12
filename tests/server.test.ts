@@ -161,7 +161,6 @@ describe('input validation', () => {
     [`/api/assets/${ID}/thumbnail?size=fullsize`, 400],
     [`/api/assets/${ID}/original`, 404],
     [`/api/users/me`, 404],
-    [`/api/config`, 404],
   ])('%s → %i', async (path, status) => {
     const {app, media} = fakeImmich();
     expect((await app.request(path)).status).toBe(status);

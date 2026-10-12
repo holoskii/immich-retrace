@@ -1,12 +1,21 @@
 <script lang="ts">
-  // Placeholder until stage 3 (overview): shows whether the backend can reach Immich.
-  let immich = $state('…');
-  fetch('/api/health?wake=1').then(r => r.json()).then(h => { immich = h.immich; }, () => { immich = 'backend unreachable'; });
+  // Layout L-A: overview strip on top, map below (full width until the photo-wave lands).
+  import {library} from './lib/index/store.svelte.ts';
+  import Overview from './lib/overview/Overview.svelte';
+  import MapView from './lib/map/MapView.svelte';
+  import {startUrlSync} from './lib/selection.svelte.ts';
+
+  void library.load();
+  // Applies ?from/to/album/at once the index is there, then follows back/forward.
+  startUrlSync();
 </script>
 
-<main>Immich Viewer — Immich: <span class="mono">{immich}</span></main>
+<div class="app">
+  <header><Overview /></header>
+  <main><MapView /></main>
+</div>
 
 <style>
-  main { padding: 48px 24px; }
-  .mono { font-family: var(--f-mono); }
+  .app { height: 100%; display: grid; grid-template-rows: auto 1fr; }
+  main { min-height: 0; }
 </style>

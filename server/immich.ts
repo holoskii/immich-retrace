@@ -1,15 +1,23 @@
 // Talks to Immich (usually through the on-demand gate). Every upstream request is built here
 // from validated inputs; nothing from the browser request is forwarded except an explicit Range.
 
+import {createHash} from 'node:crypto';
+
 export type ImmichState = 'unknown' | 'waking' | 'up' | 'down';
 
 /** An error with the status and message the viewer should answer with. */
 export class HttpError extends Error {
   readonly status: 404 | 502 | 503;
-  constructor(status: 404 | 502 | 503, message: string) { super(message); this.status = status; }
+  readonly code?: 'auth' | 'unavailable' | 'not-found' | 'invalid';
+  constructor(status: 404 | 502 | 503, message: string, code?: 'auth' | 'unavailable' | 'not-found' | 'invalid') {
+    super(message);
+    this.status = status;
+    this.code = code;
+  }
 }
 
-const unavailable = () => new HttpError(503, 'Immich is not reachable right now. It may still be starting; retry in a few seconds.');
+const KEY_PERMISSIONS = 'Immich rejected the viewer\'s API key. Check its permissions: asset.read, asset.view, album.read.';
+const unavailable = () => new HttpError(503, 'Immich is not reachable right now. It may still be starting; retry in a few seconds.', 'unavailable');
 
 export interface ImmichOptions {
   baseUrl: string;
@@ -28,6 +36,8 @@ const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 export class ImmichClient {
   state: ImmichState = 'unknown';
+  /** Stable, opaque id of (Immich URL, API key); namespaces the browser cache. */
+  readonly library: string;
   private waking: Promise<void> | null = null;
   private readonly fetch: typeof fetch;
   private readonly base: string;
@@ -37,6 +47,7 @@ export class ImmichClient {
     this.opts = opts;
     this.fetch = opts.fetch ?? globalThis.fetch;
     this.base = opts.baseUrl.replace(/\/+$/, '');
+    this.library = createHash('sha256').update(`${opts.baseUrl}\n${opts.apiKey}`).digest('hex').slice(0, 16);
   }
 
   private url(path: string, query?: Record<string, string>) {
@@ -77,26 +88,24 @@ export class ImmichClient {
   }
 
   /**
-   * GET (or HEAD) a media path. Returns Immich's response as is, except that the gate page,
-   * gate 503 and network failures become a 503 HttpError. Redirects are not followed: they would
-   * carry the API key to wherever they point.
+   * Issues one upstream request, waking Immich first and retrying once if the gate page or a
+   * gate 503 comes back instead (it was stopped since we last saw it). Redirects are not
+   * followed: they would carry the API key to wherever they point. Network failures become a
+   * 503 HttpError.
    */
-  async media(path: string, opts: {method?: 'GET' | 'HEAD'; query?: Record<string, string>; range?: string; signal?: AbortSignal} = {}): Promise<Response> {
-    const headers: Record<string, string> = {'x-api-key': this.opts.apiKey};
-    if (opts.range) headers.range = opts.range;
+  private async fetchUp(path: string, opts: {method?: 'GET' | 'HEAD'; query?: Record<string, string>; headers: Record<string, string>; signal?: AbortSignal}): Promise<Response> {
     for (let attempt = 0; attempt < 2; attempt++) {
       await this.wake();
       opts.signal?.throwIfAborted();
       let res: Response;
       try {
-        res = await this.fetch(this.url(path, opts.query), {method: opts.method ?? 'GET', headers, redirect: 'manual', signal: opts.signal});
+        res = await this.fetch(this.url(path, opts.query), {method: opts.method ?? 'GET', headers: opts.headers, redirect: 'manual', signal: opts.signal});
       } catch (err) {
         if (opts.signal?.aborted) throw err;
         this.state = 'unknown';
         throw unavailable();
       }
       if (isGatePage(res) || res.status === 503) {
-        // Immich was stopped by the gate since we last saw it; wake it again and retry once.
         await res.body?.cancel();
         this.state = 'unknown';
         continue;
@@ -104,5 +113,31 @@ export class ImmichClient {
       return res;
     }
     throw unavailable();
+  }
+
+  /** GET (or HEAD) a media path. Returns Immich's response as is (status, headers, body). */
+  async media(path: string, opts: {method?: 'GET' | 'HEAD'; query?: Record<string, string>; range?: string; signal?: AbortSignal} = {}): Promise<Response> {
+    const headers: Record<string, string> = {'x-api-key': this.opts.apiKey};
+    if (opts.range) headers.range = opts.range;
+    return this.fetchUp(path, {method: opts.method, query: opts.query, headers, signal: opts.signal});
+  }
+
+  /**
+   * GET a JSON path and return its parsed body. 400/404 → not found, 401/403 → key rejected,
+   * other non-ok or non-JSON responses → 502.
+   */
+  async json<T = unknown>(path: string, query?: Record<string, string>, signal?: AbortSignal): Promise<T> {
+    const res = await this.fetchUp(path, {headers: {'x-api-key': this.opts.apiKey, accept: 'application/json'}, query, signal});
+    if (!res.ok) {
+      void res.body?.cancel();
+      if (res.status === 400 || res.status === 404) throw new HttpError(404, 'Not found in Immich.', 'not-found');
+      if (res.status === 401 || res.status === 403) throw new HttpError(502, KEY_PERMISSIONS, 'auth');
+      throw new HttpError(502, `Immich returned ${res.status}.`);
+    }
+    if (!(res.headers.get('content-type') ?? '').startsWith('application/json')) {
+      void res.body?.cancel();
+      throw new HttpError(502, 'Immich returned a non-JSON response.');
+    }
+    return res.json() as Promise<T>;
   }
 }
