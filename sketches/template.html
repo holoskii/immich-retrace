@@ -1,0 +1,966 @@
+<title>Immich Viewer Sketchbook</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root{
+  color-scheme: dark;
+  --ground:#101215; --surface:#171A1F; --raised:#20242B; --line:#2A2F37;
+  --ink:#E9E6DF; --ink2:#B5B9C0; --muted:#7F858E;
+  --photo:#C98128; --photo-hi:#E8A64E; --video:#3A9BD6;
+  --f-display:"Bricolage Grotesque","Segoe UI",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+*{box-sizing:border-box}
+body{background:var(--ground);color:var(--ink);font:15px/1.55 var(--f-body)}
+.wrap{max-width:1280px;margin:0 auto;padding:48px 24px 96px}
+h1,h2,h3{font-family:var(--f-display);font-weight:700;text-wrap:balance;margin:0}
+h1{font-size:44px;line-height:1.05;letter-spacing:-.01em}
+h2{font-size:30px;line-height:1.15}
+h3{font-size:18px;line-height:1.3;font-weight:500}
+p{margin:0;max-width:68ch}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.eyebrow{font:500 11px/1 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+header{display:grid;gap:18px;padding-bottom:28px;border-bottom:1px solid var(--line)}
+.facts{display:flex;flex-wrap:wrap;gap:8px 28px;color:var(--ink2);font-size:13px}
+.facts b{color:var(--ink);font-weight:500}
+.key{display:inline-flex;align-items:center;gap:6px}
+.sw{width:10px;height:10px;border-radius:2px;display:inline-block}
+.answer{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:14px 16px;display:grid;gap:6px;max-width:760px}
+.answer code{font-family:var(--f-mono);color:var(--photo-hi)}
+section.comp{margin-top:72px;display:grid;gap:8px}
+section.comp>.lead{color:var(--ink2);margin-bottom:12px}
+.variant{display:grid;grid-template-columns:240px minmax(0,1fr);gap:28px;padding-block:28px;border-top:1px solid var(--line)}
+.vmeta{display:grid;gap:10px;align-content:start}
+.vid{display:flex;align-items:baseline;gap:10px}
+.vid .letter{font:700 40px/1 var(--f-display);color:var(--photo-hi)}
+.vid .code{font:500 12px/1 var(--f-mono);color:var(--muted)}
+.vmeta p{font-size:14px;color:var(--ink2)}
+.pc{list-style:none;margin:0;padding:0;display:grid;gap:4px;font-size:13px;color:var(--ink2)}
+.pc li{padding-left:16px;position:relative}
+.pc li::before{position:absolute;left:0;font-family:var(--f-mono);color:var(--muted)}
+.pc li.p::before{content:"+";color:var(--photo-hi)}
+.pc li.c::before{content:"−"}
+.fig{background:var(--surface);border-radius:6px;padding:14px;position:relative;min-width:0;display:grid;gap:10px}
+.fig canvas{display:block;width:100%;touch-action:none}
+.figbar{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;font-size:12px;color:var(--muted)}
+.figbar .mono{color:var(--ink2)}
+select,input[type=range]{accent-color:var(--photo)}
+select{background:var(--raised);color:var(--ink);border:1px solid var(--line);border-radius:4px;padding:5px 8px;font:13px var(--f-body)}
+select:focus-visible,canvas:focus-visible,input:focus-visible{outline:2px solid var(--photo-hi);outline-offset:2px}
+.ctrlrow{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;margin-bottom:6px;font-size:13px;color:var(--ink2)}
+#selReadout{color:var(--ink)}
+#mbScrub{width:100%}
+.note{font-size:12px;color:var(--muted)}
+/* layout schematics */
+.lay{aspect-ratio:16/10;background:var(--ground);border:1px solid var(--line);border-radius:4px;position:relative;overflow:hidden;font:500 11px/1.2 var(--f-mono);color:var(--ink2);max-width:100%}
+.lay .b{position:absolute;border-radius:3px;padding:6px 8px;display:flex;flex-direction:column;gap:3px}
+.lay .b small{color:var(--muted);font-weight:400}
+.b.ov{background:#2a2117;border:1px solid #5b3f1c}
+.b.dt{background:#251d14;border:1px solid #4a3418}
+.b.mp{background:#152029;border:1px solid #224257}
+.b.ctl{background:var(--raised);border:1px solid var(--line)}
+.b.glass{backdrop-filter:blur(2px);background:rgba(37,29,20,.86)}
+#tip{position:fixed;z-index:10;pointer-events:none;background:#0B0C0E;border:1px solid var(--line);border-radius:5px;padding:8px 10px;font-size:12px;color:var(--ink2);display:grid;gap:4px;max-width:260px;box-shadow:0 6px 24px rgba(0,0,0,.5)}
+#tip strong{color:var(--ink);font:500 13px var(--f-mono)}
+#tip canvas{width:120px;height:120px;border-radius:3px}
+@media (max-width:860px){.variant{grid-template-columns:1fr;gap:14px}h1{font-size:34px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div class="wrap">
+<header>
+  <span class="eyebrow">immich-viewer · step 2 of 4 · UI sketches</span>
+  <h1>Pick one of each</h1>
+  <p>Five components, three takes each. Everything below is drawn from your real library: <b>41 661</b> timeline items (photos and videos; Live Photo halves excluded), and the <b>2025-09_Kyrgyzstan</b> trip with 502 items over 5–15 Sep. Previews are thumbhash blurs, about 30 bytes each and already stored in Immich, so no actual photos leave your server. The maps have no tile layer here because the page can't load tiles; the real app will.</p>
+  <div class="facts">
+    <span class="key"><span class="sw" style="background:var(--photo)"></span>photos</span>
+    <span class="key"><span class="sw" style="background:var(--video)"></span>videos</span>
+    <span>Y scale: <b>√ count/day</b>, so one 793-photo day doesn't flatten the rest</span>
+    <span>Times: <b>local time of capture</b></span>
+  </div>
+  <div class="answer">
+    <span class="eyebrow">Picked</span>
+    <span><code>L-A · O-A · M-A + M-B strip · G-B</code>; photo-wave <code>D-A</code> moved to the backlog. Still open: how the map should zoom. <a href="#mapzoom" style="color:var(--photo-hi)">Try M-D ↓</a></span>
+  </div>
+</header>
+
+<!-- LAYOUT -->
+<section class="comp" id="layout">
+  <span class="eyebrow">L · whole screen</span>
+  <h2>Layout</h2>
+  <p class="lead">How the four parts share one desktop screen. The overview is always visible, and the lightbox opens over everything.</p>
+
+  <div class="variant">
+    <div class="vmeta"><div class="vid"><span class="letter">A</span><span class="code">L-A</span></div><h3>Stack and split</h3>
+      <p>Overview strip on top; below it, the photo-wave and the map side by side at equal weight.</p>
+      <ul class="pc"><li class="p">Time and place are equal partners</li><li class="p">Hover-linking is visible at a glance</li><li class="c">Both halves are narrower than they'd like</li></ul></div>
+    <div class="fig"><div class="lay">
+      <div class="b ctl" style="left:2%;top:3%;width:96%;height:7%">album ▾ · 5 Sep → 15 Sep 2025 · 502</div>
+      <div class="b ov" style="left:2%;top:12%;width:96%;height:17%">overview<small>all years · brush with draggable edges</small></div>
+      <div class="b dt" style="left:2%;top:32%;width:56%;height:65%">photo-wave<small>selected range · hover = time cursor</small></div>
+      <div class="b mp" style="left:60%;top:32%;width:38%;height:65%">map<small>track + photo pins · follows cursor</small></div>
+    </div></div>
+  </div>
+
+  <div class="variant">
+    <div class="vmeta"><div class="vid"><span class="letter">B</span><span class="code">L-B</span></div><h3>Map stage</h3>
+      <p>The map fills the screen. Overview and photo-wave sit in a translucent dock along the bottom, so the timeline drives the map.</p>
+      <ul class="pc"><li class="p">Feels like a travel journal, place first</li><li class="p">Lots of room for routes</li><li class="c">The wave gets a short dock; dense days get cramped</li><li class="c">Wasted for home periods with no GPS</li></ul></div>
+    <div class="fig"><div class="lay">
+      <div class="b mp" style="left:0;top:0;width:100%;height:100%">map, full bleed<small>track + photo pins</small></div>
+      <div class="b ctl" style="left:2%;top:3%;width:36%;height:8%">album ▾ · 5 → 15 Sep · 502</div>
+      <div class="b ov glass" style="left:2%;top:60%;width:96%;height:11%">overview</div>
+      <div class="b dt glass" style="left:2%;top:73%;width:96%;height:24%">photo-wave</div>
+    </div></div>
+  </div>
+
+  <div class="variant">
+    <div class="vmeta"><div class="vid"><span class="letter">C</span><span class="code">L-C</span></div><h3>Wave stage</h3>
+      <p>The photo-wave gets the full width and most of the height. The map is a picture-in-picture in the corner that expands on click.</p>
+      <ul class="pc"><li class="p">Maximum room for the mosaic</li><li class="p">The map stays out of the way when GPS is sparse</li><li class="c">The map is small while you hover</li></ul></div>
+    <div class="fig"><div class="lay">
+      <div class="b ctl" style="left:2%;top:3%;width:96%;height:7%">album ▾ · 5 Sep → 15 Sep 2025 · 502</div>
+      <div class="b ov" style="left:2%;top:12%;width:96%;height:15%">overview</div>
+      <div class="b dt" style="left:2%;top:30%;width:96%;height:67%">photo-wave<small>full width</small></div>
+      <div class="b mp" style="left:69%;top:33%;width:27%;height:32%">map PiP<small>click to expand</small></div>
+    </div></div>
+  </div>
+</section>
+
+<!-- OVERVIEW -->
+<section class="comp" id="overview">
+  <span class="eyebrow">O · all years</span>
+  <h2>Overview timeline</h2>
+  <p class="lead">The problem every variant has to solve: 18 years is about 6 600 days, so on a single linear axis a 10-day trip is about 1.5 px wide and too narrow to grab. All three share one selection. Drag to select, drag the edges to resize, drag the middle to move, or pick an album.</p>
+  <div class="ctrlrow">
+    <label for="albumPick">Album</label>
+    <select id="albumPick"></select>
+    <span id="selReadout" class="mono"></span>
+  </div>
+
+  <div class="variant">
+    <div class="vmeta"><div class="vid"><span class="letter">A</span><span class="code">O-A</span></div><h3>Context and focus</h3>
+      <p>A thin strip shows all years with a viewport window. Below it is a zoomed wave with album bars, where you make the selection. Scroll to zoom, or drag the window.</p>
+      <ul class="pc"><li class="p">Standard, predictable pattern</li><li class="p">Album rail makes trips clickable</li><li class="c">Two strips, two things to drag</li></ul></div>
+    <div class="fig">
+      <canvas id="oaCtx" tabindex="0" aria-label="All years with viewport window"></canvas>
+      <canvas id="oaMain" tabindex="0" aria-label="Zoomed timeline with selection"></canvas>
+      <div class="figbar"><span>scroll = zoom · drag = select · edges = resize · bars = albums (click)</span></div>
+    </div>
+  </div>
+
+  <div class="variant">
+    <div class="vmeta"><div class="vid"><span class="letter">B</span><span class="code">O-B</span></div><h3>Ridgeline by year</h3>
+      <p>One row per year with January to December across, so seasons line up. A 10-day trip is about 30 px wide with no zooming.</p>
+      <ul class="pc"><li class="p">Whole life on one screen, trips readable</li><li class="p">Shows yearly habits (September trips)</li><li class="c">A selection can't cross New Year</li><li class="c">2008–2014 (20 items) is folded away</li></ul></div>
+    <div class="fig">
+      <canvas id="obMain" tabindex="0" aria-label="Ridgeline of photos per year"></canvas>
+      <div class="figbar"><span>drag inside a row = select · edges = resize</span></div>
+    </div>
+  </div>
+
+  <div class="variant">
+    <div class="vmeta"><div class="vid"><span class="letter">C</span><span class="code">O-C</span></div><h3>Fisheye stream</h3>
+      <p>All years always fit the width, and the selection is magnified in place with compressed shoulders around it. Photos are drawn above the axis and videos mirrored below.</p>
+      <ul class="pc"><li class="p">One strip, no zoom state</li><li class="p">Video share visible at a glance</li><li class="c">Non-linear axis; distances outside the lens lie</li><li class="c">The lens re-settles after each drag</li></ul></div>
+    <div class="fig">
+      <canvas id="ocMain" tabindex="0" aria-label="Fisheye stream timeline"></canvas>
+      <div class="figbar"><span>drag edges/middle = adjust lens · drag outside = new selection</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- DETAIL -->
+<section class="comp" id="detail">
+  <span class="eyebrow">D · selected range</span>
+  <h2>Photo-wave</h2>
+  <p class="lead">Your option (b): the density curve is built from the previews themselves. Shown here: 5–15 Sep 2025, all 502 items in that range, including photos outside the album. Hovering moves the shared time cursor, and the maps below follow it.</p>
+
+  <div class="variant">
+    <div class="vmeta"><div class="vid"><span class="letter">A</span><span class="code">D-A</span></div><h3>Stacked columns</h3>
+      <p>Two-hour bins with the tiles stacked from the baseline. The silhouette is the histogram, read exactly.</p>
+      <ul class="pc"><li class="p">Honest counts, and tiles align in a tidy grid</li><li class="p">Easy to make zoomable (bin = f(zoom))</li><li class="c">Bins hide the exact time of a shot</li></ul></div>
+    <div class="fig"><canvas id="daMain" tabindex="0" aria-label="Stacked preview columns"></canvas></div>
+  </div>
+
+  <div class="variant">
+    <div class="vmeta"><div class="vid"><span class="letter">B</span><span class="code">D-B</span></div><h3>Swarm on a wave</h3>
+      <p>Every tile sits at its exact capture time and is nudged up only when it would overlap. A soft density curve shows behind.</p>
+      <ul class="pc"><li class="p">Most organic “wave” look</li><li class="p">Bursts read as spikes, quiet hours as gaps</li><li class="c">Stack height isn't a count you can read off</li></ul></div>
+    <div class="fig"><canvas id="dbMain" tabindex="0" aria-label="Swarm of previews over time"></canvas></div>
+  </div>
+
+  <div class="variant">
+    <div class="vmeta"><div class="vid"><span class="letter">C</span><span class="code">D-C</span></div><h3>Day rows</h3>
+      <p>One row per day, 00:00 to 24:00 across, tiles stacked per half hour. It reads like a contact sheet of a trip.</p>
+      <ul class="pc"><li class="p">Daily rhythm is obvious (early starts, long drives)</li><li class="p">Labels per day: weekday, count, city</li><li class="c">Gets tall for long ranges; needs a different mode above ~3 weeks</li></ul></div>
+    <div class="fig"><canvas id="dcMain" tabindex="0" aria-label="Previews per day row"></canvas></div>
+  </div>
+</section>
+
+<!-- MAP -->
+<section class="comp" id="map">
+  <span class="eyebrow">M · where</span>
+  <h2>Map</h2>
+  <p class="lead">Your option (c): previews pinned on the map. 295 of the 502 items have GPS; the other 207 (mostly camera shots) don't appear here. Gaps of more than 4 h between points are dashed instead of drawn as a straight walk. The scrubber under M-B moves the same cursor as hovering the photo-wave.</p>
+
+  <div class="variant">
+    <div class="vmeta"><div class="vid"><span class="letter">A</span><span class="code">M-A</span></div><h3>Route with pins</h3>
+      <p>The route is colored by time, dim at the start and bright at the end, with clustered photo pins and a count on each.</p>
+      <ul class="pc"><li class="p">Direction of travel without animation</li><li class="p">Pins show what each place looked like</li><li class="c">Line and pins compete in dense cities</li></ul></div>
+    <div class="fig"><canvas id="maMain" tabindex="0" aria-label="Route colored by time with photo pins"></canvas></div>
+  </div>
+
+  <div class="variant">
+    <div class="vmeta"><div class="vid"><span class="letter">B</span><span class="code">M-B</span></div><h3>Progress trail</h3>
+      <p>The whole route is drawn grey. The part travelled so far is bright up to the cursor, with a marker and the nearest photo next to it.</p>
+      <ul class="pc"><li class="p">Best for the “hover and watch where I was” moment</li><li class="p">Quiet when you're not hovering</li><li class="c">Shows little until you hover</li></ul></div>
+    <div class="fig">
+      <canvas id="mbMain" tabindex="0" aria-label="Route progress at cursor time"></canvas>
+      <canvas id="mbStrip" aria-hidden="true"></canvas>
+      <input type="range" id="mbScrub" min="0" max="1000" value="460" aria-label="Scrub time">
+    </div>
+  </div>
+
+  <div class="variant">
+    <div class="vmeta"><div class="vid"><span class="letter">C</span><span class="code">M-C</span></div><h3>Photo piles</h3>
+      <p>No line, only stacks of previews where you shot, sized by count, with city names on the biggest piles. The route fades in up to the cursor while you hover.</p>
+      <ul class="pc"><li class="p">Most visual; the map becomes a mosaic</li><li class="p">No misleading straight lines at all</li><li class="c">Order of places is lost without hover</li></ul></div>
+    <div class="fig"><canvas id="mcMain" tabindex="0" aria-label="Photo piles on map"></canvas></div>
+  </div>
+</section>
+
+<!-- MAP ZOOM -->
+<section class="comp" id="mapzoom">
+  <span class="eyebrow">M-D · your combo + the zoom question</span>
+  <h2>Map that follows time</h2>
+  <p class="lead">M-A's route and pins, with M-B's strip, scrubber and photo pop-out underneath. The open question is zoom. If the whole trip is fitted, Osh and Gul'cha shrink to a few pixels and the marker crawls. In <b>Follow</b> mode the camera fits the GPS points within ±3 h of the cursor instead. It moves only when the marker leaves the middle 70% of the frame or the needed zoom changes by more than 1.8×. That way it holds still inside a city and pulls back for a driving day. The inset keeps the whole trip in view.</p>
+  <div class="variant">
+    <div class="vmeta"><div class="vid"><span class="letter">D</span><span class="code">M-D</span></div><h3>Follow-cam</h3>
+      <p>Run the mouse along the strip under the map. <b>Smooth</b> is a camera path computed ahead of time from time-weighted neighbours (σ 1.5 h, blended out to 6 h / 24 h / whole trip where GPS is sparse), followed by a critically damped spring; far jumps pull back first. <b>Reactive</b> is the first version. In the inset, the dashed frame is where the camera is heading.</p>
+      <ul class="pc"><li class="p">City walks get street-level scale, drives get the whole valley</li><li class="p">No step changes: the target itself is continuous in time</li><li class="c">Lags the cursor by ~0.5 s by design</li></ul>
+      <div class="ctrlrow" role="radiogroup" aria-label="Camera behaviour">
+        <label><input type="radio" name="mdAlgo" id="mdSmooth" value="smooth" checked> Smooth</label>
+        <label><input type="radio" name="mdAlgo" id="mdReactive" value="reactive"> Reactive</label>
+      </div>
+      <div class="ctrlrow" role="radiogroup" aria-label="Map zoom mode">
+        <label><input type="radio" name="mdMode" id="mdFollow" value="follow" checked> Follow</label>
+        <label><input type="radio" name="mdMode" id="mdWhole" value="whole"> Whole trip</label>
+        <label><input type="radio" name="mdMode" id="mdManual" value="manual"> Manual</label>
+      </div></div>
+    <div class="fig">
+      <canvas id="mdMain" tabindex="0" aria-label="Map following cursor time"></canvas>
+      <canvas id="mdStrip" tabindex="0" aria-label="Time strip, drag to scrub"></canvas>
+      <input type="range" id="mdScrub" min="0" max="1000" value="460" aria-label="Scrub time">
+      <div class="figbar"><span id="mdRead" class="mono"></span></div>
+    </div>
+  </div>
+</section>
+
+<!-- LIGHTBOX -->
+<section class="comp" id="lightbox">
+  <span class="eyebrow">G · one photo</span>
+  <h2>Gallery / lightbox</h2>
+  <p class="lead">Opens on click and goes through the selected range in time order. Here the real photo is replaced by its blurred thumbhash. Click the left or right half, or hover the frame and use ← →.</p>
+
+  <div class="variant">
+    <div class="vmeta"><div class="vid"><span class="letter">A</span><span class="code">G-A</span></div><h3>Cinema</h3>
+      <p>Black, full-bleed photo with a filmstrip of neighbours. Metadata stays out of the way at the top.</p>
+      <ul class="pc"><li class="p">Photo gets every pixel</li><li class="p">Filmstrip shows bursts and what's next</li><li class="c">No sense of where or when beyond one line</li></ul></div>
+    <div class="fig"><canvas id="gaMain" tabindex="0" aria-label="Lightbox cinema"></canvas></div>
+  </div>
+
+  <div class="variant">
+    <div class="vmeta"><div class="vid"><span class="letter">B</span><span class="code">G-B</span></div><h3>Photo and logbook</h3>
+      <p>The photo takes about 70% of the width. The side panel carries the time, place, coordinates, a mini-map and the position in the range.</p>
+      <ul class="pc"><li class="p">Keeps the time/place story while browsing</li><li class="p">“Open in Immich” and “original” live here</li><li class="c">Smaller photo</li></ul></div>
+    <div class="fig"><canvas id="gbMain" tabindex="0" aria-label="Lightbox with side panel"></canvas></div>
+  </div>
+
+  <div class="variant">
+    <div class="vmeta"><div class="vid"><span class="letter">C</span><span class="code">G-C</span></div><h3>Scrubber</h3>
+      <p>Full-bleed photo with a thin density strip of the whole range along the bottom. Drag it to jump through hours at a time.</p>
+      <ul class="pc"><li class="p">Fast long jumps without closing the lightbox</li><li class="p">Keeps the wave metaphor in the lightbox</li><li class="c">Strip covers the bottom of the photo</li></ul></div>
+    <div class="fig"><canvas id="gcMain" tabindex="0" aria-label="Lightbox with scrubber"></canvas></div>
+  </div>
+</section>
+</div>
+<div id="tip" hidden></div>
+
+<script>
+const DATA = /*__DATA__*/;
+const DAY = 864e5, HOUR = 36e5;
+const C = {ground:'#101215',surface:'#171A1F',raised:'#20242B',line:'#2A2F37',ink:'#E9E6DF',ink2:'#B5B9C0',muted:'#7F858E',photo:'#C98128',photoHi:'#E8A64E',video:'#3A9BD6',black:'#060708'};
+const MONO = '500 11px "IBM Plex Mono", ui-monospace, monospace';
+const MONO_S = '400 10px "IBM Plex Mono", ui-monospace, monospace';
+const SANS = '500 12px "IBM Plex Sans", system-ui, sans-serif';
+const T = s => Date.parse(s.length === 10 ? s + 'T00:00:00Z' : s + 'Z');
+const fmt = (t, o) => new Intl.DateTimeFormat('en-GB', Object.assign({timeZone: 'UTC'}, o)).format(t);
+const fDay = t => fmt(t, {day: 'numeric', month: 'short', year: 'numeric'});
+const fTime = t => fmt(t, {hour: '2-digit', minute: '2-digit', hour12: false});
+const fWd = t => fmt(t, {weekday: 'short', day: 'numeric', month: 'short'});
+const fDur = ms => { const s = Math.round(ms / 1000); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, k) => a + (b - a) * k;
+
+/* ---------- thumbhash ---------- */
+function thumbHashToRGBA(hash) {
+  const {PI, min, max, cos, round} = Math;
+  const h24 = hash[0] | (hash[1] << 8) | (hash[2] << 16), h16 = hash[3] | (hash[4] << 8);
+  const l_dc = (h24 & 63) / 63, p_dc = ((h24 >> 6) & 63) / 31.5 - 1, q_dc = ((h24 >> 12) & 63) / 31.5 - 1;
+  const l_scale = ((h24 >> 18) & 31) / 31, hasAlpha = h24 >> 23;
+  const p_scale = ((h16 >> 3) & 63) / 63, q_scale = ((h16 >> 9) & 63) / 63, isLandscape = h16 >> 15;
+  const lx = max(3, isLandscape ? hasAlpha ? 5 : 7 : h16 & 7), ly = max(3, isLandscape ? h16 & 7 : hasAlpha ? 5 : 7);
+  const a_dc = hasAlpha ? (hash[5] & 15) / 15 : 1, a_scale = (hash[5] >> 4) / 15;
+  const ac_start = hasAlpha ? 6 : 5; let ac_index = 0;
+  const dec = (nx, ny, scale) => { const ac = [];
+    for (let cy = 0; cy < ny; cy++) for (let cx = cy ? 0 : 1; cx * ny < nx * (ny - cy); cx++)
+      ac.push((((hash[ac_start + (ac_index >> 1)] >> ((ac_index++ & 1) << 2)) & 15) / 7.5 - 1) * scale);
+    return ac; };
+  const l_ac = dec(lx, ly, l_scale), p_ac = dec(3, 3, p_scale * 1.25), q_ac = dec(3, 3, q_scale * 1.25), a_ac = hasAlpha && dec(5, 5, a_scale);
+  const hx = hash[3], ha = hash[2] & 0x80, hl = hash[4] & 0x80;
+  const ratio = (hl ? ha ? 5 : 7 : hx & 7) / (hl ? hx & 7 : ha ? 5 : 7);
+  const w = round(ratio > 1 ? 32 : 32 * ratio), h = round(ratio > 1 ? 32 / ratio : 32);
+  const rgba = new Uint8ClampedArray(w * h * 4), fx = [], fy = [];
+  for (let y = 0, i = 0; y < h; y++) for (let x = 0; x < w; x++, i += 4) {
+    let l = l_dc, p = p_dc, q = q_dc, a = a_dc;
+    for (let cx = 0, n = max(lx, hasAlpha ? 5 : 3); cx < n; cx++) fx[cx] = cos(PI / w * (x + .5) * cx);
+    for (let cy = 0, n = max(ly, hasAlpha ? 5 : 3); cy < n; cy++) fy[cy] = cos(PI / h * (y + .5) * cy);
+    for (let cy = 0, j = 0; cy < ly; cy++) for (let cx = cy ? 0 : 1, f2 = fy[cy] * 2; cx * ly < lx * (ly - cy); cx++, j++) l += l_ac[j] * fx[cx] * f2;
+    for (let cy = 0, j = 0; cy < 3; cy++) for (let cx = cy ? 0 : 1, f2 = fy[cy] * 2; cx < 3 - cy; cx++, j++) { const f = fx[cx] * f2; p += p_ac[j] * f; q += q_ac[j] * f; }
+    if (hasAlpha) for (let cy = 0, j = 0; cy < 5; cy++) for (let cx = cy ? 0 : 1, f2 = fy[cy] * 2; cx < 5 - cy; cx++, j++) a += a_ac[j] * fx[cx] * f2;
+    const b = l - 2 / 3 * p, r = (3 * l - b + q) / 2, g = r - q;
+    rgba[i] = max(0, 255 * min(1, r)); rgba[i + 1] = max(0, 255 * min(1, g)); rgba[i + 2] = max(0, 255 * min(1, b)); rgba[i + 3] = max(0, 255 * min(1, a));
+  }
+  return {w, h, rgba};
+}
+function hashCanvas(b64) {
+  const c = document.createElement('canvas');
+  if (!b64) { c.width = c.height = 4; const x = c.getContext('2d'); x.fillStyle = '#333'; x.fillRect(0, 0, 4, 4); return c; }
+  const bin = atob(b64), arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  const {w, h, rgba} = thumbHashToRGBA(arr); c.width = w; c.height = h;
+  c.getContext('2d').putImageData(new ImageData(rgba, w, h), 0, 0); return c;
+}
+
+/* ---------- data ---------- */
+const T0 = Date.UTC(2008, 0, 1), T1 = Date.UTC(2026, 9, 14);
+const ND = Math.round((T1 - T0) / DAY);
+const dI = new Float32Array(ND), dV = new Float32Array(ND);
+for (const [d, i, v] of DATA.daily) { const k = Math.round((T(d) - T0) / DAY); if (k >= 0 && k < ND) { dI[k] = i; dV[k] = v; } }
+const pI = new Float64Array(ND + 1), pV = new Float64Array(ND + 1);
+for (let k = 0; k < ND; k++) { pI[k + 1] = pI[k] + dI[k]; pV[k + 1] = pV[k] + dV[k]; }
+let maxDay = 0; for (let k = 0; k < ND; k++) maxDay = Math.max(maxDay, dI[k] + dV[k]);
+const SQ = Math.sqrt(maxDay);
+// mean per-day density over [ta, tb)
+function dens(ta, tb) {
+  const a = (ta - T0) / DAY, b = (tb - T0) / DAY;
+  if (b - a < 1) { const k = Math.floor((a + b) / 2); return k < 0 || k >= ND ? [0, 0] : [dI[k], dV[k]]; }
+  const ka = clamp(Math.floor(a), 0, ND), kb = clamp(Math.ceil(b), 0, ND), n = Math.max(1, kb - ka);
+  return [(pI[kb] - pI[ka]) / n, (pV[kb] - pV[ka]) / n];
+}
+function sumRange(ta, tb) {
+  const ka = clamp(Math.floor((ta - T0) / DAY), 0, ND), kb = clamp(Math.ceil((tb - T0) / DAY), 0, ND);
+  return [pI[kb] - pI[ka], pV[kb] - pV[ka]];
+}
+const smooth = a => a.map((_, i) => { let s = 0, w = 0; for (let j = -2; j <= 2; j++) { const v = a[i + j]; if (v !== undefined) { const k = 3 - Math.abs(j); s += v * k; w += k; } } return s / w; });
+
+const TRIPS = DATA.albums.map(a => ({n: a.n, s: T(a.s), e: T(a.e) + DAY, c: a.c}))
+  .filter(a => a.e - a.s <= 45 * DAY && a.c >= 30).sort((a, b) => b.s - a.s);
+
+const A = DATA.kg.map((a, i) => ({i, t: T(a.t), v: a.ty === 'VIDEO', la: a.la, lo: a.lo, city: a.c, du: a.du, h: a.h}));
+A.forEach(a => a.img = hashCanvas(a.h));
+const R0 = Date.UTC(2025, 8, 5), R1 = Date.UTC(2025, 8, 16);
+const GPS = A.filter(a => a.la != null);
+
+let SEL = [R0, R1];
+let HOVER_T = R0 + 0.46 * (R1 - R0);
+
+/* ---------- canvas & tooltip helpers ---------- */
+function fit(cv, h) {
+  const dpr = window.devicePixelRatio || 1, w = cv.clientWidth;
+  cv.style.height = h + 'px'; cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+  const ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
+  return {ctx, w, h};
+}
+function tile(ctx, a, x, y, s, ring) {
+  const im = a.img, m = Math.min(im.width, im.height);
+  ctx.drawImage(im, (im.width - m) / 2, (im.height - m) / 2, m, m, x, y, s, s);
+  if (a.v && s >= 5) { ctx.fillStyle = C.video; ctx.fillRect(x, y + s - Math.max(1.5, s * .18), s, Math.max(1.5, s * .18)); }
+  if (ring) { ctx.strokeStyle = ring; ctx.lineWidth = 2; ctx.strokeRect(x - 1, y - 1, s + 2, s + 2); }
+}
+function cover(ctx, im, x, y, w, h) {
+  const r = Math.max(w / im.width, h / im.height), sw = w / r, sh = h / r;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(im, (im.width - sw) / 2, (im.height - sh) / 2, sw, sh, x, y, w, h);
+}
+const tipEl = document.getElementById('tip');
+function showTip(ev, a, extra) {
+  tipEl.replaceChildren();
+  if (a) {
+    const c = document.createElement('canvas'); c.width = 120; c.height = 120; cover(c.getContext('2d'), a.img, 0, 0, 120, 120); tipEl.append(c);
+    const s = document.createElement('strong'); s.textContent = fWd(a.t) + ' · ' + fTime(a.t); tipEl.append(s);
+    const d = document.createElement('span'); d.textContent = (a.v ? 'video ' + fDur(a.du) : 'photo') + ' · ' + (a.city || (a.la != null ? 'GPS, no city' : 'no GPS')); tipEl.append(d);
+  }
+  for (const line of extra || []) { const e = document.createElement(line.b ? 'strong' : 'span'); e.textContent = line.t; tipEl.append(e); }
+  tipEl.hidden = false;
+  const r = tipEl.getBoundingClientRect();
+  let x = ev.clientX + 16, y = ev.clientY + 16;
+  if (x + r.width > innerWidth - 8) x = ev.clientX - r.width - 16;
+  if (y + r.height > innerHeight - 8) y = ev.clientY - r.height - 16;
+  tipEl.style.left = x + 'px'; tipEl.style.top = y + 'px';
+}
+const hideTip = () => tipEl.hidden = true;
+const local = (ev, el) => { const r = el.getBoundingClientRect(); return [ev.clientX - r.left, ev.clientY - r.top]; };
+
+/* generic brush: get/set [t0,t1] using toX/toT supplied at pointerdown */
+function brush(el, opt) {
+  let mode = null, off = 0, start = 0, map = null;
+  const hit = (x, m) => { const s = opt.get(), a = m.toX(s[0]), b = m.toX(s[1]);
+    if (Math.abs(x - a) < 7) return 'l'; if (Math.abs(x - b) < 7) return 'r'; if (x > a && x < b) return 'm'; return 'n'; };
+  el.addEventListener('pointerdown', ev => {
+    const [x, y] = local(ev, el); map = opt.maps(x, y); if (!map) return;
+    mode = hit(x, map); el.setPointerCapture(ev.pointerId);
+    if (mode === 'm') off = map.toT(x) - opt.get()[0];
+    if (mode === 'n') { start = map.toT(x); }
+    opt.begin && opt.begin();
+  });
+  el.addEventListener('pointermove', ev => {
+    const [x, y] = local(ev, el);
+    if (!mode) { const m = opt.maps(x, y); const h = m ? hit(x, m) : null;
+      el.style.cursor = h === 'l' || h === 'r' ? 'ew-resize' : h === 'm' ? 'grab' : 'crosshair';
+      opt.hover && opt.hover(ev, x, y); return; }
+    const t = clamp(map.toT(x), map.lo, map.hi); let [s0, s1] = opt.get();
+    if (mode === 'l') s0 = t; else if (mode === 'r') s1 = t;
+    else if (mode === 'm') { const w = s1 - s0; s0 = clamp(t - off, map.lo, map.hi - w); s1 = s0 + w; }
+    else { s0 = Math.min(start, t); s1 = Math.max(start, t); }
+    if (s1 < s0) { [s0, s1] = [s1, s0]; mode = mode === 'l' ? 'r' : 'l'; }
+    if (s1 - s0 < HOUR * 6) s1 = s0 + HOUR * 6;
+    opt.set([s0, s1]);
+  });
+  const end = () => { if (mode) { mode = null; opt.end && opt.end(); } };
+  el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+  el.addEventListener('pointerleave', () => { if (!mode) { hideTip(); opt.leave && opt.leave(); } });
+}
+function drawSel(ctx, x0, x1, y0, y1, w, label) {
+  ctx.fillStyle = 'rgba(16,18,21,.6)';
+  ctx.fillRect(0, y0, Math.max(0, x0), y1 - y0); ctx.fillRect(x1, y0, w - x1, y1 - y0);
+  ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x0, y1); ctx.moveTo(x1, y0); ctx.lineTo(x1, y1); ctx.stroke();
+  const hm = (y0 + y1) / 2; ctx.fillStyle = C.ink;
+  for (const x of [x0, x1]) { ctx.beginPath(); ctx.roundRect(x - 3, hm - 10, 6, 20, 3); ctx.fill(); }
+  if (label) { ctx.font = MONO; ctx.fillStyle = C.ink; const tw = ctx.measureText(label).width;
+    ctx.fillText(label, clamp((x0 + x1) / 2 - tw / 2, 2, w - tw - 2), y0 - 6); }
+}
+
+/* stacked sqrt area: values arrays I,V per px; base y, height H, dir +1 up */
+function area(ctx, I, V, base, H, mode) {
+  const n = I.length, top = [], mid = [];
+  for (let x = 0; x < n; x++) { const tot = I[x] + V[x]; const h = tot > 0 ? Math.sqrt(tot) / SQ * H : 0; top.push(h); mid.push(tot > 0 ? h * I[x] / tot : 0); }
+  const path = (f, g) => { ctx.beginPath(); ctx.moveTo(0, base - g(0)); for (let x = 0; x < n; x++) ctx.lineTo(x + .5, base - f(x)); for (let x = n - 1; x >= 0; x--) ctx.lineTo(x + .5, base - g(x)); ctx.closePath(); ctx.fill(); };
+  if (mode === 'mirror') {
+    ctx.fillStyle = C.photo; path(x => I[x] > 0 ? Math.sqrt(I[x]) / SQ * H : 0, () => 0);
+    ctx.fillStyle = C.video; path(() => 0, x => V[x] > 0 ? -Math.sqrt(V[x]) / SQ * H : 0);
+    return;
+  }
+  ctx.fillStyle = C.photo; path(x => mid[x], () => 0);
+  ctx.fillStyle = C.video; path(x => top[x], x => mid[x]);
+}
+function readout() {
+  const [i, v] = sumRange(SEL[0], SEL[1]); const days = Math.round((SEL[1] - SEL[0]) / DAY);
+  document.getElementById('selReadout').textContent = `${fDay(SEL[0])} → ${fDay(SEL[1] - 1)} · ${days} d · ${Math.round(i)} photos · ${Math.round(v)} videos`;
+}
+
+/* ---------- O-A context + focus ---------- */
+let VIEW = [Date.UTC(2025, 3, 1), Date.UTC(2026, 3, 1)];
+const oaCtx = document.getElementById('oaCtx'), oaMain = document.getElementById('oaMain');
+function drawOA() {
+  { const {ctx, w, h} = fit(oaCtx, 56), sc = (T1 - T0) / w, I = [], V = [];
+    for (let x = 0; x < w; x++) { const [i, v] = dens(T0 + x * sc, T0 + (x + 1) * sc); I.push(i); V.push(v); }
+    area(ctx, smooth(I), smooth(V), 40, 36);
+    ctx.font = MONO_S; ctx.fillStyle = C.muted;
+    for (let y = 2009; y <= 2026; y++) { const x = (Date.UTC(y, 0, 1) - T0) / sc; ctx.fillRect(x, 40, 1, 4); if (y % 2 === 0 || w > 900) ctx.fillText("'" + String(y).slice(2), x + 2, 54); }
+    drawSel(ctx, (VIEW[0] - T0) / sc, (VIEW[1] - T0) / sc, 2, 42, w);
+    ctx.fillStyle = C.photoHi; const sx = (SEL[0] - T0) / sc; ctx.fillRect(sx - 1, 40, Math.max(2, (SEL[1] - SEL[0]) / sc), 3);
+  }
+  const {ctx, w} = fit(oaMain, 196), sc = (VIEW[1] - VIEW[0]) / w, I = [], V = [];
+  for (let x = 0; x < w; x++) { const [i, v] = dens(VIEW[0] + x * sc, VIEW[0] + (x + 1) * sc); I.push(i); V.push(v); }
+  area(ctx, sc > DAY / 3 ? smooth(I) : I, sc > DAY / 3 ? smooth(V) : V, 138, 112);
+  ctx.fillStyle = C.line; ctx.fillRect(0, 138, w, 1);
+  // ticks: months or days
+  ctx.font = MONO_S; ctx.fillStyle = C.muted;
+  const span = VIEW[1] - VIEW[0], d0 = new Date(VIEW[0]);
+  if (span > 60 * DAY) { for (let m = 0; m < 400; m++) { const t = Date.UTC(d0.getUTCFullYear(), d0.getUTCMonth() + m, 1); if (t > VIEW[1]) break; const x = (t - VIEW[0]) / sc; if (x < 0) continue;
+      ctx.fillRect(x, 138, 1, 4); const lab = new Date(t).getUTCMonth() === 0 ? String(new Date(t).getUTCFullYear()) : fmt(t, {month: 'short'}); if (span < 900 * DAY || new Date(t).getUTCMonth() % 3 === 0) ctx.fillText(lab, x + 3, 151); } }
+  else { const step = span > 20 * DAY ? 7 : 1; for (let k = 0; k < 400; k += step) { const t = Date.UTC(d0.getUTCFullYear(), d0.getUTCMonth(), d0.getUTCDate() + k); if (t > VIEW[1]) break; const x = (t - VIEW[0]) / sc; ctx.fillRect(x, 138, 1, 4); ctx.fillText(fmt(t, {day: 'numeric', month: 'short'}), x + 3, 151); } }
+  // album rail
+  oaMain._alb = [];
+  for (const a of TRIPS) { if (a.e < VIEW[0] || a.s > VIEW[1]) continue; const x0 = (a.s - VIEW[0]) / sc, x1 = Math.max(x0 + 3, (a.e - VIEW[0]) / sc);
+    const on = SEL[0] === a.s && SEL[1] === a.e;
+    ctx.fillStyle = on ? C.photoHi : '#5b4426'; ctx.beginPath(); ctx.roundRect(x0, 166, x1 - x0, 7, 2); ctx.fill(); oaMain._alb.push({a, x0, x1});
+    if (x1 - x0 > 60) { ctx.fillStyle = on ? C.ink : C.ink2; ctx.font = MONO_S; ctx.fillText(a.n.replace(/^\d{4}(-\d\d)?_/, ''), x0, 188); } }
+  drawSel(ctx, (SEL[0] - VIEW[0]) / sc, (SEL[1] - VIEW[0]) / sc, 18, 160, w, null);
+}
+brush(oaCtx, {get: () => VIEW, set: v => { VIEW = v; drawOA(); },
+  maps: () => { const sc = (T1 - T0) / oaCtx.clientWidth; return {toX: t => (t - T0) / sc, toT: x => T0 + x * sc, lo: T0, hi: T1}; }});
+brush(oaMain, {get: () => SEL, set: s => { SEL = s; redrawOverviews(); },
+  maps: (x, y) => { if (y > 160) return null; const sc = (VIEW[1] - VIEW[0]) / oaMain.clientWidth; return {toX: t => (t - VIEW[0]) / sc, toT: x => VIEW[0] + x * sc, lo: VIEW[0], hi: VIEW[1]}; },
+  hover: (ev, x, y) => { const hit = y > 160 && (oaMain._alb || []).find(b => x >= b.x0 - 2 && x <= b.x1 + 2);
+    if (hit) { oaMain.style.cursor = 'pointer'; showTip(ev, null, [{t: hit.a.n, b: 1}, {t: `${fDay(hit.a.s)} → ${fDay(hit.a.e - 1)} · ${hit.a.c} items`}]); } else hideTip(); }});
+oaMain.addEventListener('click', ev => { const [x, y] = local(ev, oaMain); if (y <= 160) return;
+  const hit = (oaMain._alb || []).find(b => x >= b.x0 - 2 && x <= b.x1 + 2); if (hit) pickAlbum(hit.a); });
+oaMain.addEventListener('wheel', ev => { ev.preventDefault(); const [x] = local(ev, oaMain), w = oaMain.clientWidth;
+  const t = VIEW[0] + x / w * (VIEW[1] - VIEW[0]), k = Math.exp(ev.deltaY * 0.0015);
+  let span = clamp((VIEW[1] - VIEW[0]) * k, 7 * DAY, T1 - T0), v0 = t - x / w * span; v0 = clamp(v0, T0, T1 - span); VIEW = [v0, v0 + span]; drawOA(); }, {passive: false});
+
+/* ---------- O-B ridgeline ---------- */
+const obMain = document.getElementById('obMain'), YEARS = []; for (let y = 2015; y <= 2026; y++) YEARS.push(y);
+const OB = {lab: 46, pitch: 30, peak: 64, top: 52};
+function drawOB() {
+  const {ctx, w} = fit(obMain, OB.top + YEARS.length * OB.pitch + 24), pw = w - OB.lab;
+  ctx.font = MONO_S; ctx.fillStyle = C.muted;
+  for (let m = 0; m < 12; m++) { const x = OB.lab + m / 12 * pw; ctx.fillRect(x, 8, 1, OB.top + YEARS.length * OB.pitch - 4); ctx.fillText(fmt(Date.UTC(2020, m, 1), {month: 'short'}), x + 3, 12); }
+  ctx.fillStyle = C.ground; // gridlines dim
+  YEARS.forEach((y, r) => {
+    const base = OB.top + r * OB.pitch + OB.pitch, ys = Date.UTC(y, 0, 1), ye = Date.UTC(y + 1, 0, 1), sc = (ye - ys) / pw, I = [], V = [];
+    for (let x = 0; x < pw; x++) { const [i, v] = dens(ys + x * sc, ys + (x + 1) * sc); I.push(i); V.push(v); }
+    ctx.save(); ctx.translate(OB.lab, 0);
+    // occluder
+    const Is = smooth(smooth(I)), Vs = smooth(smooth(V));
+    ctx.fillStyle = C.surface; ctx.beginPath(); ctx.moveTo(0, base);
+    for (let x = 0; x < pw; x++) { const t = Is[x] + Vs[x]; ctx.lineTo(x, base - (t > 0 ? Math.sqrt(t) / SQ * OB.peak : 0) - 1.5); }
+    ctx.lineTo(pw, base); ctx.closePath(); ctx.fill();
+    area(ctx, Is, Vs, base, OB.peak);
+    ctx.fillStyle = C.line; ctx.fillRect(0, base, pw, 1);
+    // selection in this row
+    const a = Math.max(SEL[0], ys), b = Math.min(SEL[1], ye);
+    if (b > a) { const x0 = (a - ys) / sc, x1 = (b - ys) / sc;
+      ctx.fillStyle = 'rgba(233,230,223,.12)'; ctx.fillRect(x0, base - OB.pitch - 8, x1 - x0, OB.pitch + 8);
+      ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x0, base - OB.pitch - 8); ctx.lineTo(x0, base + 2); ctx.moveTo(x1, base - OB.pitch - 8); ctx.lineTo(x1, base + 2); ctx.stroke();
+      ctx.fillStyle = C.ink; for (const x of [x0, x1]) { ctx.beginPath(); ctx.roundRect(x - 3, base - OB.pitch / 2 - 10, 6, 16, 3); ctx.fill(); } }
+    ctx.restore();
+    ctx.font = MONO; ctx.fillStyle = C.ink2; ctx.fillText(String(y), 0, base - 3);
+  });
+  ctx.font = MONO_S; ctx.fillStyle = C.muted; ctx.fillText('2008–2014: 20 items, folded', OB.lab, OB.top + YEARS.length * OB.pitch + 18);
+}
+const obMap = (x, y) => { const r = Math.floor((y - OB.top) / OB.pitch); if (r < 0 || r >= YEARS.length) return null;
+  const pw = obMain.clientWidth - OB.lab, ys = Date.UTC(YEARS[r], 0, 1), ye = Date.UTC(YEARS[r] + 1, 0, 1), sc = (ye - ys) / pw;
+  return {toX: t => OB.lab + (t - ys) / sc, toT: x => ys + (x - OB.lab) * sc, lo: ys, hi: ye}; };
+brush(obMain, {get: () => SEL, set: s => { SEL = s; redrawOverviews(); }, maps: obMap,
+  hover: (ev, x, y) => { const m = obMap(x, y); if (!m || x < OB.lab) return hideTip(); const t = m.toT(x), [i, v] = sumRange(t - 3 * DAY, t + 4 * DAY);
+    showTip(ev, null, [{t: fDay(t), b: 1}, {t: `±3 days: ${Math.round(i)} photos · ${Math.round(v)} videos`}]); }});
+
+/* ---------- O-C fisheye ---------- */
+const ocMain = document.getElementById('ocMain'); let OC_FROZEN = null;
+function knots(w, s) {
+  const [s0, s1] = s, sp = s1 - s0, m = Math.max(sp * 2.5, 20 * DAY);
+  const a = Math.max(T0, s0 - m), b = Math.min(T1, s1 + m);
+  const F = w * .32, Sh = w * .12, rest = w - F - (a < s0 ? Sh : 0) - (b > s1 ? Sh : 0);
+  const outL = a - T0, outR = T1 - b, L = rest * outL / Math.max(1, outL + outR);
+  const ts = [T0, a, s0, s1, b, T1], xs = [0, L, L + (a < s0 ? Sh : 0), 0, 0, w];
+  xs[3] = xs[2] + F; xs[4] = xs[3] + (b > s1 ? Sh : 0);
+  return {ts, xs};
+}
+const pw2 = (k, from, to, v) => { for (let i = 0; i < 5; i++) if (v <= from[i + 1] || i === 4) { const d = from[i + 1] - from[i]; return d <= 0 ? to[i] : lerp(to[i], to[i + 1], (v - from[i]) / d); } };
+function drawOC() {
+  const {ctx, w} = fit(ocMain, 200), K = OC_FROZEN || knots(w, SEL);
+  const toX = t => pw2(K, K.ts, K.xs, t), toT = x => pw2(K, K.xs, K.ts, x), mid = 104, I = [], V = [];
+  for (let x = 0; x < w; x++) { const [i, v] = dens(toT(x), toT(x + 1)); I.push(i); V.push(v); }
+  // shoulder shading
+  ctx.fillStyle = 'rgba(233,230,223,.035)'; ctx.fillRect(K.xs[1], 14, K.xs[4] - K.xs[1], 176);
+  area(ctx, smooth(I), smooth(V), mid, 80, 'mirror');
+  ctx.fillStyle = C.line; ctx.fillRect(0, mid, w, 1);
+  ctx.font = MONO_S; ctx.fillStyle = C.muted; let last = -99;
+  for (let y = 2009; y <= 2026; y++) { const x = toX(Date.UTC(y, 0, 1)); ctx.fillRect(x, mid - 3, 1, 6); if (x - last > 30) { ctx.fillText(String(y), x + 2, 196); last = x; } }
+  const sp = SEL[1] - SEL[0], step = sp > 90 * DAY ? 30 : sp > 20 * DAY ? 7 : 1;
+  ctx.fillStyle = C.ink2; last = -99;
+  for (let t = SEL[0]; t <= SEL[1]; t += step * DAY) { const x = toX(t); if (x - last > 34) { ctx.fillRect(x, mid + 2, 1, 4); ctx.fillText(fmt(t, {day: 'numeric', month: 'short'}), x + 2, mid + 16); last = x; } }
+  ctx.fillStyle = C.muted; ctx.fillText('photos ↑', 4, 22); ctx.fillText('videos ↓', 4, 186);
+  drawSel(ctx, toX(SEL[0]), toX(SEL[1]), 26, 184, w, null);
+}
+brush(ocMain, {get: () => SEL, set: s => { SEL = s; redrawOverviews(); },
+  begin: () => { OC_FROZEN = knots(ocMain.clientWidth, SEL); }, end: () => { OC_FROZEN = null; redrawOverviews(); },
+  maps: () => { const K = OC_FROZEN || knots(ocMain.clientWidth, SEL); return {toX: t => pw2(K, K.ts, K.xs, t), toT: x => pw2(K, K.xs, K.ts, x), lo: T0, hi: T1}; }});
+
+function redrawOverviews() { drawOA(); drawOB(); drawOC(); readout();
+  const p = document.getElementById('albumPick'), m = TRIPS.findIndex(a => a.s === SEL[0] && a.e === SEL[1]); p.value = m >= 0 ? String(m) : ''; }
+function pickAlbum(a) { SEL = [a.s, a.e]; const span = Math.max(120 * DAY, (a.e - a.s) * 8), c = (a.s + a.e) / 2;
+  let v0 = clamp(c - span / 2, T0, T1 - span); VIEW = [v0, v0 + span]; redrawOverviews(); }
+{ const p = document.getElementById('albumPick'); const none = document.createElement('option'); none.value = ''; none.textContent = '— custom range —'; p.append(none);
+  TRIPS.forEach((a, i) => { const o = document.createElement('option'); o.value = String(i); o.textContent = `${a.n}  (${a.c})`; p.append(o); });
+  p.addEventListener('change', () => { if (p.value !== '') pickAlbum(TRIPS[+p.value]); }); }
+
+/* ---------- detail ---------- */
+const xT = w => t => (t - R0) / (R1 - R0) * w;
+function dayAxis(ctx, w, y, lab) {
+  ctx.font = MONO_S;
+  for (let k = 0; k <= 11; k++) { const t = R0 + k * DAY, x = xT(w)(t); ctx.fillStyle = C.line; ctx.fillRect(x, lab ? 0 : y - 4, 1, lab ? y : 4);
+    if (k < 11) { ctx.fillStyle = C.muted; ctx.fillText(fWd(t), x + 4, y + 14); } }
+}
+function cursor(ctx, w, top, bot) {
+  const x = xT(w)(HOVER_T); ctx.strokeStyle = C.ink; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x + .5, top); ctx.lineTo(x + .5, bot); ctx.stroke();
+  ctx.font = MONO; const s = fTime(HOVER_T), tw = ctx.measureText(s).width; ctx.fillStyle = C.ink; ctx.fillText(s, clamp(x - tw / 2, 0, w - tw), top - 4);
+}
+function nearestAsset(t) { let best = A[0], d = Infinity; for (const a of A) { const e = Math.abs(a.t - t); if (e < d) { d = e; best = a; } } return best; }
+function detailHover(cv, rectsKey, toT) {
+  cv.addEventListener('pointermove', ev => { const [x, y] = local(ev, cv), rs = cv[rectsKey] || [];
+    const r = rs.find(r => x >= r.x - 1 && x <= r.x + r.s + 1 && y >= r.y - 1 && y <= r.y + r.s + 1);
+    HOVER_T = r ? r.a.t : toT(x, y); HOVER_HIT = r ? r.a : null; redrawLinked();
+    if (r) showTip(ev, r.a); else hideTip(); cv.style.cursor = r ? 'zoom-in' : 'crosshair'; });
+  cv.addEventListener('pointerleave', () => { HOVER_HIT = null; hideTip(); redrawLinked(); });
+  cv.addEventListener('click', ev => { const [x, y] = local(ev, cv); const r = (cv[rectsKey] || []).find(r => x >= r.x - 1 && x <= r.x + r.s + 1 && y >= r.y - 1 && y <= r.y + r.s + 1);
+    if (r) { LB = r.a.i; drawLightboxes(); document.getElementById('lightbox').scrollIntoView({behavior: 'smooth'}); } });
+}
+let HOVER_HIT = null;
+
+const daMain = document.getElementById('daMain');
+function drawDA() {
+  const w = daMain.clientWidth, NB = 132, cw = w / NB, s = Math.max(3, Math.floor(cw) - 1), bins = Array.from({length: NB}, () => []);
+  for (const a of A) bins[clamp(Math.floor((a.t - R0) / (2 * HOUR)), 0, NB - 1)].push(a);
+  const mx = Math.max(...bins.map(b => b.length)), base = 24 + mx * (s + 1);
+  const {ctx} = fit(daMain, base + 22); dayAxis(ctx, w, base, true); daMain._r = [];
+  bins.forEach((b, k) => b.forEach((a, j) => { const x = Math.round(k * cw), y = base - (j + 1) * (s + 1); const on = HOVER_HIT === a;
+    tile(ctx, a, x, y, s, on ? C.ink : null); daMain._r.push({a, x, y, s}); }));
+  cursor(ctx, w, 16, base);
+}
+detailHover(daMain, '_r', x => R0 + x / daMain.clientWidth * (R1 - R0));
+
+const dbMain = document.getElementById('dbMain');
+function drawDB() {
+  const w = dbMain.clientWidth, s = 9, slot = 10, X = xT(w), edges = [], place = [];
+  for (const a of A) { const x = X(a.t) - s / 2; let L = 0; while (edges[L] !== undefined && edges[L] > x) L++; edges[L] = x + slot; place.push({a, x, L}); }
+  const base = 30 + edges.length * slot, {ctx} = fit(dbMain, base + 22);
+  // soft density
+  const bw = 2, nb = Math.ceil(w / bw), hist = new Float32Array(nb); for (const a of A) hist[clamp(Math.floor(X(a.t) / bw), 0, nb - 1)]++;
+  const sig = 1.2 * HOUR / (R1 - R0) * w / bw, kde = new Float32Array(nb);
+  for (let i = 0; i < nb; i++) if (hist[i]) for (let j = Math.max(0, i - Math.ceil(3 * sig)); j < Math.min(nb, i + 3 * sig); j++) kde[j] += hist[i] * Math.exp(-((j - i) ** 2) / (2 * sig * sig));
+  const km = Math.max(...kde); ctx.fillStyle = 'rgba(201,129,40,.16)'; ctx.beginPath(); ctx.moveTo(0, base);
+  for (let i = 0; i < nb; i++) ctx.lineTo(i * bw, base - kde[i] / km * (base - 30) * 1.05); ctx.lineTo(w, base); ctx.closePath(); ctx.fill();
+  dayAxis(ctx, w, base, true); dbMain._r = [];
+  for (const p of place) { const y = base - (p.L + 1) * slot; tile(ctx, p.a, p.x, y, s, HOVER_HIT === p.a ? C.ink : null); dbMain._r.push({a: p.a, x: p.x, y, s}); }
+  cursor(ctx, w, 22, base);
+}
+detailHover(dbMain, '_r', x => R0 + x / dbMain.clientWidth * (R1 - R0));
+
+const dcMain = document.getElementById('dcMain'), DC = {lab: 104, pitch: 66, top: 34};
+function drawDC() {
+  const w = dcMain.clientWidth, pw = w - DC.lab, cw = pw / 48, s = Math.max(4, Math.floor((cw - 2) / 2)), {ctx} = fit(dcMain, DC.top + 11 * DC.pitch + 10);
+  ctx.font = MONO_S;
+  for (let hh = 0; hh <= 24; hh += 3) { const x = DC.lab + hh / 24 * pw; ctx.fillStyle = C.line; ctx.fillRect(x, DC.top - 8, 1, 11 * DC.pitch + 8); ctx.fillStyle = C.muted; if (hh < 24) ctx.fillText(String(hh).padStart(2, '0') + ':00', x + 3, DC.top - 12); }
+  dcMain._r = [];
+  for (let d = 0; d < 11; d++) {
+    const ds = R0 + d * DAY, base = DC.top + (d + 1) * DC.pitch - 4, items = A.filter(a => a.t >= ds && a.t < ds + DAY), bins = Array.from({length: 48}, () => []);
+    items.forEach(a => bins[Math.floor((a.t - ds) / (HOUR / 2))].push(a));
+    const cities = {}; items.forEach(a => a.city && (cities[a.city] = (cities[a.city] || 0) + 1));
+    const top = Object.entries(cities).sort((a, b) => b[1] - a[1])[0];
+    ctx.fillStyle = C.line; ctx.fillRect(DC.lab, base + 1, pw, 1);
+    ctx.font = MONO; ctx.fillStyle = C.ink2; ctx.fillText(fWd(ds), 0, base - 22);
+    ctx.font = MONO_S; ctx.fillStyle = C.muted; ctx.fillText(items.length + (top ? ' · ' + top[0] : ''), 0, base - 8);
+    bins.forEach((b, k) => b.forEach((a, j) => { const x = Math.round(DC.lab + k * cw + 1 + (j % 2) * (s + 1)), y = base - (Math.floor(j / 2) + 1) * (s + 1);
+      tile(ctx, a, x, y, s, HOVER_HIT === a ? C.ink : null); dcMain._r.push({a, x, y, s}); }));
+    if (HOVER_T >= ds && HOVER_T < ds + DAY) { const x = DC.lab + (HOVER_T - ds) / DAY * pw; ctx.strokeStyle = C.ink; ctx.beginPath(); ctx.moveTo(x + .5, base - DC.pitch + 6); ctx.lineTo(x + .5, base + 2); ctx.stroke(); }
+  }
+}
+detailHover(dcMain, '_r', (x, y) => { const d = clamp(Math.floor((y - DC.top) / DC.pitch), 0, 10); return R0 + d * DAY + clamp((x - DC.lab) / (dcMain.clientWidth - DC.lab), 0, .999) * DAY; });
+
+/* ---------- maps ---------- */
+const BB = (() => { let a = 90, b = -90, c = 180, d = -180; for (const g of GPS) { a = Math.min(a, g.la); b = Math.max(b, g.la); c = Math.min(c, g.lo); d = Math.max(d, g.lo); } return {la0: a, la1: b, lo0: c, lo1: d}; })();
+function proj(w, h, pad) {
+  const k = Math.cos((BB.la0 + BB.la1) / 2 * Math.PI / 180), sx = (w - 2 * pad) / ((BB.lo1 - BB.lo0) * k), sy = (h - 2 * pad) / (BB.la1 - BB.la0), s = Math.min(sx, sy);
+  const ox = (w - (BB.lo1 - BB.lo0) * k * s) / 2, oy = (h - (BB.la1 - BB.la0) * s) / 2;
+  return (la, lo) => [ox + (lo - BB.lo0) * k * s, h - oy - (la - BB.la0) * s];
+}
+function graticule(ctx, w, h, P) {
+  ctx.strokeStyle = '#1F242B'; ctx.lineWidth = 1; ctx.font = MONO_S; ctx.fillStyle = C.muted;
+  for (let lo = Math.ceil(BB.lo0 - 2); lo <= BB.lo1 + 2; lo++) { const [x] = P(BB.la0, lo); if (x < 0 || x > w) continue; ctx.beginPath(); ctx.moveTo(x + .5, 0); ctx.lineTo(x + .5, h); ctx.stroke(); ctx.fillText(lo + '°E', x + 3, h - 6); }
+  for (let la = Math.ceil(BB.la0 - 2); la <= BB.la1 + 2; la++) { const [, y] = P(la, BB.lo0); if (y < 0 || y > h) continue; ctx.beginPath(); ctx.moveTo(0, y + .5); ctx.lineTo(w, y + .5); ctx.stroke(); ctx.fillText(la + '°N', 4, y - 4); }
+}
+const isGap = (a, b) => b.t - a.t > 4 * HOUR;
+function posAt(t) { if (t <= GPS[0].t) return GPS[0]; for (let i = 1; i < GPS.length; i++) if (GPS[i].t >= t) { const a = GPS[i - 1], b = GPS[i], k = (t - a.t) / Math.max(1, b.t - a.t); return {la: lerp(a.la, b.la, k), lo: lerp(a.lo, b.lo, k), i}; } return GPS[GPS.length - 1]; }
+function clusters(P, cell) {
+  const m = new Map(); for (const g of GPS) { const [x, y] = P(g.la, g.lo), key = Math.round(x / cell) + ',' + Math.round(y / cell); if (!m.has(key)) m.set(key, []); m.get(key).push({g, x, y}); }
+  return [...m.values()].map(l => ({items: l.map(e => e.g), x: l.reduce((s, e) => s + e.x, 0) / l.length, y: l.reduce((s, e) => s + e.y, 0) / l.length}));
+}
+function marker(ctx, P) { const p = posAt(HOVER_T), [x, y] = P(p.la, p.lo);
+  ctx.fillStyle = C.ink; ctx.beginPath(); ctx.arc(x, y, 5, 0, 7); ctx.fill(); ctx.strokeStyle = C.photo; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(x, y, 8, 0, 7); ctx.stroke(); return [x, y]; }
+function clusterTip(cv, key) {
+  cv.addEventListener('pointermove', ev => { const [x, y] = local(ev, cv), cl = (cv[key] || []).find(c => Math.hypot(c.x - x, c.y - y) < c.r);
+    if (!cl) { cv.style.cursor = 'default'; return hideTip(); } cv.style.cursor = 'pointer';
+    const ts = cl.items.map(g => g.t), cities = [...new Set(cl.items.map(g => g.city).filter(Boolean))];
+    showTip(ev, cl.items[Math.floor(cl.items.length / 2)], [{t: `${cl.items.length} items here · ${cities.join(', ') || 'no city'}`}, {t: `${fWd(Math.min(...ts))} ${fTime(Math.min(...ts))} → ${fWd(Math.max(...ts))} ${fTime(Math.max(...ts))}`}]); });
+  cv.addEventListener('pointerleave', hideTip);
+}
+const timeColor = k => { const a = [74, 52, 24], b = [244, 200, 128]; return `rgb(${a.map((v, i) => Math.round(lerp(v, b[i], k))).join(',')})`; };
+
+const maMain = document.getElementById('maMain');
+function drawMA() {
+  const {ctx, w, h} = fit(maMain, 440), P = proj(w, h, 40); graticule(ctx, w, h, P);
+  ctx.lineCap = 'round';
+  for (let i = 1; i < GPS.length; i++) { const a = GPS[i - 1], b = GPS[i], [x0, y0] = P(a.la, a.lo), [x1, y1] = P(b.la, b.lo);
+    ctx.strokeStyle = timeColor((a.t - R0) / (R1 - R0)); ctx.lineWidth = isGap(a, b) ? 1 : 2; ctx.setLineDash(isGap(a, b) ? [3, 4] : []); ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); }
+  ctx.setLineDash([]); maMain._c = [];
+  for (const c of clusters(P, 34)) { const s = c.items.length > 1 ? 26 : 18, a = c.items[Math.floor(c.items.length / 2)];
+    ctx.fillStyle = C.ground; ctx.fillRect(c.x - s / 2 - 2, c.y - s / 2 - 2, s + 4, s + 4); tile(ctx, a, c.x - s / 2, c.y - s / 2, s);
+    if (c.items.length > 1) { ctx.font = MONO_S; const lab = String(c.items.length), tw = ctx.measureText(lab).width; ctx.fillStyle = C.ground; ctx.fillRect(c.x + s / 2 - tw - 2, c.y + s / 2 - 2, tw + 5, 13); ctx.fillStyle = C.ink; ctx.fillText(lab, c.x + s / 2 - tw, c.y + s / 2 + 8); }
+    maMain._c.push({items: c.items, x: c.x, y: c.y, r: s / 2 + 4}); }
+  marker(ctx, P);
+  // legend
+  const g = ctx.createLinearGradient(w - 170, 0, w - 30, 0); g.addColorStop(0, timeColor(0)); g.addColorStop(1, timeColor(1));
+  ctx.fillStyle = g; ctx.fillRect(w - 170, 16, 140, 4); ctx.font = MONO_S; ctx.fillStyle = C.muted; ctx.fillText('5 Sep', w - 170, 34); ctx.fillText('15 Sep', w - 66, 34);
+}
+clusterTip(maMain, '_c');
+
+const mbMain = document.getElementById('mbMain'), mbStrip = document.getElementById('mbStrip'), mbScrub = document.getElementById('mbScrub');
+function drawMB() {
+  const {ctx, w, h} = fit(mbMain, 440), P = proj(w, h, 40); graticule(ctx, w, h, P); ctx.lineCap = 'round';
+  for (let i = 1; i < GPS.length; i++) { const a = GPS[i - 1], b = GPS[i], [x0, y0] = P(a.la, a.lo), [x1, y1] = P(b.la, b.lo), past = b.t <= HOVER_T, gap = isGap(a, b);
+    ctx.strokeStyle = past ? C.photoHi : '#3A4049'; ctx.lineWidth = past ? 2.5 : 1.5; ctx.setLineDash(gap ? [3, 5] : []); ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); }
+  ctx.setLineDash([]);
+  const [mx, my] = marker(ctx, P), a = HOVER_HIT || nearestAsset(HOVER_T), cw = 150, chh = 132, cx = mx + 18 + cw > w ? mx - 18 - cw : mx + 18, cy = clamp(my - chh / 2, 8, h - chh - 8);
+  ctx.fillStyle = '#0B0C0E'; ctx.strokeStyle = C.line; ctx.lineWidth = 1; ctx.beginPath(); ctx.roundRect(cx, cy, cw, chh, 5); ctx.fill(); ctx.stroke();
+  cover(ctx, a.img, cx + 6, cy + 6, cw - 12, 84);
+  ctx.font = MONO; ctx.fillStyle = C.ink; ctx.fillText(fWd(HOVER_T) + ' ' + fTime(HOVER_T), cx + 8, cy + 108);
+  ctx.font = MONO_S; ctx.fillStyle = C.muted; ctx.fillText((a.v ? 'video ' + fDur(a.du) + ' · ' : '') + (a.city || (a.la != null ? '' : 'nearest: no GPS')), cx + 8, cy + 123);
+  // strip
+  const st = fit(mbStrip, 30), sw = st.w, nb = Math.floor(sw / 3), hist = new Float32Array(nb);
+  for (const x of A) hist[clamp(Math.floor((x.t - R0) / (R1 - R0) * nb), 0, nb - 1)]++;
+  const hm = Math.max(...hist); hist.forEach((v, i) => { if (!v) return; const hh = Math.sqrt(v / hm) * 24, x = i * 3; st.ctx.fillStyle = (R0 + (i + .5) / nb * (R1 - R0)) <= HOVER_T ? C.photo : '#4a3a24'; st.ctx.fillRect(x, 28 - hh, 2, hh); });
+  for (let k = 1; k < 11; k++) { st.ctx.fillStyle = C.line; st.ctx.fillRect(k / 11 * sw, 0, 1, 30); }
+  mbScrub.value = String(Math.round((HOVER_T - R0) / (R1 - R0) * 1000));
+}
+mbScrub.addEventListener('input', () => { HOVER_T = R0 + (+mbScrub.value / 1000) * (R1 - R0); HOVER_HIT = null; redrawLinked(); });
+
+const mcMain = document.getElementById('mcMain');
+function drawMC() {
+  const {ctx, w, h} = fit(mcMain, 440), P = proj(w, h, 50); graticule(ctx, w, h, P);
+  // faint route up to cursor
+  ctx.strokeStyle = 'rgba(232,166,78,.45)'; ctx.lineWidth = 1.5; ctx.setLineDash([2, 4]); ctx.beginPath();
+  GPS.filter(g => g.t <= HOVER_T).forEach((g, i) => { const [x, y] = P(g.la, g.lo); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }); ctx.stroke(); ctx.setLineDash([]);
+  const cl = clusters(P, 48).sort((a, b) => a.items.length - b.items.length); mcMain._c = [];
+  const big = cl.slice(-6);
+  for (const c of cl) { const n = c.items.length, s = clamp(14 + Math.sqrt(n) * 4, 16, 54), pile = Math.min(3, n), rot = [-.12, .09, 0];
+    for (let p = 0; p < pile; p++) { const a = c.items[Math.floor((p + 1) / (pile + 1) * n)] || c.items[0];
+      ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(pile > 1 ? rot[3 - pile + p] : 0); ctx.fillStyle = C.ink; ctx.fillRect(-s / 2 - 2, -s / 2 - 2, s + 4, s + 4); tile(ctx, a, -s / 2, -s / 2, s); ctx.restore(); }
+    if (n > 1) { ctx.font = MONO_S; const lab = String(n), tw = ctx.measureText(lab).width; ctx.fillStyle = C.photo; ctx.beginPath(); ctx.roundRect(c.x + s / 2 - tw / 2 - 4, c.y - s / 2 - 8, tw + 8, 14, 7); ctx.fill(); ctx.fillStyle = '#1a1206'; ctx.fillText(lab, c.x + s / 2 - tw / 2, c.y - s / 2 + 2); }
+    if (big.includes(c)) { const city = c.items.map(g => g.city).find(Boolean); if (city) { ctx.font = SANS; ctx.fillStyle = C.ink; const tw = ctx.measureText(city).width; ctx.fillText(city, c.x - tw / 2, c.y + s / 2 + 16); } }
+    mcMain._c.push({items: c.items, x: c.x, y: c.y, r: s / 2 + 4}); }
+  marker(ctx, P);
+}
+clusterTip(mcMain, '_c');
+
+/* ---------- M-D follow-cam ---------- */
+const mdMain = document.getElementById('mdMain'), mdStrip = document.getElementById('mdStrip'), mdScrub = document.getElementById('mdScrub'), mdRead = document.getElementById('mdRead');
+const KLAT = Math.cos((BB.la0 + BB.la1) / 2 * Math.PI / 180), MDH = 460;
+const MD = {mode: 'follow', cur: null, tgt: null, anim: 0, drag: null};
+function fitView(pts, w, h, pad, minSpan) {
+  let a = 90, b = -90, c = 180, d = -180; for (const p of pts) { a = Math.min(a, p.la); b = Math.max(b, p.la); c = Math.min(c, p.lo); d = Math.max(d, p.lo); }
+  const dla = Math.max(b - a, minSpan), dlo = Math.max(d - c, minSpan / KLAT);
+  return {la: (a + b) / 2, lo: (c + d) / 2, z: Math.min((w - 2 * pad) / (dlo * KLAT), (h - 2 * pad) / dla)};
+}
+function windowPts(t) { let W = 3 * HOUR, pts = [];
+  for (;;) { pts = GPS.filter(g => Math.abs(g.t - t) <= W); if (pts.length >= 3 || W >= 48 * HOUR) break; W *= 2; }
+  const p = posAt(t); pts.push({la: p.la, lo: p.lo}); return pts; }
+const mdProj = (v, w, h) => (la, lo) => [w / 2 + (lo - v.lo) * KLAT * v.z, h / 2 - (la - v.la) * v.z];
+function mdTarget(w, h) {
+  if (MD.mode === 'whole') return fitView(GPS, w, h, 40, .01);
+  if (MD.mode === 'manual') return MD.tgt || MD.cur;
+  const cand = fitView(windowPts(HOVER_T), w, h, 70, .012), t = MD.tgt; if (!t) return cand;
+  const p = posAt(HOVER_T), [x, y] = mdProj(t, w, h)(p.la, p.lo), zr = cand.z / t.z;
+  return x > w * .15 && x < w * .85 && y > h * .15 && y < h * .85 && zr < 1.8 && zr > 1 / 1.8 ? t : cand;
+}
+function mdStep() {
+  const w = mdMain.clientWidth; MD.tgt = mdTarget(w, MDH); if (!MD.cur) MD.cur = {...MD.tgt};
+  const k = matchMedia('(prefers-reduced-motion: reduce)').matches ? 1 : .2, c = MD.cur, t = MD.tgt;
+  c.la = lerp(c.la, t.la, k); c.lo = lerp(c.lo, t.lo, k); c.z = Math.exp(lerp(Math.log(c.z), Math.log(t.z), k));
+  const done = Math.abs(c.z / t.z - 1) < .003 && Math.hypot((c.la - t.la) * c.z, (c.lo - t.lo) * KLAT * c.z) < .5;
+  if (done) MD.cur = {...t};
+  drawMD(); MD.anim = done ? 0 : requestAnimationFrame(mdStep);
+}
+MD.algo = 'smooth';
+const smoothOn = () => MD.algo === 'smooth' && MD.mode === 'follow';
+const mdKick = () => { if (!MD.anim) MD.anim = requestAnimationFrame(smoothOn() ? mdSmoothStep : mdStep); };
+
+/* smooth camera: continuous target path, precomputed every 10 min, then spring-followed */
+const TSTEP = 10 * 60e3; let TRACK = null;
+function buildTrack() {
+  const st = (t, s) => { let W = 0, la = 0, lo = 0; const ws = GPS.map(g => { const w = s === Infinity ? 1 : Math.exp(-.5 * ((g.t - t) / s) ** 2); W += w; la += w * g.la; lo += w * g.lo; return w; });
+    if (W < 1e-6) return null; la /= W; lo /= W; let a = 0, b = 0;
+    GPS.forEach((g, i) => { a += ws[i] * (g.la - la) ** 2; b += ws[i] * ((g.lo - lo) * KLAT) ** 2; });
+    return {W, la, lo, sa: Math.sqrt(a / W), so: Math.sqrt(b / W)}; };
+  const raw = [];
+  for (let t = R0; t <= R1; t += TSTEP) {
+    let v = st(t, Infinity);
+    for (const s of [24 * HOUR, 6 * HOUR, 1.5 * HOUR]) { const q = st(t, s); if (!q) continue; const al = q.W / (q.W + 2);
+      v = {la: lerp(v.la, q.la, al), lo: lerp(v.lo, q.lo, al), sa: lerp(v.sa, q.sa, al), so: lerp(v.so, q.so, al)}; }
+    const p = posAt(t); let hy = Math.max(2.4 * v.sa, .006), hx = Math.max(2.4 * v.so, .006);
+    hy = Math.max(hy, Math.abs(p.la - v.la) * 1.2); hx = Math.max(hx, Math.abs(p.lo - v.lo) * KLAT * 1.2);
+    raw.push([v.la, v.lo, Math.log(hx), Math.log(hy)]);
+  }
+  TRACK = raw.map((_, i) => { const o = [0, 0, 0, 0]; let W = 0;
+    for (let j = -9; j <= 9; j++) { const r = raw[i + j]; if (!r) continue; const w = Math.exp(-.5 * (j / 3) ** 2); W += w; for (let c = 0; c < 4; c++) o[c] += w * r[c]; }
+    return o.map(x => x / W); });
+}
+function trackAt(t) { const f = clamp((t - R0) / TSTEP, 0, TRACK.length - 1), i = Math.floor(f), k = f - i, a = TRACK[i], b = TRACK[Math.min(i + 1, TRACK.length - 1)];
+  const r = a.map((x, c) => lerp(x, b[c], k)); return {la: r[0], lo: r[1], hx: Math.exp(r[2]), hy: Math.exp(r[3])}; }
+const spring = (x, v, tg, om, dt) => { v += (om * om * (tg - x) - 2 * om * v) * dt; return [x + v * dt, v]; };
+function mdSmoothStep(now) {
+  if (!TRACK) buildTrack();
+  const w = mdMain.clientWidth, h = MDH, dt = MD.last ? Math.min(1 / 30, (now - MD.last) / 1000) : 1 / 60; MD.last = now;
+  const T = trackAt(HOVER_T); let lz = Math.log(Math.min((w / 2 - 60) / T.hx, (h / 2 - 60) / T.hy));
+  const c = MD.cur || (MD.cur = {la: T.la, lo: T.lo, z: Math.exp(lz)}), V = MD.vel || (MD.vel = {la: 0, lo: 0, lz: 0});
+  const dist = Math.hypot(T.la - c.la, (T.lo - c.lo) * KLAT); if (dist > 0) lz = Math.min(lz, Math.log(.45 * Math.min(w, h) / dist));
+  const p = posAt(HOVER_T); MD.mk = MD.mk || {la: p.la, lo: p.lo}; MD.mkv = MD.mkv || {la: 0, lo: 0};
+  let cz = Math.log(c.z);
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) { c.la = T.la; c.lo = T.lo; cz = lz; MD.mk = {la: p.la, lo: p.lo}; }
+  else {
+    [c.la, V.la] = spring(c.la, V.la, T.la, 5, dt); [c.lo, V.lo] = spring(c.lo, V.lo, T.lo, 5, dt); [cz, V.lz] = spring(cz, V.lz, lz, 3.5, dt);
+    [MD.mk.la, MD.mkv.la] = spring(MD.mk.la, MD.mkv.la, p.la, 14, dt); [MD.mk.lo, MD.mkv.lo] = spring(MD.mk.lo, MD.mkv.lo, p.lo, 14, dt);
+  }
+  c.z = Math.exp(cz); MD.tview = {la: T.la, lo: T.lo, z: Math.exp(lz)};
+  drawMD();
+  const px = c.z, settled = Math.hypot(T.la - c.la, (T.lo - c.lo) * KLAT) * px < .3 && Math.abs(cz - lz) < .002
+    && Math.hypot(V.la, V.lo * KLAT) * px < 1 && Math.abs(V.lz) < .01 && Math.hypot(MD.mk.la - p.la, (MD.mk.lo - p.lo) * KLAT) * px < .3;
+  if (settled || !smoothOn()) { MD.anim = 0; MD.last = 0; if (!settled) mdKick(); } else MD.anim = requestAnimationFrame(mdSmoothStep);
+}
+document.querySelectorAll('input[name=mdAlgo]').forEach(r => r.addEventListener('change', () => { MD.algo = r.value; MD.tgt = null; MD.tview = null; MD.vel = null; if (MD.mode !== 'follow') mdSetMode('follow'); else mdKick(); }));
+function popCard(ctx, mx, my, w, h) {
+  const a = HOVER_HIT || nearestAsset(HOVER_T), cw = 156, chh = 136, cx = mx + 20 + cw > w ? mx - 20 - cw : mx + 20, cy = clamp(my - chh / 2, 8, h - chh - 8);
+  ctx.strokeStyle = 'rgba(233,230,223,.35)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(cx < mx ? cx + cw : cx, cy + chh / 2); ctx.stroke();
+  ctx.fillStyle = '#0B0C0E'; ctx.strokeStyle = C.line; ctx.beginPath(); ctx.roundRect(cx, cy, cw, chh, 5); ctx.fill(); ctx.stroke();
+  cover(ctx, a.img, cx + 6, cy + 6, cw - 12, 88);
+  if (a.v) { ctx.fillStyle = C.video; ctx.fillRect(cx + 6, cy + 90, cw - 12, 4); }
+  ctx.font = MONO; ctx.fillStyle = C.ink; ctx.fillText(fWd(a.t) + ' ' + fTime(a.t), cx + 8, cy + 112);
+  ctx.font = MONO_S; ctx.fillStyle = C.muted; ctx.fillText((a.v ? 'video ' + fDur(a.du) + ' · ' : '') + (a.city || (a.la != null ? 'GPS' : 'no GPS · nearest point')), cx + 8, cy + 127);
+}
+function drawMD() {
+  const {ctx, w, h} = fit(mdMain, MDH), v = MD.cur, P = mdProj(v, w, h);
+  const lo0 = v.lo - w / 2 / (KLAT * v.z), lo1 = v.lo + w / 2 / (KLAT * v.z), la0 = v.la - h / 2 / v.z, la1 = v.la + h / 2 / v.z;
+  let st = 5; for (const s of [5, 2, 1, .5, .2, .1, .05, .02, .01, .005, .002]) if (s * v.z >= 90) st = s;
+  const dec = Math.max(0, -Math.floor(Math.log10(st) + 1e-9));
+  ctx.strokeStyle = '#1F242B'; ctx.lineWidth = 1; ctx.font = MONO_S; ctx.fillStyle = C.muted;
+  for (let lo = Math.ceil(lo0 / st) * st; lo <= lo1; lo += st) { const [x] = P(v.la, lo); ctx.beginPath(); ctx.moveTo(x + .5, 0); ctx.lineTo(x + .5, h); ctx.stroke(); ctx.fillText(lo.toFixed(dec) + '°E', x + 3, h - 6); }
+  for (let la = Math.ceil(la0 / st) * st; la <= la1; la += st) { const [, y] = P(la, v.lo); ctx.beginPath(); ctx.moveTo(0, y + .5); ctx.lineTo(w, y + .5); ctx.stroke(); ctx.fillText(la.toFixed(dec) + '°N', 4, y - 4); }
+  ctx.lineCap = 'round';
+  for (let i = 1; i < GPS.length; i++) { const a = GPS[i - 1], b = GPS[i], [x0, y0] = P(a.la, a.lo), [x1, y1] = P(b.la, b.lo), gap = isGap(a, b);
+    ctx.strokeStyle = timeColor((a.t - R0) / (R1 - R0)); ctx.lineWidth = gap ? 1 : 2.5; ctx.setLineDash(gap ? [3, 5] : []); ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); }
+  ctx.setLineDash([]); mdMain._c = [];
+  for (const c of clusters(P, 36)) { if (c.x < -30 || c.x > w + 30 || c.y < -30 || c.y > h + 30) continue;
+    const s = c.items.length > 1 ? 28 : 20, a = c.items[Math.floor(c.items.length / 2)];
+    ctx.fillStyle = C.ground; ctx.fillRect(c.x - s / 2 - 2, c.y - s / 2 - 2, s + 4, s + 4); tile(ctx, a, c.x - s / 2, c.y - s / 2, s);
+    if (c.items.length > 1) { ctx.font = MONO_S; const lab = String(c.items.length), tw = ctx.measureText(lab).width; ctx.fillStyle = C.ground; ctx.fillRect(c.x + s / 2 - tw - 2, c.y + s / 2 - 2, tw + 5, 13); ctx.fillStyle = C.ink; ctx.fillText(lab, c.x + s / 2 - tw, c.y + s / 2 + 8); }
+    mdMain._c.push({items: c.items, x: c.x, y: c.y, r: s / 2 + 4}); }
+  let mx, my;
+  if (smoothOn() && MD.mk) { [mx, my] = P(MD.mk.la, MD.mk.lo); ctx.fillStyle = C.ink; ctx.beginPath(); ctx.arc(mx, my, 5, 0, 7); ctx.fill(); ctx.strokeStyle = C.photo; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(mx, my, 8, 0, 7); ctx.stroke(); }
+  else [mx, my] = marker(ctx, P);
+  popCard(ctx, mx, my, w, h);
+  // inset: whole trip + current viewport
+  const iw = Math.min(190, w * .28), ih = iw * .7, ix = w - iw - 12, iy = 12, IP = proj(iw, ih, 10);
+  ctx.fillStyle = 'rgba(11,12,14,.92)'; ctx.strokeStyle = C.line; ctx.beginPath(); ctx.roundRect(ix, iy, iw, ih, 4); ctx.fill(); ctx.stroke();
+  ctx.save(); ctx.beginPath(); ctx.rect(ix, iy, iw, ih); ctx.clip(); ctx.translate(ix, iy);
+  ctx.strokeStyle = '#5a5f68'; ctx.lineWidth = 1; ctx.beginPath(); GPS.forEach((g, i) => { const [x, y] = IP(g.la, g.lo); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }); ctx.stroke();
+  const [rx0, ry0] = IP(la1, lo0), [rx1, ry1] = IP(la0, lo1); ctx.strokeStyle = C.photoHi; ctx.lineWidth = 1.5; ctx.strokeRect(rx0, ry0, Math.max(3, rx1 - rx0), Math.max(3, ry1 - ry0));
+  if (smoothOn() && MD.tview) { const tv = MD.tview, hx = w / 2 / (KLAT * tv.z), hy = h / 2 / tv.z, [tx0, ty0] = IP(tv.la + hy, tv.lo - hx), [tx1, ty1] = IP(tv.la - hy, tv.lo + hx);
+    ctx.setLineDash([3, 3]); ctx.strokeStyle = C.ink2; ctx.lineWidth = 1; ctx.strokeRect(tx0, ty0, Math.max(3, tx1 - tx0), Math.max(3, ty1 - ty0)); ctx.setLineDash([]); }
+  ctx.restore();
+  // scale bar
+  const kmPx = 111.32 / v.z; let km = .05; for (const s of [.05, .1, .2, .5, 1, 2, 5, 10, 20, 50, 100, 200]) if (s / kmPx <= 130) km = s;
+  const bw = km / kmPx; ctx.fillStyle = C.ink2; ctx.fillRect(16, h - 30, bw, 2); ctx.fillRect(16, h - 34, 1, 6); ctx.fillRect(16 + bw, h - 34, 1, 6);
+  ctx.font = MONO_S; ctx.fillText(km < 1 ? km * 1000 + ' m' : km + ' km', 22 + bw, h - 26);
+  // strip
+  const S = fit(mdStrip, 44), sw = S.w, nb = Math.floor(sw / 3), hist = new Float32Array(nb);
+  for (const x of A) hist[clamp(Math.floor((x.t - R0) / (R1 - R0) * nb), 0, nb - 1)]++;
+  const hm = Math.max(...hist);
+  hist.forEach((c, i) => { if (!c) return; const hh = Math.sqrt(c / hm) * 26, x = i * 3; S.ctx.fillStyle = R0 + (i + .5) / nb * (R1 - R0) <= HOVER_T ? C.photo : '#4a3a24'; S.ctx.fillRect(x, 28 - hh, 2, hh); });
+  S.ctx.font = MONO_S;
+  for (let k = 0; k < 11; k++) { const x = k / 11 * sw; S.ctx.fillStyle = C.line; S.ctx.fillRect(x, 0, 1, 30); S.ctx.fillStyle = C.muted; if (sw / 11 > 44) S.ctx.fillText(fmt(R0 + k * DAY, {day: 'numeric', weekday: 'short'}), x + 3, 41); }
+  const cx = (HOVER_T - R0) / (R1 - R0) * sw; S.ctx.fillStyle = C.ink; S.ctx.fillRect(cx - 1, 0, 2, 30);
+  mdScrub.value = String(Math.round((HOVER_T - R0) / (R1 - R0) * 1000));
+  const p = posAt(HOVER_T), cities = GPS.filter(g => g.city && Math.abs(g.t - HOVER_T) < 3 * HOUR).map(g => g.city);
+  mdRead.textContent = `${fWd(HOVER_T)} ${fTime(HOVER_T)} · ${cities[0] || '—'} · frame ≈ ${(w * kmPx).toFixed(w * kmPx < 10 ? 1 : 0)} km wide · ${MD.mode}`;
+}
+function mdSetMode(m) { MD.mode = m; MD.vel = null; MD.last = 0; document.getElementById(m === 'follow' ? 'mdFollow' : m === 'whole' ? 'mdWhole' : 'mdManual').checked = true; if (m !== 'manual') MD.tgt = null; mdKick(); }
+document.querySelectorAll('input[name=mdMode]').forEach(r => r.addEventListener('change', () => mdSetMode(r.value)));
+const mdScrubTo = x => { HOVER_T = R0 + clamp(x / mdStrip.clientWidth, 0, 1) * (R1 - R0); HOVER_HIT = null; redrawLinked(); };
+mdStrip.addEventListener('pointermove', ev => mdScrubTo(local(ev, mdStrip)[0]));
+mdStrip.addEventListener('pointerdown', ev => { mdStrip.setPointerCapture(ev.pointerId); mdScrubTo(local(ev, mdStrip)[0]); });
+mdStrip.addEventListener('keydown', ev => { if (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight') { ev.preventDefault(); HOVER_T = clamp(HOVER_T + (ev.key === 'ArrowLeft' ? -1 : 1) * HOUR, R0, R1); redrawLinked(); } });
+mdStrip.style.cursor = 'ew-resize';
+mdScrub.addEventListener('input', () => { HOVER_T = R0 + (+mdScrub.value / 1000) * (R1 - R0); HOVER_HIT = null; redrawLinked(); });
+mdMain.addEventListener('wheel', ev => { ev.preventDefault(); if (!MD.cur) return; const [x, y] = local(ev, mdMain), w = mdMain.clientWidth, v = MD.cur;
+  const lo = v.lo + (x - w / 2) / (KLAT * v.z), la = v.la - (y - MDH / 2) / v.z, z = clamp(v.z * Math.exp(-ev.deltaY * .0015), 20, 2e5);
+  MD.cur = MD.tgt = {z, lo: lo - (x - w / 2) / (KLAT * z), la: la + (y - MDH / 2) / z}; mdSetMode('manual'); }, {passive: false});
+mdMain.addEventListener('pointerdown', ev => { MD.drag = local(ev, mdMain); mdMain.setPointerCapture(ev.pointerId); });
+mdMain.addEventListener('pointermove', ev => { if (!MD.drag) return; const [x, y] = local(ev, mdMain), v = MD.cur;
+  MD.cur = MD.tgt = {z: v.z, lo: v.lo - (x - MD.drag[0]) / (KLAT * v.z), la: v.la + (y - MD.drag[1]) / v.z}; MD.drag = [x, y]; if (MD.mode !== 'manual') mdSetMode('manual'); else drawMD(); });
+const mdUp = () => MD.drag = null; mdMain.addEventListener('pointerup', mdUp); mdMain.addEventListener('pointercancel', mdUp);
+clusterTip(mdMain, '_c');
+
+/* ---------- lightbox ---------- */
+let LB = A.findIndex(a => a.t >= Date.UTC(2025, 8, 10, 9)), LB_ACTIVE = null;
+function photoBox(ctx, a, x, y, w, h) {
+  ctx.fillStyle = C.black; ctx.fillRect(x, y, w, h);
+  const ar = a.img.width / a.img.height; let pw = w, ph = w / ar; if (ph > h) { ph = h; pw = h * ar; }
+  const px = x + (w - pw) / 2, py = y + (h - ph) / 2; ctx.imageSmoothingQuality = 'high'; ctx.drawImage(a.img, px, py, pw, ph);
+  ctx.font = MONO_S; ctx.fillStyle = 'rgba(233,230,223,.55)'; ctx.fillText('thumbhash · the full photo goes here', px + 8, py + ph - 8);
+  if (a.v) { const cx = x + w / 2, cy = y + h / 2; ctx.fillStyle = 'rgba(6,7,8,.55)'; ctx.beginPath(); ctx.arc(cx, cy, 30, 0, 7); ctx.fill(); ctx.fillStyle = C.ink; ctx.beginPath(); ctx.moveTo(cx - 9, cy - 14); ctx.lineTo(cx + 15, cy); ctx.lineTo(cx - 9, cy + 14); ctx.closePath(); ctx.fill();
+    ctx.font = MONO; ctx.fillText(fDur(a.du), cx - 14, cy + 50); }
+  return {px, py, pw, ph};
+}
+function chevrons(ctx, x, y, w, h) { ctx.strokeStyle = 'rgba(233,230,223,.6)'; ctx.lineWidth = 2; for (const [cx, d] of [[x + 22, -1], [x + w - 22, 1]]) { ctx.beginPath(); ctx.moveTo(cx - 5 * d, y + h / 2 - 10); ctx.lineTo(cx + 5 * d, y + h / 2); ctx.lineTo(cx - 5 * d, y + h / 2 + 10); ctx.stroke(); } }
+const meta = a => `${fWd(a.t)} 2025 · ${fTime(a.t)}${a.city ? ' · ' + a.city : ''}`;
+function lbH(w) { return Math.round(clamp(w * .56, 260, 600)); }
+
+function drawGA() { const cv = document.getElementById('gaMain'), {ctx, w, h} = fit(cv, lbH(cv.clientWidth)), a = A[LB];
+  ctx.fillStyle = C.black; ctx.fillRect(0, 0, w, h); photoBox(ctx, a, 0, 34, w, h - 34 - 64); chevrons(ctx, 0, 34, w, h - 98);
+  ctx.font = MONO; ctx.fillStyle = C.ink2; ctx.fillText(`${LB + 1} / ${A.length}`, 14, 22); const m = meta(a), tw = ctx.measureText(m).width; ctx.fillText(m, w - tw - 14, 22);
+  const s = 44, n = Math.min(15, Math.floor(w / (s + 6))), x0 = w / 2 - (n * (s + 6)) / 2;
+  for (let k = 0; k < n; k++) { const j = LB - Math.floor(n / 2) + k; if (j < 0 || j >= A.length) continue; ctx.globalAlpha = j === LB ? 1 : .55; tile(ctx, A[j], x0 + k * (s + 6), h - 54, s, j === LB ? C.ink : null); }
+  ctx.globalAlpha = 1; }
+function drawGB() { const cv = document.getElementById('gbMain'), {ctx, w, h} = fit(cv, lbH(cv.clientWidth)), a = A[LB], pw = Math.round(w * .68);
+  photoBox(ctx, a, 0, 0, pw, h); chevrons(ctx, 0, 0, pw, h);
+  ctx.fillStyle = C.raised; ctx.fillRect(pw, 0, w - pw, h); const x = pw + 20, iw = w - pw - 40;
+  ctx.fillStyle = C.ink; ctx.font = '700 40px "Bricolage Grotesque", system-ui, sans-serif'; ctx.fillText(fTime(a.t), x, 56);
+  ctx.font = SANS; ctx.fillStyle = C.ink2; ctx.fillText(fmt(a.t, {weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'}), x, 80);
+  ctx.font = MONO_S; ctx.fillStyle = C.muted; ctx.fillText(`${LB + 1} of ${A.length} · ${a.v ? 'video ' + fDur(a.du) : 'photo'}`, x, 98);
+  ctx.font = SANS; ctx.fillStyle = C.ink; ctx.fillText(a.city || (a.la != null ? 'Kyrgyzstan' : 'No GPS on this one'), x, 128);
+  ctx.font = MONO_S; ctx.fillStyle = C.muted; ctx.fillText(a.la != null ? `${a.la.toFixed(4)}° N  ${a.lo.toFixed(4)}° E` : 'nearest GPS shown on the map', x, 144);
+  const mh = Math.min(150, h - 260); if (mh > 60) { ctx.fillStyle = C.ground; ctx.fillRect(x, 158, iw, mh); ctx.save(); ctx.translate(x, 158); const P = proj(iw, mh, 10);
+    ctx.strokeStyle = '#3A4049'; ctx.lineWidth = 1; ctx.beginPath(); GPS.forEach((g, i) => { const [px, py] = P(g.la, g.lo); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); }); ctx.stroke();
+    const p = a.la != null ? a : posAt(a.t), [px, py] = P(p.la, p.lo); ctx.fillStyle = C.photoHi; ctx.beginPath(); ctx.arc(px, py, 4, 0, 7); ctx.fill(); ctx.restore(); }
+  const sy = 158 + Math.max(0, mh) + 18; ctx.font = MONO_S; ctx.fillStyle = C.muted; ctx.fillText('position in range', x, sy);
+  const nb = Math.floor(iw / 3), hist = new Float32Array(nb); for (const b of A) hist[clamp(Math.floor((b.t - R0) / (R1 - R0) * nb), 0, nb - 1)]++; const hm = Math.max(...hist);
+  hist.forEach((v, i) => { if (!v) return; const hh = Math.sqrt(v / hm) * 22; ctx.fillStyle = C.photo; ctx.fillRect(x + i * 3, sy + 30 - hh, 2, hh); });
+  const mx = x + (a.t - R0) / (R1 - R0) * iw; ctx.fillStyle = C.ink; ctx.fillRect(mx, sy + 4, 1.5, 30);
+  const by = Math.min(h - 46, sy + 52); ctx.strokeStyle = C.line; ctx.beginPath(); ctx.roundRect(x, by, iw, 32, 4); ctx.stroke(); ctx.font = SANS; ctx.fillStyle = C.ink; ctx.fillText('Open in Immich ↗', x + 12, by + 21);
+}
+function drawGC() { const cv = document.getElementById('gcMain'), {ctx, w, h} = fit(cv, lbH(cv.clientWidth)), a = A[LB];
+  photoBox(ctx, a, 0, 0, w, h); chevrons(ctx, 0, 0, w, h - 70);
+  const g = ctx.createLinearGradient(0, h - 90, 0, h); g.addColorStop(0, 'rgba(6,7,8,0)'); g.addColorStop(1, 'rgba(6,7,8,.92)'); ctx.fillStyle = g; ctx.fillRect(0, h - 90, w, 90);
+  ctx.font = MONO; ctx.fillStyle = C.ink2; ctx.fillText(`${LB + 1} / ${A.length}`, 14, 22); ctx.fillText(meta(a), 14, h - 52);
+  const x0 = 14, iw = w - 28, nb = Math.floor(iw / 3), hist = new Float32Array(nb); for (const b of A) hist[clamp(Math.floor((b.t - R0) / (R1 - R0) * nb), 0, nb - 1)]++; const hm = Math.max(...hist);
+  hist.forEach((v, i) => { if (!v) return; const hh = Math.sqrt(v / hm) * 20, past = R0 + (i + .5) / nb * (R1 - R0) <= a.t; ctx.fillStyle = past ? C.photoHi : 'rgba(201,129,40,.45)'; ctx.fillRect(x0 + i * 3, h - 14 - hh, 2, hh); });
+  ctx.font = MONO_S; ctx.fillStyle = C.muted; for (let k = 0; k < 11; k++) { const x = x0 + k / 11 * iw; ctx.fillRect(x, h - 12, 1, 4); }
+  const mx = x0 + (a.t - R0) / (R1 - R0) * iw; ctx.fillStyle = C.ink; ctx.beginPath(); ctx.roundRect(mx - 2, h - 40, 4, 30, 2); ctx.fill();
+  cv._strip = {x0, iw, y: h - 44};
+}
+function drawLightboxes() { drawGA(); drawGB(); drawGC(); }
+for (const id of ['gaMain', 'gbMain', 'gcMain']) { const cv = document.getElementById(id);
+  cv.addEventListener('pointerenter', () => LB_ACTIVE = cv);
+  cv.addEventListener('click', ev => { const [x, y] = local(ev, cv);
+    if (cv._strip && y > cv._strip.y) { const t = R0 + clamp((x - cv._strip.x0) / cv._strip.iw, 0, 1) * (R1 - R0); LB = nearestAsset(t).i; }
+    else LB = clamp(LB + (x < cv.clientWidth * (id === 'gbMain' ? .34 : .5) ? -1 : 1), 0, A.length - 1);
+    drawLightboxes(); });
+  cv.addEventListener('keydown', ev => { if (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight') { ev.preventDefault(); LB = clamp(LB + (ev.key === 'ArrowLeft' ? -1 : 1), 0, A.length - 1); drawLightboxes(); } });
+  cv.style.cursor = 'pointer'; }
+addEventListener('keydown', ev => { if (!LB_ACTIVE || !LB_ACTIVE.matches(':hover') || document.activeElement === LB_ACTIVE) return;
+  if (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight') { ev.preventDefault(); LB = clamp(LB + (ev.key === 'ArrowLeft' ? -1 : 1), 0, A.length - 1); drawLightboxes(); } });
+
+/* ---------- boot ---------- */
+let raf = 0;
+function redrawLinked() { cancelAnimationFrame(raf); raf = requestAnimationFrame(() => { drawDA(); drawDB(); drawDC(); drawMA(); drawMB(); drawMC(); mdKick(); }); }
+function all() { redrawOverviews(); drawDA(); drawDB(); drawDC(); drawMA(); drawMB(); drawMC(); if (MD.mode === "follow") MD.tgt = null; mdKick(); drawLightboxes(); }
+let rt = 0; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(all, 120); });
+(document.fonts ? document.fonts.ready : Promise.resolve()).then(all);
+all();
+</script>

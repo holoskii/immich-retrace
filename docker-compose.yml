@@ -1,0 +1,16 @@
+services:
+  immich-viewer:
+    build: .
+    image: immich-viewer:latest
+    container_name: immich-viewer
+    env_file:
+      - .env
+    # No host port: NPM reaches it as immich-viewer:8080 on self_hosting_network, behind Authelia.
+    # The API key in .env grants read access to the whole library, so nothing else may expose it.
+    networks:
+      - self_hosting_network
+    restart: unless-stopped
+
+networks:
+  self_hosting_network:
+    external: true

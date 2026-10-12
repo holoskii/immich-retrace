@@ -1,0 +1,27 @@
+{
+  "name": "immich-viewer",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev:web": "vite",
+    "dev:server": "node --watch server/main.ts",
+    "build": "vite build",
+    "start": "node server/main.ts",
+    "test": "vitest run",
+    "check": "svelte-check --tsconfig tsconfig.json && tsc -p tsconfig.server.json"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.5",
+    "hono": "^4.13.13"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^7.3.1",
+    "@tsconfig/svelte": "^5.0.8",
+    "@types/node": "^24.19.2",
+    "svelte": "^5.57.2",
+    "svelte-check": "^4.7.6",
+    "typescript": "^6.0.3",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.4"
+  }
+}

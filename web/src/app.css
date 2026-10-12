@@ -1,0 +1,11 @@
+:root {
+  color-scheme: dark;
+  --ground: #101215; --surface: #171A1F; --raised: #20242B; --line: #2A2F37;
+  --ink: #E9E6DF; --ink2: #B5B9C0; --muted: #7F858E;
+  --photo: #C98128; --photo-hi: #E8A64E; --video: #3A9BD6;
+  --f-body: "IBM Plex Sans", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--ground); color: var(--ink); font: 14px/1.5 var(--f-body); }
