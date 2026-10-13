@@ -55,6 +55,17 @@ describe('upstream requests', () => {
     expect(up.init.signal).toBeInstanceOf(AbortSignal);
   });
 
+  it('caches a versioned (c = thumbhash) URL for good and does not forward c', async () => {
+    const {app, media} = fakeImmich();
+    const hash = '1QcSHQRnh493V4dIh4eXh1h4kJUI';
+    const res = await app.request(`/api/assets/${ID}/thumbnail?size=preview&c=${encodeURIComponent(hash + '+/=')}`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBe('private, max-age=31536000, immutable');
+    expect(Object.fromEntries(media()[0].url.searchParams)).toEqual({size: 'preview', edited: 'true'});
+    // Video is never versioned.
+    expect((await app.request(`/api/assets/${ID}/video?c=${hash}`)).headers.get('cache-control')).toBe('no-store');
+  });
+
   it('waits through the gate loading page instead of relaying it', async () => {
     const {app, immich, pingCount} = fakeImmich({upAfter: 3});
     const res = await app.request(`/api/assets/${ID}/thumbnail`);
@@ -159,6 +170,9 @@ describe('input validation', () => {
     [`/api/assets/${ID}%2F..%2Fx/thumbnail`, 400],
     [`/api/assets/${ID.toUpperCase()}x/thumbnail`, 400],
     [`/api/assets/${ID}/thumbnail?size=fullsize`, 400],
+    [`/api/assets/${ID}/thumbnail?c=`, 400],
+    [`/api/assets/${ID}/thumbnail?c=a%26key%3Dx`, 400],
+    [`/api/assets/${ID}/thumbnail?c=${'A'.repeat(65)}`, 400],
     [`/api/assets/${ID}/original`, 404],
     [`/api/users/me`, 404],
   ])('%s → %i', async (path, status) => {

@@ -8,6 +8,9 @@ import {configFromEnv} from './config.ts';
 
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 const SIZES = new Set(['thumbnail', 'preview']);
+/** Cache-busting version from the browser (the asset's thumbhash, base64); never forwarded. */
+const VERSION = /^[A-Za-z0-9+/_-]{1,62}={0,2}$/;
+const IMMUTABLE = 'private, max-age=31536000, immutable';
 
 // Response headers worth passing back from Immich media endpoints; everything else is dropped.
 const PASS = ['content-type', 'content-length', 'content-range', 'accept-ranges', 'etag', 'last-modified'];
@@ -19,7 +22,8 @@ function singleRange(h: string | undefined) {
   return h;
 }
 
-function relay(res: Response) {
+/** `cacheControl`: no-store unless the URL is versioned (a new thumbhash = a new URL). */
+function relay(res: Response, cacheControl = 'no-store') {
   if (!res.ok) {
     void res.body?.cancel();
     // Immich answers 400 for an unknown id (its access check) and 404 for e.g. video of a photo.
@@ -29,8 +33,7 @@ function relay(res: Response) {
   }
   const headers = new Headers();
   for (const h of PASS) { const v = res.headers.get(h); if (v) headers.set(h, v); }
-  // Stage 1: no browser caching, so edits in Immich show up. Versioned URLs come with the index.
-  headers.set('cache-control', 'no-store');
+  headers.set('cache-control', cacheControl);
   return new Response(res.body, {status: res.status, headers});
 }
 
@@ -58,12 +61,15 @@ export function createApp(immich: ImmichClient, config: ViewerConfig = configFro
 
   // Hono routes HEAD through these GET handlers; it is sent upstream as HEAD, without Range.
   app.get('/api/assets/:id/thumbnail', async c => {
-    const id = c.req.param('id'), size = c.req.query('size') ?? 'thumbnail';
+    const id = c.req.param('id'), size = c.req.query('size') ?? 'thumbnail', version = c.req.query('c');
     if (!UUID.test(id)) return badRequest(c, 'Invalid asset id.');
     if (!SIZES.has(size)) return badRequest(c, 'size must be thumbnail or preview.');
+    if (version !== undefined && !VERSION.test(version)) return badRequest(c, 'c must be the asset\'s thumbhash.');
     const method = c.req.method === 'HEAD' ? 'HEAD' : 'GET';
     // edited=true prefers the edited rendition and falls back to the original one.
-    return relay(await immich.media(`/assets/${id}/thumbnail`, {method, query: {size, edited: 'true'}, signal: c.req.raw.signal}));
+    // A versioned URL (c = thumbhash, as Immich's own web UI does) changes when the image does: cache it for good.
+    const res = await immich.media(`/assets/${id}/thumbnail`, {method, query: {size, edited: 'true'}, signal: c.req.raw.signal});
+    return relay(res, version ? IMMUTABLE : 'no-store');
   });
 
   app.get('/api/assets/:id/video', async c => {

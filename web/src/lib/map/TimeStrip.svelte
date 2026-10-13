@@ -1,9 +1,11 @@
 <script lang="ts">
   // M-B strip under the map: photo/video density over the selection, with the shared time cursor.
   // Drag (or ←/→, Home/End when focused) to scrub; the URL gets the cursor when the gesture ends.
+  // Enter opens the lightbox at the asset nearest to the cursor.
   import type {Active} from '../selection.svelte.ts';
   import {selection, writeUrl} from '../selection.svelte.ts';
-  import {densityBins, stepTime} from './route.ts';
+  import {densityBins, nearestRow, stepTime} from './route.ts';
+  import {markScrub} from './scrub.ts';
   import {fDay, fMonthYear, fWeekday, fWhen} from './format.ts';
 
   let {active, offset}: {active: Active; offset: number} = $props();
@@ -102,11 +104,13 @@
     if (e.button !== 0) return;
     cv!.setPointerCapture(e.pointerId);
     dragging = true;
+    markScrub();
     selection.cursor = timeAt(e.clientX);
     writeUrl('live', selection.cursor);
   }
   function move(e: PointerEvent) {
     if (!dragging) return;
+    markScrub();
     selection.cursor = timeAt(e.clientX);
     writeUrl('live', selection.cursor);
   }
@@ -120,6 +124,11 @@
     const {ix, lo, hi} = active;
     let t: number | null = null;
     const c = cursorIn;
+    if (e.key === 'Enter') {
+      const r = nearestRow(ix, lo, hi, c ?? active.t0);
+      if (r >= 0) { e.preventDefault(); selection.lightbox = r; }
+      return;
+    }
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
       const dir = e.key === 'ArrowLeft' ? -1 : 1;
       t = c == null ? (hi > lo ? ix.t[dir < 0 ? hi - 1 : lo] : null) : stepTime(ix, lo, hi, c, dir);
@@ -128,6 +137,7 @@
     else return;
     e.preventDefault();
     if (t == null) return;
+    markScrub();
     selection.cursor = t;
     writeUrl('live', t);
   }
@@ -142,7 +152,7 @@
     style:height="{H}px"
     tabindex="0"
     role="slider"
-    aria-label="Time in selection: drag to scrub, arrow keys step through photos"
+    aria-label="Time in selection: drag to scrub, arrow keys step through photos, Enter opens the nearest one"
     aria-valuemin={active.t0}
     aria-valuemax={active.t1}
     aria-valuenow={cursorIn ?? active.t0}

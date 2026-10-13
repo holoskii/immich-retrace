@@ -67,7 +67,8 @@ export function thumbHashDataUrl(b64: string | null | undefined): string | null 
     const {w, h, rgba} = thumbHashToRGBA(base64Bytes(b64));
     const c = document.createElement('canvas');
     c.width = w; c.height = h;
-    c.getContext('2d')!.putImageData(new ImageData(rgba as Uint8ClampedArray<ArrayBuffer>, w, h), 0, 0);
+    // CPU-backed canvas: toDataURL on a GPU one costs ~27 ms per hash in a readback.
+    c.getContext('2d', {willReadFrequently: true})!.putImageData(new ImageData(rgba as Uint8ClampedArray<ArrayBuffer>, w, h), 0, 0);
     url = c.toDataURL();
   } catch {
     return null; // malformed hash

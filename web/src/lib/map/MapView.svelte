@@ -1,7 +1,7 @@
 <script lang="ts">
-  // Stage 4: map (M-A: route colored by time, clustered pins) + M-B strip with the position
-  // marker and the nearest photo popping out next to it. The camera fits the selection when it
-  // changes; manual pan/zoom is free. The follow camera is stage 6.
+  // Map (M-A: route colored by time, clustered pins) + M-B strip with the position marker and the
+  // nearest photo popping out next to it. Camera (stage 6): Follow (the "Smooth" follow camera,
+  // camera.ts + follow.ts), Whole selection, or Manual; a user pan/zoom switches to Manual.
   import {onMount, untrack} from 'svelte';
   import * as maplibregl from 'maplibre-gl';
   import type {GeoJSONSource, LngLatBoundsLike, Map as MlMap, MapGeoJSONFeature} from 'maplibre-gl';
@@ -15,6 +15,11 @@
   import {thumbHashDataUrl} from '../thumbhash.ts';
   import {fDuration, fFullDay, fSpan, fWhen} from './format.ts';
   import {gpsBounds, nearestRow, pinsGeoJSON, positionAt, routeGeoJSON, segmentRoute, typicalOffset, type PinProps} from './route.ts';
+  import {binFixes, boxOf, buildTrack, mercX, mercY, type Track} from './camera.ts';
+  import type {TrackRequest} from './camera.worker.ts';
+  import {FOLLOW, Follower, type CamMode} from './follow.ts';
+  import {Inset} from './inset.ts';
+  import {isScrub} from './scrub.ts';
   import TimeStrip from './TimeStrip.svelte';
 
   maplibregl.setWorkerUrl(workerUrl);
@@ -53,6 +58,23 @@
   const pos = $derived(active && route && cursor != null ? positionAt(active.ix, route, cursor) : null);
   const nearest = $derived(active && cursor != null ? nearestRow(active.ix, active.lo, active.hi, cursor) : -1);
 
+  // Follow camera state. `mode` is what the control shows; `autoMode` is what "Re-center" returns to.
+  let mode = $state<CamMode>('follow');
+  let autoMode: 'follow' | 'whole' = 'follow';
+  let follower: Follower | undefined;
+  let inset: Inset | undefined;
+  let insetCv = $state<HTMLCanvasElement>();
+  const INSET_W = 176, INSET_H = 124;
+  const bins = $derived(active ? binFixes(active.ix, active.lo, active.hi) : null);
+  const box = $derived(bins ? boxOf(bins) : null);
+  let track = $state.raw<Track | null>(null);
+  const MODES: [CamMode, string, string][] = [
+    ['follow', 'Follow', 'Follow the time cursor'],
+    ['whole', 'Whole selection', 'Fit the whole selection'],
+    ['manual', 'Manual', 'Leave the map where you put it'],
+  ];
+  const showInset = $derived(!!box && mode !== 'whole');
+
   onMount(() => {
     const mq = matchMedia('(prefers-reduced-motion: reduce)');
     reduced = mq.matches;
@@ -68,7 +90,17 @@
       if (gone || !el) return;
       create(el, style);
     })();
-    return () => { gone = true; mq.removeEventListener('change', onMq); marker?.remove(); map?.remove(); map = undefined; };
+    const onVis = () => { if (!document.hidden) follower?.snap(); };
+    document.addEventListener('visibilitychange', onVis);
+    const release = () => { if (follower?.held) { follower.held = false; follower.kick(); } };
+    addEventListener('pointerup', release);
+    addEventListener('pointercancel', release);
+    return () => {
+      gone = true; mq.removeEventListener('change', onMq);
+      document.removeEventListener('visibilitychange', onVis);
+      removeEventListener('pointerup', release); removeEventListener('pointercancel', release);
+      follower?.dispose(); worker?.terminate(); marker?.remove(); map?.remove(); map = undefined;
+    };
   });
 
   function create(container: HTMLDivElement, style: string) {
@@ -87,8 +119,15 @@
       font = pickFont(m);
       addLayers(m);
       marker = new maplibregl.Marker({element: markerEl!, anchor: 'center'}).setLngLat([0, 0]);
-      m.on('move', placeCard);
-      m.on('resize', placeCard);
+      follower = new Follower(m, () => { placeCard(); drawInset(); }, (lon, lat) => marker?.setLngLat([lon, lat]));
+      follower.reduced = reduced;
+      m.on('move', () => { placeCard(); drawInset(); });
+      m.on('resize', () => { placeCard(); follower?.kick(); });
+      // A user gesture (drag, wheel, keys, zoom buttons all carry originalEvent) hands the camera over.
+      m.on('movestart', e => { if ((e as {originalEvent?: Event}).originalEvent) toManual(); });
+      m.on('wheel', toManual);
+      // jumpTo() resets MapLibre's gesture handlers: hold the camera while a pointer is down on the map.
+      m.getCanvasContainer().addEventListener('pointerdown', () => { if (follower) follower.held = true; });
       failed = null;
       ready = true;
     });
@@ -148,6 +187,7 @@
       try {
         const zoom = await (m.getSource('pins') as GeoJSONSource).getClusterExpansionZoom(f.properties.cluster_id as number);
         if (g !== gen) return; // data changed meanwhile: that cluster id means something else now
+        toManual();
         const center = (f.geometry as Point).coordinates as [number, number];
         if (reduced) m.jumpTo({center, zoom}); else m.easeTo({center, zoom, duration: 500});
       } catch { /* cluster gone (data replaced) */ }
@@ -203,40 +243,140 @@
     }
   });
 
-  // Camera: fit once per selection (and once for the whole library without one); not on index refreshes.
+  // Without a selection: fit the whole library once. With one, the follower drives the camera.
   let fittedFor: unknown = null;
   $effect(() => {
     if (!ready) return;
-    const sel = selection.sel, a = active, lib = library.index;
-    const key = sel ?? (lib ? 'library' : null);
-    if (!key || key === fittedFor || (sel && !a)) return;
-    fittedFor = key;
+    const sel = selection.sel, lib = library.index;
+    if (sel) { fittedFor = null; return; }
+    if (!lib || fittedFor === 'library') return;
+    fittedFor = 'library';
     untrack(() => fit(false));
   });
 
   function fit(animate = true) {
-    const a = active, lib = library.index;
-    const b = a ? gpsBounds(a.ix, a.lo, a.hi) : lib ? gpsBounds(lib, 0, lib.n) : null;
+    const lib = library.index;
+    const b = lib ? gpsBounds(lib, 0, lib.n) : null;
     if (!map || !b) return;
-    const card = a ? 190 : 0;
-    map.fitBounds(b as LngLatBoundsLike, {
-      padding: {top: 56, bottom: 48, left: 56 + card / 2, right: 56 + card / 2},
-      maxZoom: 14, duration: animate && !reduced ? 700 : 0,
-    });
+    map.fitBounds(b as LngLatBoundsLike, {padding: 56, maxZoom: 14, duration: animate && !reduced ? 700 : 0});
   }
 
-  // Marker: follows the shared cursor; cheap (one DOM marker), fine on every cursor change.
+  // Track: built in a worker (a year of GPS costs ~50–150 ms cold); the main thread only bins the fixes.
+  let worker: Worker | null = null;
+  let reqId = 0;
   $effect(() => {
-    if (!ready || !map || !marker) return;
-    if (pos) {
-      marker.setLngLat([pos.lon, pos.lat]);
-      if (!markerOn) { marker.addTo(map); markerOn = true; }
-      placeCard();
-    } else {
-      if (markerOn) { marker.remove(); markerOn = false; }
-      mpt = null;
+    const b = bins, a = active;
+    const id = ++reqId;
+    track = null;
+    if (!b || !a || !b.n) return;
+    const local = () => { if (id === reqId) track = buildTrack(b, a.t0, a.t1); };
+    try {
+      if (!worker) {
+        worker = new Worker(new URL('./camera.worker.ts', import.meta.url), {type: 'module'});
+        worker.onmessage = (e: MessageEvent<{id: number; track: Track | null}>) => { if (e.data.id === reqId) track = e.data.track; };
+        worker.onerror = e => { console.warn('camera worker:', e.message); worker?.terminate(); worker = null; local(); };
+      }
+      worker.postMessage({id, bins: b, t0: a.t0, t1: a.t1} satisfies TrackRequest);
+    } catch (e) {
+      console.warn('camera worker:', e);
+      local();
     }
   });
+
+  // New selection: back to the automatic mode, snap there (and again once its track arrives).
+  let selKey: unknown = null, snapOnTrack = false;
+  $effect(() => {
+    if (!ready || !follower) return;
+    const sel = selection.sel, bx = box;
+    follower.box = bx;
+    if (sel === selKey) { follower.kick(); return; }
+    selKey = sel;
+    untrack(() => setMode(autoMode, false));
+    follower.mk = null;
+    follower.snap();
+    snapOnTrack = true;
+  });
+  $effect(() => {
+    if (!ready || !follower) return;
+    follower.track = track;
+    if (!track) return;
+    if (snapOnTrack) { snapOnTrack = false; follower.snap(); } else follower.kick();
+  });
+
+  // Cursor: scrubbing flies along; any other jump further than FOLLOW.seekMs is a seek and snaps.
+  let lastCursor: number | null = null;
+  $effect(() => {
+    if (!ready || !follower) return;
+    const c = cursor, prev = lastCursor;
+    lastCursor = c;
+    follower.cursor = c;
+    const seek = c != null && !isScrub() && (prev == null || Math.abs(c - prev) > FOLLOW.seekMs);
+    if (seek) follower.snap(); else follower.kick();
+  });
+
+  $effect(() => { if (follower) { follower.reduced = reduced; follower.kick(); } });
+
+  // Marker: shown at the cursor's route position; the follower moves it (on a spring while following).
+  $effect(() => {
+    if (!ready || !map || !marker || !follower) return;
+    if (pos) {
+      follower.pos = {x: mercX(pos.lon), y: mercY(pos.lat)};
+      if (!markerOn) { marker.setLngLat([pos.lon, pos.lat]).addTo(map); markerOn = true; follower.mk = null; }
+      follower.kick();
+    } else {
+      follower.pos = null;
+      if (markerOn) { marker.remove(); markerOn = false; }
+      mpt = null;
+      follower.kick();
+    }
+  });
+
+  function setMode(k: CamMode, user = true) {
+    mode = k;
+    if (k !== 'manual') autoMode = k;
+    if (!follower) return;
+    follower.mode = k;
+    follower.release();
+    if (user) follower.kick();
+  }
+
+  function toManual() {
+    if (mode !== 'manual' && active) setMode('manual');
+  }
+
+  // Inset: route pre-rendered per selection; view, target and position drawn per frame.
+  $effect(() => {
+    const cv = insetCv, a = active, r = route, bx = box;
+    if (!cv || !a || !r || !bx) { inset = undefined; return; }
+    inset = new Inset(cv);
+    inset.setRoute(a.ix, r, bx, INSET_W, INSET_H);
+    untrack(drawInset);
+  });
+
+  function drawInset() {
+    if (!inset || !map || !follower) return;
+    const b = map.getBounds(), c = map.getContainer();
+    const view: [number, number, number, number] = [mercX(b.getWest()), mercY(b.getNorth()), mercX(b.getEast()), mercY(b.getSouth())];
+    inset.draw(view, follower.following ? follower.goal : null, c.clientWidth, c.clientHeight, follower.mk);
+  }
+
+  /** Opens the lightbox at the pop-out card's photo. Native listeners: the card lives inside MapLibre's
+   *  container, so it must stop events there (Svelte's delegated handlers would run too late). */
+  function cardActions(node: HTMLElement) {
+    const stop = (e: Event) => e.stopPropagation();
+    const open = () => { if (nearest >= 0) selection.lightbox = nearest; };
+    const key = (e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } e.stopPropagation(); };
+    const evs = ['pointerdown', 'mousedown', 'touchstart', 'dblclick', 'wheel'] as const;
+    for (const ev of evs) node.addEventListener(ev, stop);
+    const click = (e: Event) => { e.stopPropagation(); open(); };
+    node.addEventListener('click', click);
+    node.addEventListener('keydown', key);
+    return () => {
+      for (const ev of evs) node.removeEventListener(ev, stop);
+      node.removeEventListener('click', click);
+      node.removeEventListener('keydown', key);
+    };
+  }
 
   function placeCard() {
     if (!map || !marker || !pos) return;
@@ -293,10 +433,22 @@
       </div>
     {/if}
 
-    {#if ready}
-      <button class="fit" onclick={() => fit(true)} title="Fit the map to the whole selection">
-        {active ? 'Whole selection' : 'Whole library'}
-      </button>
+    {#if ready && box}
+      <div class="modes" role="radiogroup" aria-label="Camera">
+        {#each MODES as [k, label, title] (k)}
+          <button role="radio" aria-checked={mode === k} class:on={mode === k} {title} onclick={() => setMode(k)}>{label}</button>
+        {/each}
+      </div>
+      {#if mode === 'manual'}
+        <button class="recenter" onclick={() => setMode(autoMode)}>Re-center</button>
+      {/if}
+    {:else if ready && !selection.sel}
+      <button class="fit" onclick={() => fit(true)} title="Fit the map to the whole library">Whole library</button>
+    {/if}
+
+    {#if showInset}
+      <canvas class="inset" bind:this={insetCv}
+        style:width="{INSET_W}px" style:height="{INSET_H}px" aria-hidden="true"></canvas>
     {/if}
 
     {#if tip && pinsOf}
@@ -331,7 +483,8 @@
       {@const ix = active.ix}
       {@const r = nearest}
       {@const hash = thumbHashDataUrl(ix.thumbhash[r])}
-      <div class="card {cardSide}" style:top="{cardTop}px" bind:offsetHeight={cardH}>
+      <div class="card {cardSide}" style:top="{cardTop}px" bind:offsetHeight={cardH} {@attach cardActions}
+        role="button" tabindex="0" title="Open in the lightbox" aria-label="Open {fWhen(ix.t[r], ix.off[r])} in the lightbox">
         <div class="ph" style:background-image={hash ? `url(${hash})` : undefined}>
           {#if thumbFor === ix.id[r]}
             {#key thumbFor}<img src={thumbUrl(ix.id[r])} alt="" onload={e => (e.currentTarget as HTMLImageElement).classList.add('in')} />{/key}
@@ -377,7 +530,30 @@
     font: 500 12px var(--f-body); padding: 5px 10px; cursor: pointer;
   }
   .fit:hover { color: var(--ink); border-color: var(--muted); }
-  .fit:focus-visible { outline: 2px solid var(--photo-hi); outline-offset: 2px; }
+  .fit:focus-visible, .modes button:focus-visible, .recenter:focus-visible { outline: 2px solid var(--photo-hi); outline-offset: 2px; }
+
+  .modes {
+    position: absolute; right: 50px; top: 10px; z-index: 2; display: flex;
+    background: rgba(11, 12, 14, .86); border: 1px solid var(--line); border-radius: 4px; overflow: hidden;
+  }
+  .modes button {
+    background: none; color: var(--ink2); border: 0; font: 500 12px var(--f-body); padding: 5px 10px; cursor: pointer;
+  }
+  .modes button + button { border-left: 1px solid var(--line); }
+  .modes button:hover { color: var(--ink); }
+  .modes button.on { color: var(--ink); background: rgba(232, 166, 78, .16); box-shadow: inset 0 -2px 0 var(--photo); }
+
+  .recenter {
+    position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 2;
+    background: rgba(11, 12, 14, .9); color: var(--ink); border: 1px solid var(--photo); border-radius: 999px;
+    font: 500 12px var(--f-body); padding: 6px 14px; cursor: pointer; box-shadow: 0 4px 14px rgba(0, 0, 0, .4);
+  }
+  .recenter:hover { background: rgba(232, 166, 78, .18); }
+
+  .inset {
+    position: absolute; left: 12px; bottom: 12px; z-index: 2; pointer-events: none;
+    background: rgba(11, 12, 14, .9); border: 1px solid var(--line); border-radius: 4px;
+  }
 
   .tip {
     position: absolute; z-index: 3; pointer-events: none; display: grid; gap: 1px; width: 150px;
@@ -404,7 +580,10 @@
     background: #0B0C0E; border: 1px solid var(--line); border-radius: 5px;
     box-shadow: 0 6px 18px rgba(0, 0, 0, .45);
     font: 400 11px/1.35 var(--f-mono); color: var(--muted);
+    pointer-events: auto; cursor: pointer;
   }
+  .card:hover { border-color: var(--muted); }
+  .card:focus-visible { outline: 2px solid var(--photo-hi); outline-offset: 2px; }
   .card.right { left: 22px; }
   .card.left { right: 22px; }
   .card .ph { height: 100px; border-radius: 3px; margin-bottom: 5px; }

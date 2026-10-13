@@ -25,6 +25,15 @@ class SelectionStore {
   /** Album member index, loaded when an album is selected in members mode. */
   members = $state.raw<{albumId: string; version: string; ix: LibraryIndex} | null>(null);
 
+  /** Open lightbox: a row of `active.ix` (←/→ walks active.lo..hi-1). Stage 5 owns the UI; the map card opens it. */
+  lightbox = $state<number | null>(null);
+
+  /** The open lightbox's asset id; null when closed or when the row is outside the active range. */
+  lightboxId = $derived.by(() => {
+    const a = this.active, r = this.lightbox;
+    return a && r != null && r >= a.lo && r < a.hi ? a.ix.id[r] : null;
+  });
+
   active = $derived.by((): Active | null => {
     const s = this.sel, lib = library.index;
     if (!s) return null;
@@ -61,6 +70,7 @@ export function offsetNear(t: number | null) {
 //   ?from=2026-08-01&to=2026-08-30        range, UTC calendar days, `to` inclusive
 //   ?album=<uuid>[&mode=range]            album, members by default
 //   &at=<epoch ms>                        cursor (optional)
+//   &lb=<asset id>                        open lightbox (optional; written from selection.lightboxId by every writeUrl)
 const DAY = 86400e3;
 const day = (s: string | null) => (s && /^\d{4}-\d{2}-\d{2}$/.test(s) ? Date.parse(s + 'T00:00:00Z') : NaN);
 
@@ -77,7 +87,7 @@ export function selectionFromUrl(q: URLSearchParams, albums: {id: string; start:
 }
 
 const isoDay = (t: number) => new Date(t).toISOString().slice(0, 10);
-const URL_KEYS = ['from', 'to', 'album', 'mode', 'at'];
+const URL_KEYS = ['from', 'to', 'album', 'mode', 'at', 'lb'];
 
 /**
  * `base` with the selection keys replaced. `at` is written only when it lies inside the selection.
@@ -103,13 +113,19 @@ const LIVE_MS = 250;
  * Writes `selection.sel` to the URL.
  * - 'live' (while dragging/scrubbing): replaceState; the first live write of a gesture remembers the entry it started from.
  * - 'commit' (release, scrub end, click): one pushState for the whole gesture, nothing if the URL ended where it started.
+ * - 'replace': replaceState of the current entry, outside any gesture (lightbox stepping and closing).
  * `at`: undefined keeps the URL's current `at` (the overview never writes hover positions); a number or null sets/clears it.
+ * `lb` always follows `selection.lightboxId`.
  */
-export function writeUrl(how: 'live' | 'commit', at?: number | null) {
+export function writeUrl(how: 'live' | 'commit' | 'replace', at?: number | null) {
   const cur = new URLSearchParams(location.search);
   const keep = cur.has('at') ? Number(cur.get('at')) : null;
-  const q = selectionToQuery(selection.sel, at === undefined ? keep : at, cur).toString();
+  const sq = selectionToQuery(selection.sel, at === undefined ? keep : at, cur);
+  const lb = selection.sel ? selection.lightboxId : null;
+  if (lb) sq.set('lb', lb);
+  const q = sq.toString();
   const href = location.pathname + (q ? '?' + q : '') + location.hash;
+  if (how === 'replace') { history.replaceState(history.state, '', href); return; }
   if (how === 'live') {
     const now = Date.now();
     if (gesture && now - lastLive < LIVE_MS) return;
@@ -125,12 +141,24 @@ export function writeUrl(how: 'live' | 'commit', at?: number | null) {
   history.pushState(null, '', href);
 }
 
-/** Applies the current URL: selection, then cursor (`at`, or none). */
+/** `lb` from the URL waiting for `active` (album members load async). While set, the lightbox must not write the URL. */
+let pendingLb = $state<string | null>(null);
+export const lightboxPending = () => pendingLb != null;
+
+/** The row of asset `id` if it lies in the active range, else null. */
+export function rowInActive(a: Active, id: string) {
+  const r = a.ix.idToRow.get(id);
+  return r != null && r >= a.lo && r < a.hi ? r : null;
+}
+
+/** Applies the current URL: selection, then cursor (`at`, or none), then the lightbox (`lb`) once `active` is ready. */
 export function applyUrl(albums: {id: string; start: number | null; end: number | null}[]) {
   gesture = null;
-  const q = new URLSearchParams(location.search), at = Number(q.get('at'));
+  const q = new URLSearchParams(location.search), at = Number(q.get('at')), lb = q.get('lb');
   selection.select(selectionFromUrl(q, albums)).catch(e => console.warn('album members:', e));
   selection.cursor = q.has('at') && Number.isFinite(at) ? at : null;
+  if (lb !== selection.lightboxId) selection.lightbox = null;
+  pendingLb = lb;
 }
 
 /**
@@ -141,7 +169,14 @@ export function startUrlSync() {
   const onPop = () => applyUrl(library.albums);
   addEventListener('popstate', onPop);
   let applied = false;
+  pendingLb = new URLSearchParams(location.search).get('lb');
   const stop = $effect.root(() => {
+    $effect(() => {
+      const id = pendingLb, a = selection.active;
+      if (id == null || !a || !applied) return;
+      selection.lightbox = rowInActive(a, id);
+      pendingLb = null;
+    });
     $effect(() => {
       if (applied || !library.index) return;
       if (new URLSearchParams(location.search).has('album') && !library.albums.length) return;
