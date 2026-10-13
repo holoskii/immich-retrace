@@ -11,10 +11,11 @@
   import type {ViewerConfig} from '../../../../shared/api.ts';
   import type {LibraryIndex} from '../index/model.ts';
   import {library} from '../index/store.svelte.ts';
-  import {sameSelection, selection, writeUrl, type Selection} from '../selection.svelte.ts';
+  import {lowerBound, sameSelection, selection, writeUrl, type Selection} from '../selection.svelte.ts';
   import {thumbHashDataUrl} from '../thumbhash.ts';
   import {thumbUrl} from '../lightbox/media.ts';
-  import {selName, zoomSpan} from '../nav.ts';
+  import {fDays, zoomName, zoomSpan} from '../nav.ts';
+  import {countRows} from '../overview/data.ts';
   import {fDay, fDuration, fFullDay, fSpan, fWhen} from './format.ts';
   import {clusterVisits, gpsBounds, nearestRow, pinsGeoJSON, positionAt, routeGeoJSON, segmentRoute, typicalOffset, type PinProps, type Visit} from './route.ts';
   import {binFixes, boxOf, buildTrack, mercX, mercY, type Track} from './camera.ts';
@@ -206,7 +207,7 @@
       try {
         const leaves = await src.getClusterLeaves(cid, Infinity, 0);
         if (g !== gen || seq !== clickSeq) return;
-        const [lo, hi] = a && a.ix === ix ? [a.lo, a.hi] : [0, ix.n];
+        const [lo, hi] = a && a.ix === ix ? [a.lo, a.hi] : libRows ?? [0, ix.n];
         const visits = clusterVisits(ix, lo, hi, leaves.map(l => (l.properties as PinProps).r)).filter(v => narrows(v.t0, v.t1));
         if (visits.length > 1) { menu = {x: e.point.x, y: e.point.y, visits, expand, off: a ? offset : 0}; return; }
         if (visits.length === 1) { zoomTo(visits[0]); return; }
@@ -233,7 +234,7 @@
   }
   function zoomTo(v: {t0: number; t1: number; n: number; place: string}) {
     menu = null;
-    selection.zoomInto(zoomSel(v.t0, v.t1), v.place || `${v.n} photos`, v.t0);
+    selection.zoomInto(zoomSel(v.t0, v.t1), zoomName(selection.sel, v.t0, v.t1, v.place) || `${v.n} photos`, v.t0);
     writeUrl('commit', v.t0);
   }
   /** "29 Apr 2023" or "29 Apr 2023 → 2 May" in the selection's local time. */
@@ -241,13 +242,6 @@
     const a = fFullDay(v.t0, off), b = fFullDay(v.t1, off);
     return a === b ? a : `${a} → ${fDay(v.t1, off)}`;
   }
-  function back() {
-    if (selection.back()) writeUrl('commit', selection.cursor);
-  }
-  const parentName = $derived.by(() => {
-    const top = selection.stack.at(-1);
-    return top ? selName(top.sel, top.label) : null;
-  });
   // The chooser belongs to the data it was made from.
   $effect(() => { void active; void pinsOf; menu = null; });
 
@@ -274,7 +268,14 @@
     tip = {x: p.x, y: p.y, row: leaf.r, count: n, first: t0, last: t1};
   }
 
-  // Data: only when the selection (or, without one, the library) changes. Never per frame.
+  /** Without a selection: the library rows inside the overview's visible period (all rows before it is known). */
+  const libRows = $derived.by((): [number, number] | null => {
+    const lib = library.index, v = selection.timeline;
+    if (!lib) return null;
+    return v ? [lowerBound(lib.t, v[0]), lowerBound(lib.t, v[1])] : [0, lib.n];
+  });
+
+  // Data: only when the selection (or, without one, the library or its visible period) changes. Never per frame.
   $effect(() => {
     if (!ready || !map) return;
     const a = active, r = route, lib = library.index, m = map;
@@ -288,13 +289,18 @@
       pinsOf = a.ix;
     } else {
       lines.setData(EMPTY); gaps.setData(EMPTY);
-      const all = !selection.sel && lib;
-      pins.setData(all ? pinsGeoJSON(lib, 0, lib.n, g) : EMPTY);
+      const lr = libRows, all = !selection.sel && lib && lr;
+      pins.setData(all ? pinsGeoJSON(lib, lr[0], lr[1], g) : EMPTY);
       pinsOf = all ? lib : null;
+      // The visible period moved somewhere the map isn't showing at all: go there.
+      if (all) untrack(() => {
+        const b = gpsBounds(lib, lr[0], lr[1]), v = m.getBounds();
+        if (b && (b[2] < v.getWest() || b[0] > v.getEast() || b[3] < v.getSouth() || b[1] > v.getNorth())) fit(true);
+      });
     }
   });
 
-  // Without a selection: fit the whole library once. With one, the follower drives the camera.
+  // Without a selection: fit the library's visible period once. With one, the follower drives the camera.
   let fittedFor: unknown = null;
   $effect(() => {
     if (!ready) return;
@@ -306,8 +312,8 @@
   });
 
   function fit(animate = true) {
-    const lib = library.index;
-    const b = lib ? gpsBounds(lib, 0, lib.n) : null;
+    const lib = library.index, lr = libRows;
+    const b = lib && lr ? gpsBounds(lib, lr[0], lr[1]) : null;
     if (!map || !b) return;
     map.fitBounds(b as LngLatBoundsLike, {padding: 56, maxZoom: 14, duration: animate && !reduced ? 700 : 0});
   }
@@ -477,19 +483,25 @@
 <svelte:window onkeydown={e => { if (e.key === 'Escape' && menu && !e.defaultPrevented && selection.lightbox == null) { e.preventDefault(); menu = null; } }} />
 <div class="mapview">
   <div class="mapwrap" bind:clientWidth={wrapW} bind:clientHeight={wrapH}>
-    <div class="map" bind:this={el}></div>
+    <div class="map" class:dim={!!active && !gpsCount} bind:this={el}></div>
 
     {#if failed}
       <div class="notice">Map unavailable: {failed}</div>
     {:else if !selection.sel}
-      <div class="notice">Pick a range or album above to see the route and scrub through it.</div>
+      <div class="notice">
+        {#if selection.timeline && library.index && libRows}
+          {@const c = countRows(library.index, libRows[0], libRows[1])}
+          {c.gps ? `Photos from the visible timeline (${fDays(...selection.timeline)}).` : `No photos with GPS in ${fDays(...selection.timeline)}.`}
+        {/if}
+        Pick a range or album to follow a route.
+      </div>
     {:else if active && !gpsCount}
-      <div class="notice">None of the {active.hi - active.lo} items in this selection have GPS.</div>
+      <div class="notice nogps">
+        None of the {active.hi - active.lo} items here have GPS.
+        <button onclick={() => (selection.lightbox = active!.lo)}>Browse them →</button>
+      </div>
     {/if}
 
-    {#if parentName}
-      <button class="back" onclick={back} title="Back to the previous selection (Backspace)">← Back to {parentName}</button>
-    {/if}
 
     {#if menu}
       <div class="menu" role="menu" aria-label="Visits to this place" {@attach n => n.querySelector('button')?.focus()}
@@ -523,7 +535,7 @@
         <button class="recenter" onclick={() => setMode(autoMode)}>Re-center</button>
       {/if}
     {:else if ready && !selection.sel}
-      <button class="fit" onclick={() => fit(true)} title="Fit the map to the whole library">Whole library</button>
+      <button class="fit" onclick={() => fit(true)} title="Fit the map to the photos of the visible timeline">Fit</button>
     {/if}
 
     {#if showInset}
@@ -586,6 +598,14 @@
   .mapwrap { position: relative; min-height: 0; }
   .map { position: absolute; inset: 0; background: var(--ground); }
 
+  .map.dim { opacity: .35; }
+  .notice.nogps { pointer-events: auto; display: flex; gap: 12px; align-items: center; }
+  .nogps button {
+    background: var(--raised); color: var(--ink); border: 1px solid var(--photo); border-radius: 999px;
+    font: 500 12px var(--f-body); padding: 3px 12px; cursor: pointer;
+  }
+  .nogps button:hover { background: rgba(232, 166, 78, .18); }
+  .nogps button:focus-visible { outline: 2px solid var(--photo-hi); outline-offset: 2px; }
   .notice {
     position: absolute; top: 14px; left: 50%; transform: translateX(-50%); z-index: 2;
     background: rgba(16, 18, 21, .88); border: 1px solid var(--line); border-radius: 999px;
@@ -629,14 +649,7 @@
   }
   .recenter:hover { background: rgba(232, 166, 78, .18); }
 
-  .back {
-    position: absolute; left: 50%; top: 12px; transform: translateX(-50%); z-index: 3;
-    background: rgba(11, 12, 14, .92); color: var(--ink); border: 1px solid var(--photo); border-radius: 999px;
-    font: 500 12px var(--f-body); padding: 6px 14px; cursor: pointer; box-shadow: 0 4px 14px rgba(0, 0, 0, .4);
-    max-width: 50%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  }
-  .back:hover { background: rgba(232, 166, 78, .18); }
-  .back:focus-visible, .menu button:focus-visible { outline: 2px solid var(--photo-hi); outline-offset: 2px; }
+  .menu button:focus-visible { outline: 2px solid var(--photo-hi); outline-offset: 2px; }
   .menu {
     position: absolute; z-index: 4; width: 240px; display: grid; padding: 4px; max-height: calc(100% - 56px); overflow-y: auto;
     background: #0B0C0E; border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 8px 24px rgba(0, 0, 0, .5);

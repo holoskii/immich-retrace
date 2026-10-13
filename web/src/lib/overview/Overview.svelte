@@ -1,20 +1,21 @@
 <script lang="ts">
   // Overview O-A: all-years context strip with a viewport window, zoomed √-density wave with the
-  // selection brush, album rail. Writes `selection.sel` (and the URL), hover writes `selection.cursor`.
+  // selection brush, album rail. Writes `selection.sel` (and the URL), hover only draws a cursor here (it never moves the map).
   import {untrack} from 'svelte';
   import {library} from '../index/store.svelte.ts';
   import {lowerBound, offsetNear, selection, writeUrl, type Selection} from '../selection.svelte.ts';
   import {selName} from '../nav.ts';
   import AlbumPicker from './AlbumPicker.svelte';
   import {
-    clamp, countRows, DAY, daysFromIndex, daysFromMonths, defaultView, dragTo, fDay, fNum, hitGrip, railAlbums,
+    clamp, countRows, albumLabel, DAY, daysFromIndex, daysFromMonths, defaultView, dragTo, fDay, fNum, hitGrip, railAlbums,
     snapDay, viewAround, viewToShow, zoomAt, type Grip, type RailAlbum, type Span,
   } from './data.ts';
   import {CTX, drawContext, drawMain, MAIN, type RailHit} from './draw.ts';
 
   let ctxCv = $state<HTMLCanvasElement>(), mainCv = $state<HTMLCanvasElement>();
   let size = $state(0);
-  let showAll = $state(false);
+  /** Hover position on the wave: drawn as the overview's cursor, never written to `selection.cursor`. */
+  let hoverT = $state<number | null>(null);
   let focus = $state(false);
   let hoverAlbum = $state<string | null>(null);
   let tip = $state<{x: number; y: number; title: string; text: string} | null>(null);
@@ -26,7 +27,7 @@
   // Histogram once per index (or per manifest while the first index builds).
   const days = $derived(library.index ? daysFromIndex(library.index) : library.provisional ? daysFromMonths(library.provisional) : null);
   const dom = $derived<Span | null>(days ? [days.t0, days.t0 + days.nd * DAY] : null);
-  const rail = $derived(railAlbums(library.albums, showAll));
+  const rail = $derived(railAlbums(library.albums, false));
   /**
    * The brush while it is dragged (or moved by held keys). The selection itself — and so the whole map:
    * route, pins, camera track — follows only when the brush rests or is released, not on every move.
@@ -61,6 +62,14 @@
     });
   });
 
+  // Publish the visible period to the map once the timeline rests: re-clustering the library per frame would stutter.
+  $effect(() => {
+    const v = view;
+    if (!v) return;
+    const h = setTimeout(() => (selection.timeline = v), 200);
+    return () => clearTimeout(h);
+  });
+
   const reduced = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
   let anim = 0;
   function animateView(target: Span) {
@@ -81,7 +90,7 @@
   // Redraw on any input change, at most once per frame.
   let raf = 0;
   $effect(() => {
-    const st = {days, view, sel: selSpan, cursor: selection.cursor, cursorOff: offsetNear(selection.cursor), albums: rail, activeAlbum: album?.id ?? null, hoverAlbum, focus};
+    const st = {days, view, sel: selSpan, cursor: hoverT ?? selection.cursor, cursorOff: offsetNear(hoverT ?? selection.cursor), albums: rail, activeAlbum: album?.id ?? null, hoverAlbum, focus};
     void size;
     if (!ctxCv || !mainCv || !st.view) return;
     const c = ctxCv, m = mainCv, v = st.view;
@@ -108,8 +117,6 @@
   const railHit = (x: number, y: number) => y > MAIN.base + 4 ? hits.find(h => x >= h.x0 - 2 && x <= h.x1 + 2 && y >= h.y - 4 && y <= h.y + MAIN.pitch - 2) ?? null : null;
 
   let drag: {grip: Grip; anchor: number; cur: Span; x: number; moved: boolean} | null = null;
-  /** Cursor before hover took it over (e.g. the map scrubber's), restored on leave. */
-  let before: number | null | undefined;
 
   function selectRange(s: Span, how: 'live' | 'commit') {
     // A brushed range is no longer the named zoom level; Back still returns to where the zoom came from.
@@ -164,14 +171,13 @@
     }
     const hit = railHit(x, y);
     hoverAlbum = hit?.a.id ?? null;
-    tip = hit ? {x: ev.clientX, y: ev.clientY, title: hit.a.name, text: `${fDay(hit.a.start)} → ${fDay(hit.a.end)} · ${fNum(hit.a.count)} items`} : null;
+    tip = hit ? {x: ev.clientX, y: ev.clientY, title: albumLabel(hit.a.name), text: `${fDay(hit.a.start)} → ${fDay(hit.a.end)} · ${fNum(hit.a.count)} items`} : null;
     if (inWave(y)) {
-      if (before === undefined) before = selection.cursor;
-      selection.cursor = t;
+      hoverT = t;
       const s = selSpan, g = s ? hitGrip(x, mainX(s[0]), mainX(s[1])) : 'n';
       mainCv!.style.cursor = g === 'l' || g === 'r' ? 'ew-resize' : g === 'm' ? 'grab' : 'crosshair';
     } else {
-      restoreCursor();
+      hoverT = null;
       mainCv!.style.cursor = hit ? 'pointer' : 'default';
     }
   }
@@ -189,14 +195,9 @@
     if (hit) pickAlbum(hit.a);
   }
 
-  function restoreCursor() {
-    if (before !== undefined) { selection.cursor = before; before = undefined; }
-  }
-
   function onMainLeave() {
     if (drag) return;
-    hoverAlbum = null; tip = null;
-    restoreCursor();
+    hoverAlbum = null; tip = null; hoverT = null;
   }
 
   function clearSelection() {
@@ -213,8 +214,16 @@
   function pickAlbum(a: RailAlbum) {
     selection.resetZoom();
     if (dom) animateView(viewAround(a.start, a.end + 1, dom[0], dom[1]));
-    selection.select({kind: 'album', albumId: a.id, mode: 'members', t0: a.start, t1: a.end + 1}).catch(e => console.warn('album members:', e));
-    writeUrl('commit');
+    const sel: Selection = {kind: 'album', albumId: a.id, mode: 'members', t0: a.start, t1: a.end + 1};
+    selection.cursor = null;
+    // Start at the album's first photo, so the map opens with a position and a photo card.
+    selection.select(sel).then(() => {
+      const act = selection.active;
+      if (selection.sel !== sel || !act || act.hi <= act.lo || selection.cursor != null) return;
+      selection.cursor = act.ix.t[act.lo];
+      writeUrl('replace', selection.cursor);
+    }).catch(e => console.warn('album members:', e));
+    writeUrl('commit', null);
   }
 
   function setMode(mode: 'members' | 'range') {
@@ -324,7 +333,7 @@
   const readout = $derived.by(() => {
     const d = draft, s: Selection | null = d ? {kind: 'range', t0: d[0], t1: d[1]} : selection.sel;
     if (!s) return null;
-    const name = selection.zoomLabel && !d ? selection.zoomLabel : s.kind === 'album' ? (album?.name ?? 'Album') : null;
+    const name = selection.zoomLabel && !d ? selection.zoomLabel : s.kind === 'album' ? (album ? albumLabel(album.name) : 'Album') : null;
     const head = `${fDay(s.t0)} → ${fDay(s.t1 - 1)} · ${Math.floor((s.t1 - 1) / DAY) - Math.floor(s.t0 / DAY) + 1} d`;
     const lib = library.index;
     const a = d ? (lib ? {ix: lib, lo: lowerBound(lib.t, d[0]), hi: lowerBound(lib.t, d[1])} : null) : selection.active;
@@ -352,7 +361,7 @@
       {#if parent}
         <button class="btn back" onclick={back} title="Back (Backspace)">← {selName(parent.sel, parent.label)}</button>
       {/if}
-      <AlbumPicker albums={library.albums} current={album?.id ?? null} bind:showAll onpick={pickAlbum} />
+      <AlbumPicker albums={library.albums} current={album?.id ?? null} onpick={pickAlbum} />
       {#if album}
         <button class="btn icon" disabled={!neighbors.prev} onclick={() => neighbors.prev && pickAlbum(neighbors.prev)}
           title={neighbors.prev ? `Previous album: ${neighbors.prev.name}` : 'No earlier album'} aria-label="Previous album">‹</button>
@@ -372,11 +381,11 @@
     {/if}
     {#if selection.sel?.kind === 'album'}
       <div class="seg" role="group" aria-label="Album selection mode">
-        <button aria-pressed={selection.sel.mode === 'members'} onclick={() => setMode('members')}>members only</button>
-        <button aria-pressed={selection.sel.mode === 'range'} onclick={() => setMode('range')}>everything in range</button>
+        <button aria-pressed={selection.sel.mode === 'members'} onclick={() => setMode('members')} title="Only the photos in the album">album photos</button>
+        <button aria-pressed={selection.sel.mode === 'range'} onclick={() => setMode('range')} title="Every photo taken during the album's dates">all photos in these dates</button>
       </div>
     {/if}
-    <button class="btn" disabled={isFull} onclick={resetZoom} title="Zoom the timeline out to all years">Reset zoom</button>
+    <button class="btn" disabled={isFull} onclick={resetZoom} title="Zoom the timeline out to all years">All years</button>
     <div class="status mono" class:err={library.status === 'error'}>
       {status}
       <button class="link" onclick={() => library.clearCache()} title="Drop the cached index and rebuild it">clear cache</button>

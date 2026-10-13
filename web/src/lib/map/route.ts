@@ -219,10 +219,17 @@ export function clusterVisits(ix: IndexColumns, lo: number, hi: number, leaves: 
   const leaf = new Set(rows), out: Visit[] = [];
   let start = 0;
   const close = (end: number) => {
-    const names = new Map<string, number>();
-    for (let i = start; i < end; i++) { const p = ix.city[rows[i]] || ix.country[rows[i]]; if (p) names.set(p, (names.get(p) ?? 0) + 1); }
-    let place = '', best = 0;
-    for (const [p, c] of names) if (c > best) { place = p; best = c; }
+    // The city if one has most of the named photos (a city break), else the country (a road trip).
+    const city = new Map<string, number>(), country = new Map<string, number>();
+    let named = 0;
+    for (let i = start; i < end; i++) {
+      const r = rows[i], c = ix.city[r], k = ix.country[r];
+      if (c) { city.set(c, (city.get(c) ?? 0) + 1); named++; }
+      if (k) country.set(k, (country.get(k) ?? 0) + 1);
+    }
+    const top = (m: Map<string, number>) => { let p = '', b = 0; for (const [k, c] of m) if (c > b) { p = k; b = c; } return [p, b] as const; };
+    const [c, cn] = top(city), [k] = top(country);
+    const place = c && cn * 2 > named ? c : k || c;
     out.push({t0: ix.t[rows[start]], t1: ix.t[rows[end - 1]], n: end - start, place});
     start = end;
   };

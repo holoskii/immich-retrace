@@ -225,3 +225,16 @@ describe('clusterVisits', () => {
     expect(clusterVisits(j, 0, j.n, [0, 2])).toHaveLength(1);
   });
 });
+
+describe('clusterVisits place', () => {
+  const named = (cities: (string | null)[], country: string) => {
+    const ix = index(cities.map((_, i) => [i * 10, 41.9, 12.5] as [number, number, number]));
+    cities.forEach((c, i) => { ix.city[i] = c; ix.country[i] = country; });
+    return clusterVisits(ix, 0, ix.n, cities.map((_, i) => i))[0].place;
+  };
+  it('names the city when one has most named photos, else the country', () => {
+    expect(named(['Rome', 'Rome', 'Florence'], 'Italy')).toBe('Rome');
+    expect(named(['Braga', 'Porto', 'Gerês', null], 'Portugal')).toBe('Portugal');
+    expect(named([null, null], 'Italy')).toBe('Italy');
+  });
+});

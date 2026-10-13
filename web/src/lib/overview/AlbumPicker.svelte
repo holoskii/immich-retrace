@@ -3,9 +3,10 @@
   import type {AlbumSummary} from '../../../../shared/api.ts';
   import {albumLabel, DAY, fDay, fNum, railAlbums, TRIP_DAYS, type RailAlbum} from './data.ts';
 
-  let {albums, current, showAll = $bindable(), onpick}: {
-    albums: AlbumSummary[]; current: string | null; showAll: boolean; onpick: (a: RailAlbum) => void;
-  } = $props();
+  let {albums, current, onpick}: {albums: AlbumSummary[]; current: string | null; onpick: (a: RailAlbum) => void} = $props();
+
+  /** The picker's own filter: the rail under the timeline always shows trips. */
+  let showAll = $state(false);
 
   let open = $state(false);
   let q = $state('');

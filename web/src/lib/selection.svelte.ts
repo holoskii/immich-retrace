@@ -32,6 +32,11 @@ class SelectionStore {
   sel = $state.raw<Selection | null>(null);
   /** Shared time cursor: overview hover, map scrubber, lightbox. null = none. */
   cursor = $state<number | null>(null);
+  /**
+   * The period visible in the overview timeline, once it stops moving. Without a selection the map shows
+   * only the library's photos from it. (The overview axis is local wall time; close enough here.)
+   */
+  timeline = $state.raw<[number, number] | null>(null);
   /** Zoom stack: selections a cluster zoom came from, innermost last. `label` names the zoomed-in level. */
   stack = $state.raw<Crumb[]>([]);
   /** Name of the current zoomed-in level (top of the stack), e.g. a city. */

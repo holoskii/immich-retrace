@@ -1,6 +1,6 @@
 // Names for selections in navigation UI (Back button, breadcrumb).
 import {library} from './index/store.svelte.ts';
-import {albumLabel, fDay} from './overview/data.ts';
+import {albumLabel, fDay, railAlbums} from './overview/data.ts';
 import type {Selection} from './selection.svelte.ts';
 
 export const DAY = 86400e3;
@@ -20,6 +20,20 @@ export function selName(sel: Selection | null, label?: string | null) {
     if (a) return albumLabel(a.name);
   }
   return fDays(sel.t0, sel.t1);
+}
+
+/**
+ * Name for a zoom into [t0, t1] from `sel`: "Album › place". The album is the selected one, or else the
+ * shortest trip album covering the span; without one, just the place.
+ */
+export function zoomName(sel: Selection | null, t0: number, t1: number, place: string) {
+  let a = sel?.kind === 'album' ? library.albums.find(x => x.id === sel.albumId) : undefined;
+  if (!a) {
+    let best = Infinity;
+    for (const b of railAlbums(library.albums, false)) if (b.start <= t0 && b.end >= t1 && b.end - b.start < best) { a = b; best = b.end - b.start; }
+  }
+  const name = a ? albumLabel(a.name) : '';
+  return name && place ? `${name} › ${place}` : name || place;
 }
 
 const HOUR = 3600e3, MIN = 60e3;
