@@ -203,3 +203,35 @@ export function typicalOffset(ix: IndexColumns, lo: number, hi: number) {
   s.sort((a, b) => a - b);
   return s[s.length >> 1];
 }
+
+/** A stay at one map cluster's place: its photos' first/last time, count and most common place name. */
+export interface Visit { t0: number; t1: number; n: number; place: string }
+/** Leaves further apart than this, with a GPS fix elsewhere in between, are separate visits (a day trip out stays one). */
+export const VISIT_GAP_MS = 36 * HOUR;
+
+/**
+ * Splits a cluster's leaf rows into visits, oldest first. `lo..hi` is the range the pins came from: a GPS fix
+ * there that isn't a leaf counts as "was elsewhere". No-GPS rows never split (camera shots have no position).
+ */
+export function clusterVisits(ix: IndexColumns, lo: number, hi: number, leaves: number[]): Visit[] {
+  const rows = [...new Set(leaves)].filter(r => r >= lo && r < hi).sort((a, b) => a - b);
+  if (!rows.length) return [];
+  const leaf = new Set(rows), out: Visit[] = [];
+  let start = 0;
+  const close = (end: number) => {
+    const names = new Map<string, number>();
+    for (let i = start; i < end; i++) { const p = ix.city[rows[i]] || ix.country[rows[i]]; if (p) names.set(p, (names.get(p) ?? 0) + 1); }
+    let place = '', best = 0;
+    for (const [p, c] of names) if (c > best) { place = p; best = c; }
+    out.push({t0: ix.t[rows[start]], t1: ix.t[rows[end - 1]], n: end - start, place});
+    start = end;
+  };
+  for (let i = 1; i < rows.length; i++) {
+    if (ix.t[rows[i]] - ix.t[rows[i - 1]] <= VISIT_GAP_MS) continue;
+    let away = false;
+    for (let r = rows[i - 1] + 1; r < rows[i] && !away; r++) away = ix.gps[r] === 1 && !leaf.has(r);
+    if (away) close(i);
+  }
+  close(rows.length);
+  return out;
+}

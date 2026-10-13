@@ -3,7 +3,9 @@
   // selection brush, album rail. Writes `selection.sel` (and the URL), hover writes `selection.cursor`.
   import {untrack} from 'svelte';
   import {library} from '../index/store.svelte.ts';
-  import {offsetNear, selection, writeUrl, type Selection} from '../selection.svelte.ts';
+  import {lowerBound, offsetNear, selection, writeUrl, type Selection} from '../selection.svelte.ts';
+  import {selName} from '../nav.ts';
+  import AlbumPicker from './AlbumPicker.svelte';
   import {
     clamp, countRows, DAY, daysFromIndex, daysFromMonths, defaultView, dragTo, fDay, fNum, hitGrip, railAlbums,
     snapDay, viewAround, viewToShow, zoomAt, type Grip, type RailAlbum, type Span,
@@ -25,7 +27,14 @@
   const days = $derived(library.index ? daysFromIndex(library.index) : library.provisional ? daysFromMonths(library.provisional) : null);
   const dom = $derived<Span | null>(days ? [days.t0, days.t0 + days.nd * DAY] : null);
   const rail = $derived(railAlbums(library.albums, showAll));
-  const selSpan = $derived<Span | null>(selection.sel ? [selection.sel.t0, selection.sel.t1] : null);
+  /**
+   * The brush while it is dragged (or moved by held keys). The selection itself — and so the whole map:
+   * route, pins, camera track — follows only when the brush rests or is released, not on every move.
+   */
+  let draft = $state.raw<Span | null>(null);
+  let draftTimer: ReturnType<typeof setTimeout> | undefined;
+  const REST_MS = 220;
+  const selSpan = $derived<Span | null>(draft ?? (selection.sel ? [selection.sel.t0, selection.sel.t1] : null));
   const album = $derived.by(() => {
     const s = selection.sel;
     return s?.kind === 'album' ? library.albums.find(a => a.id === s.albumId) ?? null : null;
@@ -103,9 +112,32 @@
   let before: number | null | undefined;
 
   function selectRange(s: Span, how: 'live' | 'commit') {
+    // A brushed range is no longer the named zoom level; Back still returns to where the zoom came from.
+    selection.zoomLabel = null;
     void selection.select({kind: 'range', t0: s[0], t1: s[1]});
     writeUrl(how);
   }
+  /** Moves the brush; the selection follows after REST_MS without further moves. */
+  function setDraft(s: Span) {
+    draft = s;
+    clearTimeout(draftTimer);
+    draftTimer = setTimeout(() => { if (draft) selectRange(draft, 'live'); }, REST_MS);
+  }
+  /** Ends a brush gesture: the selection takes the brush's final span. */
+  function commitDraft() {
+    clearTimeout(draftTimer);
+    const d = draft;
+    draft = null;
+    if (d) selectRange(d, 'commit');
+  }
+  // The selection changed from elsewhere (Back, popstate, Esc, an album pick) mid-gesture: drop the draft.
+  $effect(() => {
+    const s = selection.sel;
+    untrack(() => {
+      if (draft && !(s?.kind === 'range' && s.t0 === draft[0] && s.t1 === draft[1])) { clearTimeout(draftTimer); draft = null; }
+    });
+  });
+  $effect(() => () => clearTimeout(draftTimer));
 
   function onMainDown(ev: PointerEvent) {
     if (!view || ev.button !== 0) return;
@@ -127,8 +159,7 @@
       drag.moved = true;
       const r = dragTo(drag.grip, drag.anchor, t, drag.cur, view[0], view[1], DAY, snapDay);
       drag.grip = r.grip; drag.cur = r.span;
-      selection.cursor = clamp(t, view[0], view[1]);
-      selectRange(r.span, 'live');
+      setDraft(r.span);
       return;
     }
     const hit = railHit(x, y);
@@ -149,9 +180,9 @@
     const d = drag;
     drag = null;
     if (d) {
-      if (d.moved) writeUrl('commit');
+      if (d.moved) commitDraft();
       // A plain click outside the selection clears it; inside or on an edge does nothing.
-      else if (d.grip === 'n' && selection.sel) { void selection.select(null); writeUrl('commit'); }
+      else if (d.grip === 'n' && selection.sel) clearSelection();
       return;
     }
     const [x, y] = local(ev, mainCv!), hit = railHit(x, y);
@@ -168,7 +199,19 @@
     restoreCursor();
   }
 
+  function clearSelection() {
+    clearTimeout(draftTimer); draft = null;
+    selection.resetZoom();
+    void selection.select(null);
+    writeUrl('commit');
+  }
+
+  function back() {
+    if (selection.back()) writeUrl('commit', selection.cursor);
+  }
+
   function pickAlbum(a: RailAlbum) {
+    selection.resetZoom();
     if (dom) animateView(viewAround(a.start, a.end + 1, dom[0], dom[1]));
     selection.select({kind: 'album', albumId: a.id, mode: 'members', t0: a.start, t1: a.end + 1}).catch(e => console.warn('album members:', e));
     writeUrl('commit');
@@ -177,6 +220,7 @@
   function setMode(mode: 'members' | 'range') {
     const s = selection.sel;
     if (s?.kind !== 'album' || s.mode === mode) return;
+    // The other mode of the same zoom level: the stack stays (Back returns to where the zoom came from).
     selection.select({...s, mode}).catch(e => console.warn('album members:', e));
     writeUrl('commit');
   }
@@ -229,9 +273,9 @@
 
   function onKey(ev: KeyboardEvent) {
     if (ev.key === 'Escape') {
-      if (!selection.sel) return;
+      if (!selection.sel && !draft) return;
       ev.preventDefault();
-      void selection.select(null); writeUrl('commit');
+      clearSelection();
       return;
     }
     if (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight') return;
@@ -241,26 +285,49 @@
     if (!s) {
       // Nothing selected yet: start with the day in the middle of the view.
       const d = Math.floor((view[0] + view[1]) / 2 / DAY) * DAY;
-      selectRange([d, d + DAY], 'live');
+      setDraft([d, d + DAY]);
       return;
     }
     let t0 = snapDay(s[0]), t1 = Math.max(t0 + DAY, snapDay(s[1]));
     if (ev.altKey) t1 = Math.max(t0 + DAY, Math.min(dom[1], t1 + step));
     else { const w = t1 - t0; t0 = clamp(t0 + step, dom[0], dom[1] - w); t1 = t0 + w; }
-    selectRange([t0, t1], 'live');
+    setDraft([t0, t1]);
   }
   function onKeyUp(ev: KeyboardEvent) {
-    if (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight') writeUrl('commit');
+    if (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight') commitDraft();
   }
+
+  /** Backspace anywhere but a text field: back out of the last zoom. */
+  function onWindowKey(ev: KeyboardEvent) {
+    if (ev.key !== 'Backspace' || ev.defaultPrevented || selection.lightbox != null) return;
+    const t = ev.target as HTMLElement | null;
+    if (t?.closest('input, textarea, [contenteditable]')) return;
+    if (selection.stack.length) { ev.preventDefault(); back(); }
+  }
+
+  // ---- navigation bar ----
+
+  const isFull = $derived(!!view && !!dom && view[0] <= dom[0] && view[1] >= dom[1]);
+  function resetZoom() { if (dom) animateView([dom[0], dom[1]]); }
+
+  /** Previous / next album on the rail (same filter), by start date. */
+  const neighbors = $derived.by(() => {
+    const id = album?.id;
+    if (!id) return {prev: null, next: null};
+    const i = rail.findIndex(a => a.id === id);
+    return i < 0 ? {prev: null, next: null} : {prev: rail[i - 1] ?? null, next: rail[i + 1] ?? null};
+  });
+  const parent = $derived(selection.stack.at(-1) ?? null);
 
   // ---- readout & status ----
 
   const readout = $derived.by(() => {
-    const s: Selection | null = selection.sel;
+    const d = draft, s: Selection | null = d ? {kind: 'range', t0: d[0], t1: d[1]} : selection.sel;
     if (!s) return null;
-    const name = s.kind === 'album' ? (album?.name ?? 'Album') : null;
+    const name = selection.zoomLabel && !d ? selection.zoomLabel : s.kind === 'album' ? (album?.name ?? 'Album') : null;
     const head = `${fDay(s.t0)} → ${fDay(s.t1 - 1)} · ${Math.floor((s.t1 - 1) / DAY) - Math.floor(s.t0 / DAY) + 1} d`;
-    const a = selection.active;
+    const lib = library.index;
+    const a = d ? (lib ? {ix: lib, lo: lowerBound(lib.t, d[0]), hi: lowerBound(lib.t, d[1])} : null) : selection.active;
     if (!a) return {name, head, rest: s.kind === 'album' && s.mode === 'members' ? 'loading members…' : '…'};
     const c = countRows(a.ix, a.lo, a.hi);
     return {name, head, rest: `${fNum(c.photos)} photos · ${fNum(c.videos)} videos · ${fNum(c.gps)} with GPS`};
@@ -278,25 +345,38 @@
   });
 </script>
 
+<svelte:window onkeydown={onWindowKey} />
 <section class="overview" aria-label="Overview">
   <div class="bar">
+    <div class="nav">
+      {#if parent}
+        <button class="btn back" onclick={back} title="Back (Backspace)">← {selName(parent.sel, parent.label)}</button>
+      {/if}
+      <AlbumPicker albums={library.albums} current={album?.id ?? null} bind:showAll onpick={pickAlbum} />
+      {#if album}
+        <button class="btn icon" disabled={!neighbors.prev} onclick={() => neighbors.prev && pickAlbum(neighbors.prev)}
+          title={neighbors.prev ? `Previous album: ${neighbors.prev.name}` : 'No earlier album'} aria-label="Previous album">‹</button>
+        <button class="btn icon" disabled={!neighbors.next} onclick={() => neighbors.next && pickAlbum(neighbors.next)}
+          title={neighbors.next ? `Next album: ${neighbors.next.name}` : 'No later album'} aria-label="Next album">›</button>
+      {/if}
+    </div>
     <div class="readout mono" aria-live="polite">
       {#if readout}
         {#if readout.name}<b>{readout.name}</b>{' · '}{/if}{readout.head} · <span class="ink2">{readout.rest}</span>
       {:else}
-        <span class="muted">No selection: drag on the wave or click an album</span>
+        <span class="muted">No selection: drag on the timeline, click an album bar, or pick from Albums</span>
       {/if}
     </div>
+    {#if selection.sel}
+      <button class="btn" onclick={clearSelection} title="Clear the selection (Esc on the timeline)">✕ clear</button>
+    {/if}
     {#if selection.sel?.kind === 'album'}
       <div class="seg" role="group" aria-label="Album selection mode">
         <button aria-pressed={selection.sel.mode === 'members'} onclick={() => setMode('members')}>members only</button>
         <button aria-pressed={selection.sel.mode === 'range'} onclick={() => setMode('range')}>everything in range</button>
       </div>
     {/if}
-    <div class="seg" role="group" aria-label="Albums on the rail">
-      <button aria-pressed={!showAll} onclick={() => (showAll = false)} title="Albums spanning at most 45 days">trips</button>
-      <button aria-pressed={showAll} onclick={() => (showAll = true)}>all albums</button>
-    </div>
+    <button class="btn" disabled={isFull} onclick={resetZoom} title="Zoom the timeline out to all years">Reset zoom</button>
     <div class="status mono" class:err={library.status === 'error'}>
       {status}
       <button class="link" onclick={() => library.clearCache()} title="Drop the cached index and rebuild it">clear cache</button>
@@ -314,10 +394,10 @@
     bind:this={mainCv} class="main" style:height="{MAIN.h}px" tabindex="0"
     aria-label="Zoomed timeline. Drag to select a range; arrow keys move it by a day (Shift: a week), Alt+arrows resize it, Escape clears"
     onpointerdown={onMainDown} onpointermove={onMainMove} onpointerup={onMainUp}
-    onpointercancel={() => { drag = null; writeUrl('commit'); }} onpointerleave={onMainLeave}
+    onpointercancel={() => { drag = null; commitDraft(); }} onpointerleave={onMainLeave}
     onwheel={ev => onWheel(ev, mainCv!, false)}
     onkeydown={onKey} onkeyup={onKeyUp}
-    onfocus={() => (focus = true)} onblur={() => { focus = false; writeUrl('commit'); }}
+    onfocus={() => (focus = true)} onblur={() => { focus = false; if (draft) commitDraft(); else writeUrl('commit'); }}
   ></canvas>
   <div class="hint">scroll = zoom · drag = select · edges = resize · bars = albums · ←/→ move · Alt+←/→ resize · Esc clear</div>
 
@@ -338,6 +418,12 @@
   .seg button { background: none; border: 0; color: var(--muted); font: 12px var(--f-body); padding: 2px 9px; cursor: pointer; }
   .seg button + button { border-left: 1px solid var(--line); }
   .seg button[aria-pressed='true'] { background: var(--raised); color: var(--ink); }
+  .nav { display: inline-flex; gap: 6px; align-items: center; }
+  .btn { background: var(--raised); border: 1px solid var(--line); border-radius: 4px; color: var(--ink2); font: 500 12px var(--f-body); padding: 3px 10px; cursor: pointer; white-space: nowrap; }
+  .btn:hover:not(:disabled) { color: var(--ink); border-color: var(--muted); }
+  .btn:disabled { opacity: .4; cursor: default; }
+  .btn.icon { padding: 3px 8px; }
+  .btn.back { color: var(--ink); border-color: var(--photo); max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
   .status { font-size: 11px; color: var(--muted); display: inline-flex; gap: 10px; align-items: baseline; }
   .status.err { color: #e07a6a; }
   .link { background: none; border: 0; padding: 0; color: var(--ink2); font: inherit; text-decoration: underline dotted; cursor: pointer; }

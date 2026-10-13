@@ -11,10 +11,12 @@
   import type {ViewerConfig} from '../../../../shared/api.ts';
   import type {LibraryIndex} from '../index/model.ts';
   import {library} from '../index/store.svelte.ts';
-  import {selection} from '../selection.svelte.ts';
+  import {sameSelection, selection, writeUrl, type Selection} from '../selection.svelte.ts';
   import {thumbHashDataUrl} from '../thumbhash.ts';
-  import {fDuration, fFullDay, fSpan, fWhen} from './format.ts';
-  import {gpsBounds, nearestRow, pinsGeoJSON, positionAt, routeGeoJSON, segmentRoute, typicalOffset, type PinProps} from './route.ts';
+  import {thumbUrl} from '../lightbox/media.ts';
+  import {selName, zoomSpan} from '../nav.ts';
+  import {fDay, fDuration, fFullDay, fSpan, fWhen} from './format.ts';
+  import {clusterVisits, gpsBounds, nearestRow, pinsGeoJSON, positionAt, routeGeoJSON, segmentRoute, typicalOffset, type PinProps, type Visit} from './route.ts';
   import {binFixes, boxOf, buildTrack, mercX, mercY, type Track} from './camera.ts';
   import type {TrackRequest} from './camera.worker.ts';
   import {FOLLOW, Follower, type CamMode} from './follow.ts';
@@ -46,8 +48,10 @@
   /** The index the current pins' rows refer to. */
   let pinsOf = $state.raw<LibraryIndex | null>(null);
   /** Hover / click requests in flight; bumped to cancel them. */
-  let hoverSeq = 0, hoverKey = '';
+  let hoverSeq = 0, hoverKey = '', clickSeq = 0;
   let cardH = $state(160);
+  /** Visit chooser after a click on a cluster the user was at more than once. */
+  let menu = $state<{x: number; y: number; visits: Visit[]; expand: () => void; off: number} | null>(null);
   let tipW = $state(162), tipH = $state(150), wrapW = $state(0), wrapH = $state(0);
 
   const active = $derived(selection.active);
@@ -126,6 +130,8 @@
       // A user gesture (drag, wheel, keys, zoom buttons all carry originalEvent) hands the camera over.
       m.on('movestart', e => { if ((e as {originalEvent?: Event}).originalEvent) toManual(); });
       m.on('wheel', toManual);
+      m.on('movestart', e => { if ((e as {originalEvent?: Event}).originalEvent) menu = null; });
+      m.on('click', e => { if (!m.queryRenderedFeatures(e.point, {layers: ['clusters']}).length) menu = null; });
       // jumpTo() resets MapLibre's gesture handlers: hold the camera while a pointer is down on the map.
       m.getCanvasContainer().addEventListener('pointerdown', () => { if (follower) follower.held = true; });
       failed = null;
@@ -149,7 +155,7 @@
     m.addSource('route', {type: 'geojson', data: EMPTY});
     m.addSource('pins', {
       type: 'geojson', data: EMPTY, cluster: true, clusterRadius: 44, clusterMaxZoom: 15,
-      clusterProperties: {t0: ['min', ['get', 't']], t1: ['max', ['get', 't']]},
+      clusterProperties: {t0: ['min', ['get', 't']], t1: ['max', ['get', 't']], g: ['max', ['get', 'g']]},
     });
     // Gaps: thin, dashed, dim. They say "no GPS between these", not "went this way".
     m.addLayer({id: 'gaps', type: 'line', source: 'gaps', layout: {'line-cap': 'butt'},
@@ -181,16 +187,31 @@
       m.on('mouseleave', id, () => { m.getCanvas().style.cursor = ''; hoverSeq++; hoverKey = ''; tip = null; });
       m.on('mousemove', id, e => void hover(m, e.features?.[0], e.point));
     }
+    // A cluster click narrows the selection to the days of that place's photos (a zoom; Back returns).
+    // Several visits (e.g. start and end of a trip) → a chooser. Nothing to narrow → zoom the map in.
     m.on('click', 'clusters', async e => {
-      const f = e.features?.[0], g = gen;
-      if (!f) return;
+      const f = e.features?.[0], g = gen, ix = pinsOf, a = active, seq = ++clickSeq;
+      // A cluster still rendered from the previous data: its id means something else in the new data.
+      if (!f || !ix || f.properties.g !== g) return;
+      const src = m.getSource('pins') as GeoJSONSource, cid = f.properties.cluster_id as number;
+      const center = (f.geometry as Point).coordinates as [number, number];
+      const expand = async () => {
+        try {
+          const zoom = await src.getClusterExpansionZoom(cid);
+          if (g !== gen) return; // data changed meanwhile: that cluster id means something else now
+          toManual();
+          if (reduced) m.jumpTo({center, zoom}); else m.easeTo({center, zoom, duration: 500});
+        } catch { /* cluster gone (data replaced) */ }
+      };
       try {
-        const zoom = await (m.getSource('pins') as GeoJSONSource).getClusterExpansionZoom(f.properties.cluster_id as number);
-        if (g !== gen) return; // data changed meanwhile: that cluster id means something else now
-        toManual();
-        const center = (f.geometry as Point).coordinates as [number, number];
-        if (reduced) m.jumpTo({center, zoom}); else m.easeTo({center, zoom, duration: 500});
-      } catch { /* cluster gone (data replaced) */ }
+        const leaves = await src.getClusterLeaves(cid, Infinity, 0);
+        if (g !== gen || seq !== clickSeq) return;
+        const [lo, hi] = a && a.ix === ix ? [a.lo, a.hi] : [0, ix.n];
+        const visits = clusterVisits(ix, lo, hi, leaves.map(l => (l.properties as PinProps).r)).filter(v => narrows(v.t0, v.t1));
+        if (visits.length > 1) { menu = {x: e.point.x, y: e.point.y, visits, expand, off: a ? offset : 0}; return; }
+        if (visits.length === 1) { zoomTo(visits[0]); return; }
+      } catch { /* no leaves: just expand */ }
+      void expand();
     });
     m.on('click', 'pin', e => {
       const p = e.features?.[0]?.properties as PinProps | undefined;
@@ -199,6 +220,36 @@
       selection.cursor = a.ix.t[p.r];
     });
   }
+
+  /** The selection a zoom to [t0, t1] would make (whole hours within the current span, inside the current album if any). */
+  function zoomSel(t0: number, t1: number): Selection {
+    const s = selection.sel, [d0, d1] = zoomSpan(t0, t1, s ? [s.t0, s.t1] : null);
+    return s?.kind === 'album' ? {...s, t0: d0, t1: d1, sub: true} : {kind: 'range', t0: d0, t1: d1};
+  }
+  /** Whether zooming to [t0, t1] would narrow the current selection at all. */
+  function narrows(t0: number, t1: number) {
+    const s = selection.sel, z = zoomSel(t0, t1);
+    return !s || ((z.t0 > s.t0 || z.t1 < s.t1) && !sameSelection(s, z));
+  }
+  function zoomTo(v: {t0: number; t1: number; n: number; place: string}) {
+    menu = null;
+    selection.zoomInto(zoomSel(v.t0, v.t1), v.place || `${v.n} photos`, v.t0);
+    writeUrl('commit', v.t0);
+  }
+  /** "29 Apr 2023" or "29 Apr 2023 → 2 May" in the selection's local time. */
+  function fVisit(v: Visit, off: number) {
+    const a = fFullDay(v.t0, off), b = fFullDay(v.t1, off);
+    return a === b ? a : `${a} → ${fDay(v.t1, off)}`;
+  }
+  function back() {
+    if (selection.back()) writeUrl('commit', selection.cursor);
+  }
+  const parentName = $derived.by(() => {
+    const top = selection.stack.at(-1);
+    return top ? selName(top.sel, top.label) : null;
+  });
+  // The chooser belongs to the data it was made from.
+  $effect(() => { void active; void pinsOf; menu = null; });
 
   async function hover(m: MlMap, f: MapGeoJSONFeature | undefined, p: {x: number; y: number}) {
     const ix = pinsOf;
@@ -385,15 +436,26 @@
     mpt = {x: p.x, y: p.y, w: c.clientWidth, h: c.clientHeight};
   }
 
-  // The pop-out photo: thumbhash at once, the thumbnail after the cursor rests for a moment.
-  let thumbFor = $state<string | null>(null);
+  // The pop-out photo: the thumbhash until the first thumbnail is in, then the last loaded thumbnail
+  // stays up until the next one has decoded. One load in flight, latest wins: scrubbing never
+  // flashes back to the blur or to an empty frame.
+  let shown = $state<{id: string; url: string} | null>(null);
+  let want: {id: string; url: string} | null = null, loading = false, broken = '';
   $effect(() => {
-    const id = active && nearest >= 0 ? active.ix.id[nearest] : null;
-    if (id === untrack(() => thumbFor)) return;
-    const h = setTimeout(() => (thumbFor = id), 90);
-    return () => clearTimeout(h);
+    const a = active, r = nearest;
+    want = a && r >= 0 ? {id: a.ix.id[r], url: thumbUrl(a.ix.id[r], a.ix.thumbhash[r])} : null;
+    pump();
   });
-  const thumbUrl = (id: string) => `/api/assets/${id}/thumbnail?size=thumbnail`;
+  function pump() {
+    const w = want;
+    // A thumbnail that failed: its own thumbhash (the card's background), not the previous photo.
+    if (w && w.url === broken) { shown = null; return; }
+    if (loading || !w || w.url === untrack(() => shown?.url)) return;
+    loading = true;
+    const img = new Image();
+    img.src = w.url;
+    img.decode().then(() => { shown = w; }, () => { broken = w.url; }).finally(() => { loading = false; pump(); });
+  }
 
   const CARD_W = 172, GAP = 22;
   const cardSide = $derived(mpt && mpt.x + GAP + CARD_W > mpt.w - 8 ? 'left' : 'right');
@@ -412,6 +474,7 @@
   const legend = $derived(active ? {from: fFullDay(active.t0, 0), to: fFullDay(active.t1 - 1, 0)} : null);
 </script>
 
+<svelte:window onkeydown={e => { if (e.key === 'Escape' && menu && !e.defaultPrevented && selection.lightbox == null) { e.preventDefault(); menu = null; } }} />
 <div class="mapview">
   <div class="mapwrap" bind:clientWidth={wrapW} bind:clientHeight={wrapH}>
     <div class="map" bind:this={el}></div>
@@ -422,6 +485,23 @@
       <div class="notice">Pick a range or album above to see the route and scrub through it.</div>
     {:else if active && !gpsCount}
       <div class="notice">None of the {active.hi - active.lo} items in this selection have GPS.</div>
+    {/if}
+
+    {#if parentName}
+      <button class="back" onclick={back} title="Back to the previous selection (Backspace)">← Back to {parentName}</button>
+    {/if}
+
+    {#if menu}
+      <div class="menu" role="menu" aria-label="Visits to this place" {@attach n => n.querySelector('button')?.focus()}
+        style:left="{Math.max(8, Math.min(menu.x + 8, wrapW - 250))}px" style:top="{Math.max(8, Math.min(menu.y + 8, wrapH - 40 - 30 * (menu.visits.length + 2)))}px">
+        <div class="mh">{menu.visits.length} visits here</div>
+        {#each menu.visits as v (v.t0)}
+          <button role="menuitem" onclick={() => zoomTo(v)}>
+            <span>{fVisit(v, menu.off)}</span><span class="mut">{v.n}{v.place ? ` · ${v.place}` : ''}</span>
+          </button>
+        {/each}
+        <button role="menuitem" class="sec" onclick={() => { const e = menu!.expand; menu = null; void e(); }}>Just zoom the map in</button>
+      </div>
     {/if}
 
     {#if legend && gpsCount}
@@ -462,6 +542,7 @@
           <strong>{tip.count} items</strong>
           <span>{fWhen(tip.first, ix.off[tip.row])}</span>
           {#if tip.last - tip.first > 60e3}<span>→ {fWhen(tip.last, ix.off[tip.row])}</span>{/if}
+          <span class="hint">click: zoom into this time span</span>
         {:else}
           <strong>{fWhen(tip.first, ix.off[tip.row])}</strong>
           <span>{ix.video[tip.row] ? `video ${fDuration(ix.dur[tip.row])} · ` : ''}{where(ix, tip.row)}</span>
@@ -486,9 +567,7 @@
       <div class="card {cardSide}" style:top="{cardTop}px" bind:offsetHeight={cardH} {@attach cardActions}
         role="button" tabindex="0" title="Open in the lightbox" aria-label="Open {fWhen(ix.t[r], ix.off[r])} in the lightbox">
         <div class="ph" style:background-image={hash ? `url(${hash})` : undefined}>
-          {#if thumbFor === ix.id[r]}
-            {#key thumbFor}<img src={thumbUrl(ix.id[r])} alt="" onload={e => (e.currentTarget as HTMLImageElement).classList.add('in')} />{/key}
-          {/if}
+          {#if shown}<img src={shown.url} alt="" />{/if}
           {#if ix.video[r]}<span class="vid">{fDuration(ix.dur[r])}</span>{/if}
         </div>
         <strong>{fWhen(ix.t[r], ix.off[r])}</strong>
@@ -550,6 +629,29 @@
   }
   .recenter:hover { background: rgba(232, 166, 78, .18); }
 
+  .back {
+    position: absolute; left: 50%; top: 12px; transform: translateX(-50%); z-index: 3;
+    background: rgba(11, 12, 14, .92); color: var(--ink); border: 1px solid var(--photo); border-radius: 999px;
+    font: 500 12px var(--f-body); padding: 6px 14px; cursor: pointer; box-shadow: 0 4px 14px rgba(0, 0, 0, .4);
+    max-width: 50%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .back:hover { background: rgba(232, 166, 78, .18); }
+  .back:focus-visible, .menu button:focus-visible { outline: 2px solid var(--photo-hi); outline-offset: 2px; }
+  .menu {
+    position: absolute; z-index: 4; width: 240px; display: grid; padding: 4px; max-height: calc(100% - 56px); overflow-y: auto;
+    background: #0B0C0E; border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 8px 24px rgba(0, 0, 0, .5);
+    font: 400 12px var(--f-body);
+  }
+  .menu .mh { padding: 4px 8px 6px; color: var(--muted); font-size: 11px; }
+  .menu button {
+    display: flex; justify-content: space-between; gap: 8px; background: none; border: 0; border-radius: 4px;
+    color: var(--ink); font: inherit; padding: 6px 8px; cursor: pointer; text-align: left;
+  }
+  .menu button:hover { background: var(--raised); }
+  .menu .mut { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .menu .sec { color: var(--ink2); border-top: 1px solid var(--line); border-radius: 0 0 4px 4px; margin-top: 2px; }
+  .tip .hint { color: var(--photo-hi); margin-top: 2px; }
+
   .inset {
     position: absolute; left: 12px; bottom: 12px; z-index: 2; pointer-events: none;
     background: rgba(11, 12, 14, .9); border: 1px solid var(--line); border-radius: 4px;
@@ -587,8 +689,7 @@
   .card.right { left: 22px; }
   .card.left { right: 22px; }
   .card .ph { height: 100px; border-radius: 3px; margin-bottom: 5px; }
-  .card img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; }
-  .card img:global(.in) { opacity: 1; transition: opacity .15s; }
+  .card img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
   .card strong { color: var(--ink); font-weight: 500; }
   .card .place { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .card .note { color: var(--ink2); }
@@ -597,10 +698,6 @@
     position: absolute; left: 0; right: 0; bottom: 0; height: 16px; padding: 0 5px;
     background: linear-gradient(transparent, rgba(0, 0, 0, .6)); color: #fff; font-size: 10px; text-align: right;
     border-bottom: 3px solid var(--video);
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .card img:global(.in) { transition: none; }
   }
 
   :global(.maplibregl-ctrl-group) { background: rgba(11, 12, 14, .86) !important; }

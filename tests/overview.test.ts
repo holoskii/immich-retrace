@@ -4,8 +4,9 @@ import {
   smooth, snapDay, sumRange, viewAround, viewToShow, zoomAt, albumLabel,
 } from '../web/src/lib/overview/data.ts';
 import {withLookup, type IndexColumns} from '../web/src/lib/index/model.ts';
-import {selection, selectionFromUrl, selectionToQuery, writeUrl, type Selection} from '../web/src/lib/selection.svelte.ts';
+import {applyUrl, selection, selectionFromUrl, selectionToQuery, writeUrl, type Selection} from '../web/src/lib/selection.svelte.ts';
 import type {AlbumSummary} from '../shared/api.ts';
+import {zoomSpan} from '../web/src/lib/nav.ts';
 
 const D = (s: string) => Date.parse(s + 'T00:00:00Z');
 const H = 3600e3;
@@ -192,8 +193,59 @@ describe('URL', () => {
     expect(selectionToQuery({...sel, mode: 'range'}, D('2024-06-01')).toString()).toBe('album=alb&mode=range');
     expect(selectionFromUrl(selectionToQuery({...sel, mode: 'range'}, null), albums)).toEqual({...sel, mode: 'range'});
   });
+  it('an album narrowed by a zoom keeps its days (sub)', () => {
+    const sel: Selection = {kind: 'album', albumId: 'alb', mode: 'members', t0: D('2024-05-03'), t1: D('2024-05-05'), sub: true};
+    const q = selectionToQuery(sel, null);
+    expect(q.toString()).toBe('album=alb&from=2024-05-03&to=2024-05-04');
+    expect(selectionFromUrl(q, albums)).toEqual(sel);
+  });
+  it('a sub-day span (cluster zoom) round-trips to the minute, to exclusive', () => {
+    const sel: Selection = {kind: 'range', t0: D('2024-05-03') + 14 * H, t1: D('2024-05-04') + 18 * H};
+    const q = selectionToQuery(sel, null);
+    expect(q.toString()).toBe('from=2024-05-03T14%3A00Z&to=2024-05-04T18%3A00Z');
+    expect(selectionFromUrl(q, [])).toEqual(sel);
+    expect(selectionFromUrl(new URLSearchParams('from=2024-05-03T14:00&to=2024-05-04'), [])).toBeNull();
+  });
   it('no selection clears the keys', () => {
     expect(selectionToQuery(null, 5, new URLSearchParams('from=2024-01-01&to=2024-01-02&at=5&q=1')).toString()).toBe('q=1');
+  });
+});
+
+describe('zoom stack', () => {
+  it('zoomInto remembers selection and cursor; back restores them', async () => {
+    const a: Selection = {kind: 'range', t0: D('2024-05-01'), t1: D('2024-05-10')}, b: Selection = {kind: 'range', t0: D('2024-05-03'), t1: D('2024-05-04')};
+    await selection.select(a); selection.cursor = 7; selection.resetZoom();
+    selection.zoomInto(b, 'Rome', 9);
+    expect([selection.sel, selection.cursor, selection.zoomLabel, selection.stack.length]).toEqual([b, 9, 'Rome', 1]);
+    expect(selection.back()).toBe(true);
+    expect([selection.sel, selection.cursor, selection.zoomLabel, selection.stack.length]).toEqual([a, 7, null, 0]);
+    expect(selection.back()).toBe(false);
+  });
+  it('a zoom from nothing selected returns to nothing', async () => {
+    await selection.select(null); selection.resetZoom();
+    selection.zoomInto({kind: 'range', t0: D('2024-05-03'), t1: D('2024-05-04')}, 'Rome', null);
+    expect(selection.back()).toBe(true);
+    expect([selection.sel, selection.stack.length]).toEqual([null, 0]);
+  });
+  it('the zoom span is whole hours, never reaching outside the parent (to the minute)', () => {
+    const t = D('2024-05-03');
+    expect(zoomSpan(t + 10 * H + 20 * 60e3, t + 12.5 * H, null)).toEqual([t + 10 * H, t + 13 * H]);
+    // Parent 10:15:30 → 18:45:10 (an album's exact span): clamped to 10:15 / 18:46.
+    expect(zoomSpan(t + 10 * H + 20 * 60e3, t + 18.7 * H, [t + 10.25 * H + 30e3, t + 18.75 * H + 10e3])).toEqual([t + 10.25 * H, t + 18.75 * H + 60e3]);
+    expect(zoomSpan(t + 10 * H, t + 11 * H, [D('2024-05-01'), D('2024-05-10')])).toEqual([t + 10 * H, t + 12 * H]);
+  });
+  it('popstate onto the zoom\'s parent pops it; onto an unrelated selection forgets the stack', () => {
+    const a: Selection = {kind: 'range', t0: D('2024-05-01'), t1: D('2024-05-10')}, b: Selection = {kind: 'range', t0: D('2024-05-03') + 14 * H, t1: D('2024-05-03') + 18 * H};
+    const go = (search: string) => { vi.stubGlobal('location', {search}); applyUrl([]); };
+    try {
+      selection.resetZoom(); selection.sel = a;
+      selection.zoomInto({kind: 'range', t0: D('2024-05-02'), t1: D('2024-05-05')}, 'Rome', null);
+      selection.zoomInto(b, 'Colosseum', null);
+      go('?from=2024-05-02&to=2024-05-04');
+      expect([selection.stack.length, selection.zoomLabel]).toEqual([1, 'Rome']);
+      go('?from=2024-06-01&to=2024-06-02');
+      expect([selection.stack.length, selection.zoomLabel]).toEqual([0, null]);
+    } finally { vi.unstubAllGlobals(); selection.sel = null; }
   });
 });
 

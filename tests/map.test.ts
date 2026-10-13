@@ -3,7 +3,7 @@ import {rgbaToThumbHash, thumbHashToRGBA as refDecode} from 'thumbhash';
 import type {AssetColumns} from '../shared/api.ts';
 import {buildIndex} from '../web/src/lib/index/model.ts';
 import {
-  breakBetween, densityBins, EXACT_MS, gpsBounds, haversineKm, nearestRow, pinsGeoJSON, positionAt,
+  breakBetween, clusterVisits, densityBins, EXACT_MS, gpsBounds, haversineKm, nearestRow, pinsGeoJSON, positionAt,
   routeGeoJSON, segmentRoute, stepTime, typicalOffset,
 } from '../web/src/lib/map/route.ts';
 import {base64Bytes, thumbHashRatio, thumbHashToRGBA} from '../web/src/lib/thumbhash.ts';
@@ -206,5 +206,22 @@ describe('thumbhash', () => {
   it('reads Immich\'s base64 form', () => {
     const b64 = Buffer.from(hash).toString('base64');
     expect([...base64Bytes(b64)]).toEqual([...hash]);
+  });
+});
+
+describe('clusterVisits', () => {
+  // Rows: 0–2 at A, 3 elsewhere (B), 4–5 at A again two days later; 6 no GPS.
+  const ix = index([[0, 41.9, 12.5], [60, 41.9, 12.5], [120, 41.9, 12.5], [24 * 60, 43.7, 11.2], [50 * 60, 41.9, 12.5], [51 * 60, 41.9, 12.5]]);
+  it('splits a return visit when a fix elsewhere lies between and the gap is long', () => {
+    const v = clusterVisits(ix, 0, ix.n, [5, 0, 1, 2, 4]);
+    expect(v.map(x => [x.n, x.t0, x.t1])).toEqual([[3, T0, T0 + 120 * M], [2, T0 + 50 * H, T0 + 51 * H]]);
+  });
+  it('keeps one visit when nothing else was photographed in between (or outside the range)', () => {
+    expect(clusterVisits(ix, 0, ix.n, [0, 1, 2, 3, 4, 5])).toHaveLength(1);
+    expect(clusterVisits(ix, 4, ix.n, [4, 5, 0])).toEqual([{t0: T0 + 50 * H, t1: T0 + 51 * H, n: 2, place: ''}]);
+  });
+  it('a short excursion (< 36 h) stays one visit', () => {
+    const j = index([[0, 41.9, 12.5], [5 * 60, 41.96, 12.8], [10 * 60, 41.9, 12.5]]);
+    expect(clusterVisits(j, 0, j.n, [0, 2])).toHaveLength(1);
   });
 });

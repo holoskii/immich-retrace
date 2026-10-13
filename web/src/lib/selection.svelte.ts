@@ -6,8 +6,18 @@ import {library} from './index/store.svelte.ts';
 /** Times are UTC instants (epoch ms); `t1` is exclusive. */
 export type Selection =
   | {kind: 'range'; t0: number; t1: number}
-  /** members: the album's own assets (may include ones outside the library index); range: everything in its date span. */
-  | {kind: 'album'; albumId: string; mode: 'members' | 'range'; t0: number; t1: number};
+  /**
+   * members: the album's own assets (may include ones outside the library index); range: everything in its date span.
+   * `sub`: t0/t1 were narrowed inside the album (a map cluster zoom); members are clipped to them then.
+   */
+  | {kind: 'album'; albumId: string; mode: 'members' | 'range'; t0: number; t1: number; sub?: true};
+
+/** A selection to return to (zoom stack): what was selected (null: nothing, the whole library), the cursor, its name for Back. */
+export interface Crumb { sel: Selection | null; cursor: number | null; label: string }
+
+export const sameSelection = (a: Selection | null, b: Selection | null) =>
+  a === b || (!!a && !!b && a.kind === b.kind && a.t0 === b.t0 && a.t1 === b.t1
+    && (a.kind === 'range' || (b.kind === 'album' && a.albumId === b.albumId && a.mode === b.mode && !!a.sub === !!b.sub)));
 
 /** The selected assets: rows lo..hi-1 of `ix`, which is sorted by t. */
 export interface Active { ix: LibraryIndex; lo: number; hi: number; t0: number; t1: number }
@@ -22,6 +32,10 @@ class SelectionStore {
   sel = $state.raw<Selection | null>(null);
   /** Shared time cursor: overview hover, map scrubber, lightbox. null = none. */
   cursor = $state<number | null>(null);
+  /** Zoom stack: selections a cluster zoom came from, innermost last. `label` names the zoomed-in level. */
+  stack = $state.raw<Crumb[]>([]);
+  /** Name of the current zoomed-in level (top of the stack), e.g. a city. */
+  zoomLabel = $state<string | null>(null);
   /** Album member index, loaded when an album is selected in members mode. */
   members = $state.raw<{albumId: string; version: string; ix: LibraryIndex} | null>(null);
 
@@ -39,7 +53,8 @@ class SelectionStore {
     if (!s) return null;
     if (s.kind === 'album' && s.mode === 'members') {
       const m = this.members;
-      return m && m.albumId === s.albumId ? {ix: m.ix, lo: 0, hi: m.ix.n, t0: s.t0, t1: s.t1} : null;
+      if (!m || m.albumId !== s.albumId) return null;
+      return s.sub ? {ix: m.ix, lo: lowerBound(m.ix.t, s.t0), hi: lowerBound(m.ix.t, s.t1), t0: s.t0, t1: s.t1} : {ix: m.ix, lo: 0, hi: m.ix.n, t0: s.t0, t1: s.t1};
     }
     if (!lib) return null;
     return {ix: lib, lo: lowerBound(lib.t, s.t0), hi: lowerBound(lib.t, s.t1), t0: s.t0, t1: s.t1};
@@ -54,6 +69,28 @@ class SelectionStore {
     const ix = await library.membersOf(s.albumId);
     if (this.sel === s) this.members = {albumId: s.albumId, version, ix};
   }
+
+  /** Narrows to `sel` remembering the current selection and cursor; `label` names the new level. */
+  zoomInto(sel: Selection, label: string, cursor: number | null) {
+    this.stack = [...this.stack, {sel: this.sel, cursor: this.cursor, label: this.zoomLabel ?? ''}];
+    this.zoomLabel = label;
+    this.select(sel).catch(e => console.warn('album members:', e));
+    this.cursor = cursor;
+  }
+
+  /** Back to the selection the last zoom came from (and its cursor). False when there is none. */
+  back() {
+    const top = this.stack.at(-1);
+    if (!top) return false;
+    this.stack = this.stack.slice(0, -1);
+    this.zoomLabel = top.label || null;
+    this.select(top.sel).catch(e => console.warn('album members:', e));
+    this.cursor = top.cursor;
+    return true;
+  }
+
+  /** Forgets the zoom stack (a fresh pick: album list, clear). */
+  resetZoom() { this.stack = []; this.zoomLabel = null; }
 }
 
 export const selection = new SelectionStore();
@@ -69,10 +106,20 @@ export function offsetNear(t: number | null) {
 // URL format (stage 3 owns writing it via writeUrl(): replaceState while dragging, pushState on release):
 //   ?from=2026-08-01&to=2026-08-30        range, UTC calendar days, `to` inclusive
 //   ?album=<uuid>[&mode=range]            album, members by default
+//   from/to may also be 2026-08-01T14:00Z (UTC to the minute, `to` exclusive): a map cluster zoom
+//   ?album=<uuid>&from=…&to=…             album narrowed to that span (map cluster zoom)
 //   &at=<epoch ms>                        cursor (optional)
 //   &lb=<asset id>                        open lightbox (optional; written from selection.lightboxId by every writeUrl)
 const DAY = 86400e3;
 const day = (s: string | null) => (s && /^\d{4}-\d{2}-\d{2}$/.test(s) ? Date.parse(s + 'T00:00:00Z') : NaN);
+const HOUR_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}Z$/;
+const hour = (s: string | null) => (s && HOUR_RE.test(s) ? Date.parse(s) : NaN);
+/** from/to: whole days (`to` inclusive), or UTC instants to the minute (`to` exclusive), as a cluster zoom writes them. */
+function span(q: URLSearchParams): [number, number] | null {
+  const f = q.get('from'), t = q.get('to');
+  const t0 = HOUR_RE.test(f ?? '') ? hour(f) : day(f), t1 = HOUR_RE.test(t ?? '') ? hour(t) : day(t) + DAY;
+  return Number.isFinite(t0) && Number.isFinite(t1) && t1 > t0 ? [t0, t1] : null;
+}
 
 /** Reads a selection from the URL. Album t0/t1 come from the album list, so albums resolve once it is loaded. */
 export function selectionFromUrl(q: URLSearchParams, albums: {id: string; start: number | null; end: number | null}[]): Selection | null {
@@ -80,13 +127,17 @@ export function selectionFromUrl(q: URLSearchParams, albums: {id: string; start:
   if (album) {
     const a = albums.find(x => x.id === album);
     if (!a || a.start == null || a.end == null) return null;
-    return {kind: 'album', albumId: a.id, mode: q.get('mode') === 'range' ? 'range' : 'members', t0: a.start, t1: a.end + 1};
+    const mode = q.get('mode') === 'range' ? 'range' : 'members';
+    const sp = span(q);
+    if (sp) return {kind: 'album', albumId: a.id, mode, t0: sp[0], t1: sp[1], sub: true};
+    return {kind: 'album', albumId: a.id, mode, t0: a.start, t1: a.end + 1};
   }
-  const t0 = day(q.get('from')), t1 = day(q.get('to')) + DAY;
-  return Number.isFinite(t0) && Number.isFinite(t1) && t1 > t0 ? {kind: 'range', t0, t1} : null;
+  const sp = span(q);
+  return sp ? {kind: 'range', t0: sp[0], t1: sp[1]} : null;
 }
 
 const isoDay = (t: number) => new Date(t).toISOString().slice(0, 10);
+const isoMin = (t: number) => new Date(t).toISOString().slice(0, 16) + 'Z';
 const URL_KEYS = ['from', 'to', 'album', 'mode', 'at', 'lb'];
 
 /**
@@ -98,7 +149,11 @@ export function selectionToQuery(sel: Selection | null, at: number | null, base 
   for (const k of URL_KEYS) q.delete(k);
   if (!sel) return q;
   if (sel.kind === 'album') { q.set('album', sel.albumId); if (sel.mode === 'range') q.set('mode', 'range'); }
-  else { q.set('from', isoDay(sel.t0)); q.set('to', isoDay(sel.t1 - 1)); }
+  if (sel.kind === 'range' || sel.sub) {
+    // Whole days stay readable; anything finer (a cluster zoom) is written to the minute.
+    if (sel.t0 % DAY === 0 && sel.t1 % DAY === 0) { q.set('from', isoDay(sel.t0)); q.set('to', isoDay(sel.t1 - 1)); }
+    else { q.set('from', isoMin(sel.t0)); q.set('to', isoMin(sel.t1)); }
+  }
   if (at != null && Number.isFinite(at) && at >= sel.t0 && at < sel.t1) q.set('at', String(Math.round(at)));
   return q;
 }
@@ -155,7 +210,12 @@ export function rowInActive(a: Active, id: string) {
 export function applyUrl(albums: {id: string; start: number | null; end: number | null}[]) {
   gesture = null;
   const q = new URLSearchParams(location.search), at = Number(q.get('at')), lb = q.get('lb');
-  selection.select(selectionFromUrl(q, albums)).catch(e => console.warn('album members:', e));
+  const sel = selectionFromUrl(q, albums);
+  // Back/forward onto the selection a zoom came from pops it; onto anything else unrelated forgets the stack.
+  const top = selection.stack.at(-1);
+  if (top && sameSelection(top.sel, sel)) { selection.stack = selection.stack.slice(0, -1); selection.zoomLabel = top.label || null; }
+  else if (!sameSelection(selection.sel, sel)) selection.resetZoom();
+  selection.select(sel).catch(e => console.warn('album members:', e));
   selection.cursor = q.has('at') && Number.isFinite(at) ? at : null;
   if (lb !== selection.lightboxId) selection.lightbox = null;
   pendingLb = lb;
