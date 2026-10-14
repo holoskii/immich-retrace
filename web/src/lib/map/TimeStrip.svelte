@@ -12,7 +12,8 @@
 
   const H = 64, BARS = 40, BIN = 3;
   const DAY = 86400e3;
-  const C = {gps: '#4CB782', gpsDim: '#2B5A45', nogps: '#A0504A', nogpsDim: '#4E2C2A', line: '#2A2F37', muted: '#7F858E', ink: '#E9E6DF'};
+  // Tokens from app.css; `*Dim`: the part after the cursor (not yet played), dimmed but still lighter-for-GPS.
+  const C = {gps: '#4ADBA8', gpsDim: '#1E7A5E', nogps: '#6B7079', nogpsDim: '#464B53', line: '#2A2F37', muted: '#8A9099', ink: '#E9E6DF'};
 
   let cv = $state<HTMLCanvasElement>();
   let width = $state(0);
@@ -60,7 +61,7 @@
     const x = (t: number) => (t - active.t0) / span * width;
     const cx = cursorIn == null ? null : x(cursorIn);
     // The cursor's time label sits in the axis row; day labels under it are skipped.
-    const MONO = '400 10px "IBM Plex Mono", ui-monospace, monospace', MONO_B = '500 11px "IBM Plex Mono", ui-monospace, monospace';
+    const MONO = '400 10px ui-monospace, Menlo, Consolas, monospace', MONO_B = '500 11px ui-monospace, Menlo, Consolas, monospace';
     let cur: {s: string; x0: number; x1: number} | null = null;
     if (cx != null) {
       ctx.font = MONO_B;

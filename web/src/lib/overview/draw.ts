@@ -1,12 +1,27 @@
 // Canvas drawing for overview O-A, ported from sketches/template.html (`fit`, `area`, `drawSel`, `drawOA`).
-import {albumLabel, clamp, DAY, fDayMonth, fMonth, packLanes, sample, type Days, type RailAlbum, type Span} from './data.ts';
+import {albumLabel, clamp, DAY, fDayMonth, fMonth, fNum, packLanes, sample, sumRange, type Days, type RailAlbum, type Span} from './data.ts';
 
+/** Mirrors the tokens in app.css (canvas can't read CSS variables cheaply per frame). */
 export const C = {
-  ground: '#101215', line: '#2A2F37', ink: '#E9E6DF', ink2: '#B5B9C0', muted: '#7F858E',
-  photo: '#C98128', photoHi: '#E8A64E', video: '#3A9BD6', gps: '#4CB782', nogps: '#A0504A', rail: '#5b4426', railHover: '#8a6534',
+  ground: '#101215', line: '#2A2F37', ink: '#E9E6DF', ink2: '#B5B9C0', muted: '#8A9099',
+  photo: '#C98128', photoHi: '#E8A64E', video: '#3A9BD6', gps: '#4ADBA8', nogps: '#6B7079', rail: '#5b4426', railHover: '#8a6534',
 };
-const MONO = '500 11px "IBM Plex Mono", ui-monospace, monospace';
-const MONO_S = '400 10px "IBM Plex Mono", ui-monospace, monospace';
+const MONO = '500 11px ui-monospace, Menlo, Consolas, monospace';
+const MONO_S = '400 10px ui-monospace, Menlo, Consolas, monospace';
+
+/** Diagonal hatch for provisional counts (GPS not known yet): reads as "pending", not as either colour. */
+let hatch: CanvasPattern | null = null;
+function pending(ctx: CanvasRenderingContext2D): CanvasPattern | string {
+  if (!hatch) {
+    const t = document.createElement('canvas');
+    t.width = t.height = 6;
+    const g = t.getContext('2d')!;
+    g.strokeStyle = C.muted; g.lineWidth = 1.5;
+    g.beginPath(); g.moveTo(-1, 7); g.lineTo(7, -1); g.moveTo(5, 7); g.lineTo(7, 5); g.moveTo(-1, 1); g.lineTo(1, -1); g.stroke();
+    hatch = ctx.createPattern(t, 'repeat');
+  }
+  return hatch ?? C.muted;
+}
 
 /** Context strip geometry (CSS px). */
 export const CTX = {h: 50, base: 36, H: 32};
@@ -25,7 +40,7 @@ export function fit(cv: HTMLCanvasElement, h: number) {
 
 /**
  * Stacked √ area: media with GPS from the baseline, without GPS on top, split proportionally (sketch `area`):
- * red stretches have nothing to show on the map. Provisional counts (GPS unknown) are drawn neutral.
+ * the dim grey stretches have nothing to show on the map. Provisional counts (GPS unknown) are hatched.
  */
 function area(ctx: CanvasRenderingContext2D, I: Float32Array, V: Float32Array, base: number, H: number, sq: number, provisional = false) {
   const n = I.length;
@@ -41,8 +56,9 @@ function area(ctx: CanvasRenderingContext2D, I: Float32Array, V: Float32Array, b
     for (let x = n - 1; x >= 0; x--) ctx.lineTo(x + .5, base - (g ? g[x] : 0));
     ctx.closePath(); ctx.fill();
   };
-  ctx.fillStyle = provisional ? C.muted : C.gps; path(mid, null);
-  ctx.fillStyle = provisional ? C.muted : C.nogps; path(top, mid);
+  if (provisional) { ctx.fillStyle = pending(ctx); path(top, null); return; }
+  ctx.fillStyle = C.gps; path(mid, null);
+  ctx.fillStyle = C.nogps; path(top, mid);
 }
 
 /** Dims outside [x0, x1], draws edges with grab handles (sketch `drawSel`). */
@@ -55,21 +71,32 @@ function drawSel(ctx: CanvasRenderingContext2D, x0: number, x1: number, y0: numb
   for (const x of [x0, x1]) { ctx.beginPath(); ctx.roundRect(x - 3, hm - 10, 6, 20, 3); ctx.fill(); }
 }
 
-export function drawContext(cv: HTMLCanvasElement, days: Days | null, view: Span, sel: Span | null) {
+/**
+ * The all-years strip over `ext` (the library's core, widened to the view when that reaches outlier dates).
+ * Items outside `ext` are announced at its ends ("‹ 3 earlier · 2008") instead of squeezing the axis.
+ */
+export function drawContext(cv: HTMLCanvasElement, days: Days | null, ext: Span, view: Span, sel: Span | null) {
   const {ctx, w} = fit(cv, CTX.h);
   if (!days || w <= 0) return;
-  const T0 = days.t0, T1 = T0 + days.nd * DAY, sc = (T1 - T0) / w;
+  const [T0, T1] = ext, sc = (T1 - T0) / w, end = days.t0 + days.nd * DAY;
   // Each pixel here averages several days, so scale to the strip's own peak rather than the busiest single day.
   const {I, V} = sample(days, T0, T1, w);
   let peak = 0;
   for (let x = 0; x < I.length; x++) peak = Math.max(peak, I[x] + V[x]);
   area(ctx, I, V, CTX.base, CTX.H, Math.sqrt(peak) || 1, days.provisional);
   ctx.font = MONO_S; ctx.fillStyle = C.muted;
-  const y0 = new Date(T0).getUTCFullYear(), y1 = new Date(T1).getUTCFullYear(), every = Math.ceil(40 / ((365 * DAY) / sc));
+  const count = (a: number, b: number) => { const [p, v] = sumRange(days, a, b); return Math.round(p + v); };
+  const nb = T0 > days.t0 ? count(days.t0, T0) : 0, na = T1 < end ? count(T1, end) : 0;
+  const yr = (t: number) => new Date(t).getUTCFullYear();
+  const lb = nb ? `‹ ${fNum(nb)} earlier · ${yr(days.t0)}` : '', la = na ? `${fNum(na)} later · ${yr(end - DAY)} ›` : '';
+  const xl = lb ? ctx.measureText(lb).width + 8 : 0, xr = la ? w - ctx.measureText(la).width - 8 : w;
+  if (lb) ctx.fillText(lb, 0, CTX.base + 13);
+  if (la) ctx.fillText(la, xr + 8, CTX.base + 13);
+  const y0 = yr(T0), y1 = yr(T1), every = Math.ceil(40 / ((365 * DAY) / sc));
   for (let y = y0 + 1; y <= y1; y++) {
     const x = (Date.UTC(y, 0, 1) - T0) / sc;
     ctx.fillRect(x, CTX.base, 1, 4);
-    if (y % every === 0) ctx.fillText("'" + String(y).slice(2), x + 2, CTX.base + 13);
+    if (y % every === 0 && x > xl && x + 24 < xr) ctx.fillText("'" + String(y).slice(2), x + 2, CTX.base + 13);
   }
   drawSel(ctx, (view[0] - T0) / sc, (view[1] - T0) / sc, 2, CTX.base + 2, w);
   if (sel) { ctx.fillStyle = C.photoHi; ctx.fillRect((sel[0] - T0) / sc - 1, CTX.base, Math.max(2, (sel[1] - sel[0]) / sc), 3); }

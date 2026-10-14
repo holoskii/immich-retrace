@@ -18,16 +18,47 @@ export interface Days {
   pP: Float64Array; pV: Float64Array;
   /** Top of the √ scale: sqrt of the 99.5th-percentile busy day, so one outlier day (a 2 000-photo event) doesn't flatten the rest; taller days clip. */
   sq: number;
+  /**
+   * The library without outlier dates (`trimOutliers`): the context strip's extent (Jan 1 of the first year → axis end)
+   * and the day of its first item. The whole domain / first item when nothing was trimmed.
+   */
+  core: Span; first: number;
 }
 
-/** Domain: Jan 1 of the first asset's year → the day after max(last asset, today). */
-function domain(first: number, last: number, now: number) {
+export const YEAR = 365 * DAY;
+/** An active library (newest item at most this old) ends at today, so the gap since the last photo shows. */
+const RECENT = 30 * DAY;
+
+/** Axis: Jan 1 of the first item's year → the day after the last item (after today while it is RECENT). */
+function domain(first: number, last: number, now: number): Span {
   const t0 = Date.UTC(new Date(first).getUTCFullYear(), 0, 1);
-  const end = (Math.floor(Math.max(last, now) / DAY) + 1) * DAY;
-  return {t0, nd: Math.max(1, Math.round((end - t0) / DAY))};
+  const end = (Math.floor((now >= last && now - last <= RECENT ? now : last) / DAY) + 1) * DAY;
+  return [t0, Math.max(t0 + DAY, end)];
 }
 
-function finish(t0: number, nd: number, photo: Float32Array, video: Float32Array, provisional = false): Days {
+/**
+ * Indices [a, b] (inclusive) of the core of n time-sorted items, item i covering [lo(i), hi(i)] with weight w(i).
+ * Isolated items at either end are outliers for framing: a camera clock left at 2008 or 1970, one scan decades
+ * before the rest, a future date. Rule: a run holding at most 2% of the weight at one end is cut off when a gap of
+ * at least a year, and at least a quarter of the remaining span, separates it from the rest. Relative to the
+ * library's own span, so a 3-year library drops a lone item a year off while a 20-year one keeps photos 2 years
+ * before the bulk; libraries under 50 items keep everything. Trimmed items stay in the histogram and the domain
+ * (zoom out, "All years"). O(trimmed run) per end after one O(n) weight sum.
+ */
+export function trimOutliers(n: number, lo: (i: number) => number, hi: (i: number) => number, w: (i: number) => number = () => 1): [number, number] {
+  let total = 0;
+  for (let i = 0; i < n; i++) total += w(i);
+  let a = 0, b = n - 1;
+  if (n < 2 || total < 50) return [a, b];
+  const budget = total * 0.02, cut = (gap: number, rest: number) => gap >= YEAR && gap >= rest / 4;
+  for (let i = 0, cum = 0; i < n - 1 && (cum += w(i)) <= budget; i++) if (cut(lo(i + 1) - hi(i), hi(n - 1) - lo(i + 1))) a = i + 1;
+  for (let j = n - 1, cum = 0; j > a && (cum += w(j)) <= budget; j--) if (cut(lo(j) - hi(j - 1), hi(j - 1) - lo(a))) b = j - 1;
+  return [a, b];
+}
+
+/** `dom`: the whole axis; `cf` / `cl`: the core's first and last item. */
+function finish(dom: Span, cf: number, cl: number, now: number, photo: Float32Array, video: Float32Array, provisional = false): Days {
+  const t0 = dom[0], nd = Math.round((dom[1] - t0) / DAY);
   const pP = new Float64Array(nd + 1), pV = new Float64Array(nd + 1);
   const busy: number[] = [];
   for (let k = 0; k < nd; k++) {
@@ -36,19 +67,24 @@ function finish(t0: number, nd: number, photo: Float32Array, video: Float32Array
   }
   busy.sort((a, b) => a - b);
   const top = busy.length ? busy[Math.min(busy.length - 1, Math.floor(busy.length * 0.995))] : 1;
-  return {t0, nd, gps: photo, nogps: video, pP, pV, sq: Math.sqrt(Math.max(1, top)), ...(provisional ? {provisional: true as const} : {})};
+  return {
+    t0, nd, gps: photo, nogps: video, pP, pV, sq: Math.sqrt(Math.max(1, top)),
+    core: domain(cf, cl, now), first: Math.floor(cf / DAY) * DAY, ...(provisional ? {provisional: true as const} : {}),
+  };
 }
 
 export function daysFromIndex(ix: IndexColumns, now = Date.now()): Days | null {
   if (!ix.n) return null;
   let first = Infinity, last = -Infinity;
   for (let r = 0; r < ix.n; r++) { const l = ix.t[r] + ix.off[r] * HOUR; if (l < first) first = l; if (l > last) last = l; }
-  const {t0, nd} = domain(first, last, now), photo = new Float32Array(nd), video = new Float32Array(nd);
+  // Rows are sorted by UTC instant; hours of offset don't matter at the scale of the gaps trimmed here.
+  const loc = (r: number) => ix.t[r] + ix.off[r] * HOUR, [a, b] = trimOutliers(ix.n, loc, loc);
+  const dom = domain(first, last, now), t0 = dom[0], nd = Math.round((dom[1] - t0) / DAY), photo = new Float32Array(nd), video = new Float32Array(nd);
   for (let r = 0; r < ix.n; r++) {
     const k = Math.floor((ix.t[r] + ix.off[r] * HOUR - t0) / DAY);
     if (k >= 0 && k < nd) (ix.gps[r] ? photo : video)[k]++;
   }
-  return finish(t0, nd, photo, video);
+  return finish(dom, a > 0 ? loc(a) : first, b < ix.n - 1 ? loc(b) : last, now, photo, video);
 }
 
 /** Provisional overview while the first index builds: each month's count spread evenly over its days (GPS unknown). */
@@ -57,13 +93,16 @@ export function daysFromMonths(months: IndexManifest['months'], now = Date.now()
   if (!ms.length) return null;
   const start = (m: string) => Date.UTC(+m.slice(0, 4), +m.slice(5, 7) - 1, 1);
   const next = (m: string) => Date.UTC(+m.slice(0, 4), +m.slice(5, 7), 1);
-  const first = Math.min(...ms.map(m => start(m.month))), last = Math.max(...ms.map(m => next(m.month) - DAY));
-  const {t0, nd} = domain(first, last, now), photo = new Float32Array(nd), video = new Float32Array(nd);
+  ms.sort((a, b) => a.month.localeCompare(b.month));
+  const lo = (i: number) => start(ms[i].month), hi = (i: number) => next(ms[i].month) - DAY;
+  const [ca, cb] = trimOutliers(ms.length, lo, hi, i => ms[i].count);
+  const dom = domain(lo(0), hi(ms.length - 1), now), t0 = dom[0], nd = Math.round((dom[1] - t0) / DAY);
+  const photo = new Float32Array(nd), video = new Float32Array(nd);
   for (const m of ms) {
     const a = Math.round((start(m.month) - t0) / DAY), b = Math.round((next(m.month) - t0) / DAY), per = m.count / (b - a);
     for (let k = Math.max(0, a); k < Math.min(nd, b); k++) photo[k] += per;
   }
-  return finish(t0, nd, photo, video, true);
+  return finish(dom, lo(ca), hi(cb), now, photo, video, true);
 }
 
 /** Mean per-day density over [ta, tb): a sub-day span reads the day containing its midpoint (sketch `dens`). */
@@ -178,7 +217,16 @@ export function zoomAt(view: Span, t: number, f: number, k: number, lo: number, 
   return [v0, v0 + span];
 }
 
-export const defaultView = (lo: number, hi: number): Span => [Math.max(lo, hi - 365 * DAY), hi];
+/**
+ * First view: the 12 months ending at the core's end (the last photo, or today for an active library), or the whole
+ * core (plus a little room before it) when that spans under 2 years, so any library — an old one, a fixed demo
+ * set — opens on its photos.
+ */
+export function defaultView(h: Days): Span {
+  const end = h.core[1], len = end - h.first;
+  if (len >= 2 * YEAR) return [Math.max(h.t0, end - YEAR), end];
+  return [Math.max(h.t0, Math.min(h.first - Math.max(DAY, len * 0.04), end - 14 * DAY)), end];
+}
 
 // ---- brush (sketch `brush`), as a pure step ----
 

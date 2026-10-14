@@ -1,12 +1,18 @@
 :root {
   color-scheme: dark;
   --ground: #101215; --surface: #171A1F; --raised: #20242B; --line: #2A2F37;
-  --ink: #E9E6DF; --ink2: #B5B9C0; --muted: #7F858E;
+  /* --muted: secondary text, ≥ 4.5:1 on every background here (4.84 on --raised, 5.42 on --surface). */
+  --ink: #E9E6DF; --ink2: #B5B9C0; --muted: #8A9099;
   --photo: #C98128; --photo-hi: #E8A64E; --video: #3A9BD6;
-  /* Timeline density: media with GPS (map-worthy) vs. without (bright vs. dim, not hue alone). */
-  --gps: #4CB782; --nogps: #A0504A;
-  --f-body: "IBM Plex Sans", system-ui, sans-serif;
-  --f-mono: "IBM Plex Mono", ui-monospace, monospace;
+  /*
+   * Timeline density: media with GPS (map-worthy) vs. without. They differ in lightness, not only hue (2.84:1 between
+   * them; red/green blindness, and red would read as an error): bright teal vs. a dim neutral grey, each ≥ 3:1 on
+   * --surface (9.96, 3.50). Mirrored in overview/draw.ts and map/TimeStrip.svelte (canvas).
+   */
+  --gps: #4ADBA8; --nogps: #6B7079;
+  /* System fonts: no web font to load (Plex was named here but never shipped). Mono also mirrored in canvas code. */
+  --f-body: system-ui, sans-serif;
+  --f-mono: ui-monospace, Menlo, Consolas, monospace;
 }
 * { box-sizing: border-box; }
 html, body, #app { height: 100%; margin: 0; }

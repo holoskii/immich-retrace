@@ -41,13 +41,24 @@
     return s?.kind === 'album' ? library.albums.find(a => a.id === s.albumId) ?? null : null;
   });
 
-  // Default viewport: the last ~12 months; re-clamped when the domain changes (provisional → real).
+  /** The default view as last set; while `view` is still this one (untouched), a new histogram reframes it. */
+  let auto: Span | null = null;
+  // Default viewport (`defaultView`: the last ~12 months of photos); re-clamped when the domain changes (provisional → real).
   $effect(() => {
-    if (!dom) return;
+    if (!days || !dom) return;
     const v = untrack(() => view);
-    if (!v) { view = defaultView(dom[0], dom[1]); return; }
+    if (!v || v === auto) { view = auto = defaultView(days); return; }
     const span = Math.min(v[1] - v[0], dom[1] - dom[0]), v0 = clamp(v[0], dom[0], dom[1] - span);
     if (v0 !== v[0] || v0 + span !== v[1]) view = [v0, v0 + span];
+  });
+
+  /** Context strip extent while its window is dragged, so the strip doesn't rescale under the pointer. */
+  let frozen = $state.raw<Span | null>(null);
+  /** Context strip extent: the library without outlier dates, widened to the view when that reaches them. */
+  const strip = $derived.by<Span | null>(() => {
+    if (frozen) return frozen;
+    if (!days || !view) return dom;
+    return [Math.min(days.core[0], view[0]), Math.max(days.core[1], view[1])];
   });
 
   // Keep the selection in view when it changes from outside the brush (URL, back/forward, keyboard).
@@ -92,11 +103,12 @@
   $effect(() => {
     const st = {days, view, sel: selSpan, cursor: hoverT ?? selection.cursor, cursorOff: offsetNear(hoverT ?? selection.cursor), albums: rail, activeAlbum: album?.id ?? null, hoverAlbum, focus};
     void size;
-    if (!ctxCv || !mainCv || !st.view) return;
+    const ext = strip;
+    if (!ctxCv || !mainCv || !st.view || !ext) return;
     const c = ctxCv, m = mainCv, v = st.view;
     cancelAnimationFrame(raf);
     raf = requestAnimationFrame(() => {
-      drawContext(c, st.days, v, st.sel);
+      drawContext(c, st.days, ext, v, st.sel);
       hits = drawMain(m, {...st, view: v});
     });
   });
@@ -237,8 +249,8 @@
   function onWheel(ev: WheelEvent, cv: HTMLCanvasElement, overall: boolean) {
     if (!view || !dom) return;
     ev.preventDefault();
-    const [x] = local(ev, cv), w = cv.clientWidth, f = x / w;
-    const t = overall ? dom[0] + f * (dom[1] - dom[0]) : view[0] + f * (view[1] - view[0]);
+    const [x] = local(ev, cv), w = cv.clientWidth, f = x / w, e = strip ?? dom;
+    const t = overall ? e[0] + f * (e[1] - e[0]) : view[0] + f * (view[1] - view[0]);
     const g = overall ? (t - view[0]) / (view[1] - view[0]) : f;
     setView(zoomAt(view, t, overall ? clamp(g, 0, 1) : g, Math.exp(ev.deltaY * 0.0015), dom[0], dom[1]));
   }
@@ -246,13 +258,14 @@
   // ---- pointer: context strip (viewport window) ----
 
   let vdrag: {grip: Grip; anchor: number; cur: Span; x: number; moved: boolean} | null = null;
-  const ctxT = (x: number) => dom ? dom[0] + x / ctxCv!.clientWidth * (dom[1] - dom[0]) : 0;
-  const ctxX = (t: number) => dom ? (t - dom[0]) / (dom[1] - dom[0]) * ctxCv!.clientWidth : 0;
+  const ctxT = (x: number) => strip ? strip[0] + x / ctxCv!.clientWidth * (strip[1] - strip[0]) : 0;
+  const ctxX = (t: number) => strip ? (t - strip[0]) / (strip[1] - strip[0]) * ctxCv!.clientWidth : 0;
 
   function onCtxDown(ev: PointerEvent) {
-    if (!view || !dom || ev.button !== 0) return;
+    if (!view || !dom || !strip || ev.button !== 0) return;
     const [x] = local(ev, ctxCv!), t = ctxT(x), grip = hitGrip(x, ctxX(view[0]), ctxX(view[1]));
     vdrag = {grip, anchor: grip === 'm' ? t - view[0] : t, cur: view, x, moved: false};
+    frozen = strip;
     ctxCv!.setPointerCapture(ev.pointerId);
   }
   function onCtxMove(ev: PointerEvent) {
@@ -265,13 +278,14 @@
     }
     if (!vdrag.moved && Math.abs(x - vdrag.x) < 3) return;
     vdrag.moved = true;
-    const r = dragTo(vdrag.grip, vdrag.anchor, ctxT(x), vdrag.cur, dom[0], dom[1], 7 * DAY);
+    const e = strip ?? dom, r = dragTo(vdrag.grip, vdrag.anchor, ctxT(x), vdrag.cur, e[0], e[1], 7 * DAY);
     vdrag.grip = r.grip; vdrag.cur = r.span;
     setView(r.span);
   }
   function onCtxUp(ev: PointerEvent) {
     const d = vdrag;
     vdrag = null;
+    frozen = null;
     if (!d || d.moved || !view || !dom) return;
     // A click recenters the window there.
     const [x] = local(ev, ctxCv!), span = view[1] - view[0], v0 = clamp(ctxT(x) - span / 2, dom[0], dom[1] - span);
@@ -373,7 +387,7 @@
       {#if readout}
         {#if readout.name}<b>{readout.name}</b>{' · '}{/if}{readout.head} ·
         {#if readout.gps == null}<span class="ink2">{selection.sel?.kind === 'album' && selection.sel.mode === 'members' ? 'loading members…' : '…'}</span>
-        {:else}<span class="gps">{readout.gps} with GPS</span> · <span class="nogps">{readout.nogps} without</span>{/if}
+        {:else}<i class="sw gps"></i>{readout.gps} with location · <i class="sw nogps"></i>{readout.nogps} without{/if}
       {:else}
         <span class="muted">No selection: drag on the timeline, click an album bar, or pick from Albums</span>
       {/if}
@@ -397,7 +411,7 @@
   <canvas
     bind:this={ctxCv} class="ctx" style:height="{CTX.h}px"
     aria-label="All years; drag the window to choose the zoomed period"
-    onpointerdown={onCtxDown} onpointermove={onCtxMove} onpointerup={onCtxUp} onpointercancel={() => (vdrag = null)}
+    onpointerdown={onCtxDown} onpointermove={onCtxMove} onpointerup={onCtxUp} onpointercancel={() => { vdrag = null; frozen = null; }}
     onwheel={ev => onWheel(ev, ctxCv!, true)}
   ></canvas>
   <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
@@ -410,7 +424,13 @@
     onkeydown={onKey} onkeyup={onKeyUp}
     onfocus={() => (focus = true)} onblur={() => { focus = false; if (draft) commitDraft(); else writeUrl('commit'); }}
   ></canvas>
-  <div class="hint">scroll = zoom · drag = select · edges = resize · bars = albums · ←/→ move · Alt+←/→ resize · Esc clear</div>
+  <div class="hint">
+    <span class="key">
+      {#if days?.provisional}<i class="sw pending"></i>counting (location not known yet)
+      {:else}<i class="sw gps"></i>with location <i class="sw nogps"></i>without location{/if}
+    </span>
+    <span>scroll = zoom · drag = select · edges = resize · bars = albums · ←/→ move · Alt+←/→ resize · Esc clear</span>
+  </div>
 
   {#if tip}
     <div class="tip" style:left="{tip.x + 14}px" style:top="{tip.y + 14}px"><strong>{tip.title}</strong><span>{tip.text}</span></div>
@@ -424,8 +444,11 @@
   .readout b { font-weight: 500; color: var(--photo-hi); }
   .mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
   .ink2 { color: var(--ink2); }
-  .gps { color: var(--gps); }
-  .nogps { color: var(--nogps); filter: brightness(1.35); }
+  /* Colour key swatches: the counts and labels stay in text colours, the swatch carries the encoding. */
+  .sw { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin: 0 5px 0 0; vertical-align: -1px; }
+  .sw.gps { background: var(--gps); }
+  .sw.nogps { background: var(--nogps); }
+  .sw.pending { background: repeating-linear-gradient(-45deg, var(--muted) 0 1.5px, transparent 1.5px 4px); }
   .muted { color: var(--muted); }
   .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
   .seg button { background: none; border: 0; color: var(--muted); font: 12px var(--f-body); padding: 2px 9px; cursor: pointer; }
@@ -443,7 +466,9 @@
   .link:hover { color: var(--ink); }
   canvas { display: block; width: 100%; touch-action: none; }
   canvas:focus-visible, button:focus-visible { outline: 2px solid var(--photo-hi); outline-offset: 2px; }
-  .hint { font-size: 11px; color: var(--muted); }
+  .hint { font-size: 11px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 2px 18px; }
+  .key { color: var(--ink2); white-space: nowrap; }
+  .key .sw.nogps { margin-left: 10px; }
   .tip { position: fixed; z-index: 10; pointer-events: none; background: #0B0C0E; border: 1px solid var(--line); border-radius: 5px; padding: 6px 9px; font-size: 12px; color: var(--ink2); display: grid; gap: 2px; max-width: 280px; box-shadow: 0 6px 24px rgba(0,0,0,.5); }
   .tip strong { color: var(--ink); font: 500 12px var(--f-mono); }
 </style>

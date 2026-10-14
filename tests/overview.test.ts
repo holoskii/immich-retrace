@@ -1,7 +1,7 @@
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {
   countRows, DAY, daysFromIndex, daysFromMonths, defaultView, dens, dragTo, hitGrip, packLanes, railAlbums, sample,
-  smooth, snapDay, sumRange, fLength, viewAround, viewToShow, zoomAt, albumLabel,
+  smooth, snapDay, sumRange, fLength, trimOutliers, viewAround, viewToShow, zoomAt, albumLabel,
 } from '../web/src/lib/overview/data.ts';
 import {withLookup, type IndexColumns} from '../web/src/lib/index/model.ts';
 import {applyUrl, selection, selectionFromUrl, selectionToQuery, writeUrl, type Selection} from '../web/src/lib/selection.svelte.ts';
@@ -32,9 +32,12 @@ describe('daysFromIndex', () => {
   ]);
   const h = daysFromIndex(lib, NOW)!;
 
-  it('starts at Jan 1 of the first year and runs to the day after max(last, now)', () => {
+  it('starts at Jan 1 of the first year and runs to the day after the last item (today only while recent)', () => {
     expect(h.t0).toBe(D('2023-01-01'));
-    expect(h.t0 + h.nd * DAY).toBe(D('2024-03-11'));
+    expect(h.t0 + h.nd * DAY).toBe(D('2024-01-02'));
+    expect(h.core).toEqual([h.t0, D('2024-01-02')]);
+    const active = daysFromIndex(lib, D('2024-01-20'))!; // newest item 19 days old: the axis ends at today
+    expect(active.t0 + active.nd * DAY).toBe(D('2024-01-21'));
   });
 
   it('buckets by local calendar day, with and without GPS apart', () => {
@@ -77,6 +80,80 @@ describe('daysFromMonths (provisional)', () => {
     expect(sumRange(h, h.t0, D('2025-01-01'))).toEqual([expect.closeTo(329), 0]);
   });
   it('is null without counts', () => expect(daysFromMonths([])).toBeNull());
+});
+
+describe('default framing', () => {
+  /** n items spread evenly over [from, to), all with GPS. */
+  const spread = (from: string, to: string, n: number): [string, number, 0 | 1, 0 | 1][] =>
+    Array.from({length: n}, (_, i) => [new Date(D(from) + (D(to) - D(from)) * i / n).toISOString(), 0, 0, 1]);
+  const lib = (...parts: [string, number, 0 | 1, 0 | 1][][]) => ix(parts.flat().sort((a, b) => Date.parse(a[0]) - Date.parse(b[0])));
+  const inView = (h: NonNullable<ReturnType<typeof daysFromIndex>>, v: [number, number]) => sumRange(h, v[0], v[1])[0];
+
+  it('a tiny old library (2019, nothing since) opens on all of its photos, not on an empty today', () => {
+    const h = daysFromIndex(lib(spread('2019-03-01', '2019-06-01', 12)), D('2026-10-13'))!;
+    expect(h.t0 + h.nd * DAY).toBe(D('2019-05-25')); // last item 24 May 2019
+    const v = defaultView(h);
+    expect(v[1]).toBe(D('2019-05-25'));
+    expect(v[0]).toBeLessThan(D('2019-03-01'));
+    expect(inView(h, v)).toBe(12);
+  });
+
+  it('a 2008 outlier stays in the domain but not in the framing or the context strip', () => {
+    const h = daysFromIndex(lib([['2008-07-01T10:00:00Z', 0, 0, 1]], spread('2021-01-10', '2026-10-01', 400)), D('2026-10-13'))!;
+    expect(h.t0).toBe(D('2008-01-01'));
+    expect(h.core).toEqual([D('2021-01-01'), D('2026-10-14')]); // active: ends today
+    expect(h.first).toBe(D('2021-01-10'));
+    const v = defaultView(h);
+    expect(v).toEqual([D('2026-10-14') - 365 * DAY, D('2026-10-14')]);
+    expect(inView(h, v)).toBeGreaterThan(50);
+    expect(sumRange(h, h.t0, h.t0 + h.nd * DAY)[0]).toBe(401); // still counted, reachable via "All years"
+  });
+
+  it('a normal active library: nothing trimmed, the last 12 months up to today', () => {
+    const h = daysFromIndex(lib(spread('2015-02-01', '2026-10-12', 3000)), D('2026-10-13'))!;
+    expect(h.core).toEqual([h.t0, h.t0 + h.nd * DAY]);
+    expect(defaultView(h)).toEqual([D('2025-10-14'), D('2026-10-14')]);
+  });
+
+  it('a fixed 2023–2026 set (the demo) lands on its photos whenever it is opened', () => {
+    const rows = spread('2023-02-01', '2026-06-01', 900);
+    for (const now of ['2026-06-15', '2027-01-01', '2040-01-01']) {
+      const h = daysFromIndex(lib(rows), D(now))!, v = defaultView(h);
+      expect(v[1]).toBeLessThanOrEqual(D('2026-07-01'));
+      expect(v[1] - v[0]).toBe(365 * DAY);
+      expect(inView(h, v)).toBeGreaterThan(200);
+    }
+  });
+
+  it('trims a future clock at the end; keeps a modest early gap in a long library; keeps tiny libraries whole', () => {
+    const future = daysFromIndex(lib(spread('2020-01-01', '2026-10-01', 300), [['2037-01-01T00:00:00Z', 0, 0, 1]]), D('2026-10-13'))!;
+    expect(future.t0 + future.nd * DAY).toBe(D('2037-01-02'));
+    expect(future.core[1]).toBe(D('2026-10-14'));
+    expect(defaultView(future)[1]).toBe(D('2026-10-14'));
+    // 20 years; 1% of photos two years before the bulk: a real era, not an outlier (gap < a quarter of the span).
+    const long = daysFromIndex(lib(spread('2004-01-01', '2004-06-01', 30), spread('2006-06-01', '2026-10-01', 3000)), D('2026-10-13'))!;
+    expect(long.core[0]).toBe(D('2004-01-01'));
+    // 20 items with one from 1970: under 50 items nothing is trimmed.
+    const tiny = daysFromIndex(lib([['1970-01-01T00:00:00Z', 0, 0, 1]], spread('2024-01-01', '2024-03-01', 19)), D('2024-03-05'))!;
+    expect(tiny.core[0]).toBe(D('1970-01-01'));
+  });
+
+  it('trimOutliers: at most 2% of the weight per end, gap ≥ a year and ≥ a quarter of the rest', () => {
+    const at = (ts: number[]) => (i: number) => D(String(ts[i]) + '-06-01');
+    const ys = [1970, 2008, ...Array.from({length: 98}, (_, i) => 2020 + i * 6 / 98)].map(Math.floor);
+    expect(trimOutliers(ys.length, at(ys), at(ys))).toEqual([2, 99]);
+    const w = [1, 500, 500];
+    expect(trimOutliers(3, at([2000, 2020, 2024]), at([2000, 2020, 2024]), i => w[i])).toEqual([1, 2]);
+    expect(trimOutliers(3, at([2000, 2020, 2024]), at([2000, 2020, 2024]), i => [100, 500, 500][i])).toEqual([0, 2]); // 10%: not an outlier
+  });
+
+  it('provisional months trim the same way', () => {
+    const months = [{month: '2008-03', count: 2}, ...Array.from({length: 36}, (_, i) => ({month: `${2023 + Math.floor(i / 12)}-${String(i % 12 + 1).padStart(2, '0')}`, count: 40}))];
+    const h = daysFromMonths(months, D('2030-01-01'))!;
+    expect(h.t0).toBe(D('2008-01-01'));
+    expect(h.core).toEqual([D('2023-01-01'), D('2026-01-01')]);
+    expect(defaultView(h)).toEqual([D('2025-01-01'), D('2026-01-01')]);
+  });
 });
 
 describe('sample / smooth', () => {
@@ -123,7 +200,6 @@ describe('album rail', () => {
 
 describe('viewport', () => {
   const lo = D('2010-01-01'), hi = D('2026-10-14');
-  it('default = last 12 months', () => expect(defaultView(lo, hi)).toEqual([hi - 365 * DAY, hi]));
   it('viewAround: ≥120 days or 8× the span, centered, clamped', () => {
     const v = viewAround(D('2020-06-01'), D('2020-06-11'), lo, hi);
     expect(v[1] - v[0]).toBe(120 * DAY);
