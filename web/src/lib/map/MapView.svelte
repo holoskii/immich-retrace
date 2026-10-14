@@ -10,12 +10,13 @@
   import type {FeatureCollection, Point} from 'geojson';
   import type {ViewerConfig} from '../../../../shared/api.ts';
   import type {LibraryIndex} from '../index/model.ts';
-  import {library} from '../index/store.svelte.ts';
+  import {library, phaseText} from '../index/store.svelte.ts';
+  import {explainIndex, explainMedia, probeMedia, retryLibrary, type MediaFailure} from '../failure.ts';
   import {lowerBound, sameSelection, selection, writeUrl, type Selection} from '../selection.svelte.ts';
   import {thumbHashDataUrl} from '../thumbhash.ts';
   import {thumbUrl} from '../lightbox/media.ts';
   import {fDays, zoomName, zoomSpan} from '../nav.ts';
-  import {countRows} from '../overview/data.ts';
+  import {countRows, DAY, fNum} from '../overview/data.ts';
   import {fDay, fDuration, fFullDay, fSpan, fWhen} from './format.ts';
   import {clusterVisits, gpsBounds, nearestRow, pinsGeoJSON, positionAt, routeGeoJSON, segmentRoute, typicalOffset, type PinProps, type Visit} from './route.ts';
   import {binFixes, boxOf, buildTrack, mercX, mercY, type Track} from './camera.ts';
@@ -447,6 +448,8 @@
   // flashes back to the blur or to an empty frame.
   let shown = $state<{id: string; url: string} | null>(null);
   let want: {id: string; url: string} | null = null, loading = false, broken = '';
+  /** Why thumbnails fail (probed once, until one loads again): a missing permission shouldn't look like a blur. */
+  let thumbIssue = $state<MediaFailure | null>(null), probing = false;
   $effect(() => {
     const a = active, r = nearest;
     want = a && r >= 0 ? {id: a.ix.id[r], url: thumbUrl(a.ix.id[r], a.ix.thumbhash[r])} : null;
@@ -460,8 +463,16 @@
     loading = true;
     const img = new Image();
     img.src = w.url;
-    img.decode().then(() => { shown = w; }, () => { broken = w.url; }).finally(() => { loading = false; pump(); });
+    img.decode().then(() => { shown = w; thumbIssue = null; }, () => {
+      broken = w.url;
+      if (thumbIssue || probing) return;
+      probing = true;
+      void probeMedia(w.url).then(k => { thumbIssue = k; }).finally(() => { probing = false; });
+    }).finally(() => { loading = false; pump(); });
   }
+  // Card note only for causes worth knowing (a missing file or an odd format just keeps the blur).
+  const thumbNote = $derived(thumbIssue === 'permission' ? 'no thumbnails: the API key needs asset.view'
+    : thumbIssue === 'unavailable' || thumbIssue === 'network' || thumbIssue === 'signed-out' ? explainMedia(thumbIssue, false).text : '');
 
   const CARD_W = 172, GAP = 22;
   const cardSide = $derived(mpt && mpt.x + GAP + CARD_W > mpt.w - 8 ? 'left' : 'right');
@@ -478,6 +489,27 @@
     pos.kind === 'interp' ? 'estimated position' : '');
 
   const legend = $derived(active ? {from: fFullDay(active.t0, 0), to: fFullDay(active.t1 - 1, 0)} : null);
+
+  // First-run states, centred over the map: nothing to show yet (loading or failed), an empty
+  // library, or a library where nothing has GPS. With a library shown, a failed refresh is a notice.
+  const libGps = $derived(library.index ? countRows(library.index, 0, library.index.n).gps : 0);
+  const panel = $derived.by(() => {
+    const ix = library.index;
+    if (!ix) return library.status === 'error' ? 'error' : 'loading';
+    if (!ix.n) return library.status === 'ready' ? 'empty' : null;
+    return !libGps && !selection.sel ? 'nogps' : null;
+  });
+  const failure = $derived(library.status === 'error' ? explainIndex(library.failure) : null);
+
+  /** The whole library as one range with the lightbox on its first item (for a library without GPS). */
+  function browseAll() {
+    const ix = library.index;
+    if (!ix?.n) return;
+    selection.resetZoom();
+    void selection.select({kind: 'range', t0: Math.floor(ix.t[0] / DAY) * DAY, t1: Math.floor(ix.t[ix.n - 1] / DAY) * DAY + DAY});
+    writeUrl('commit', null);
+    selection.lightbox = 0;
+  }
 </script>
 
 <svelte:window onkeydown={e => { if (e.key === 'Escape' && menu && !e.defaultPrevented && selection.lightbox == null) { e.preventDefault(); menu = null; } }} />
@@ -485,8 +517,36 @@
   <div class="mapwrap" bind:clientWidth={wrapW} bind:clientHeight={wrapH}>
     <div class="map" class:dim={!!active && !gpsCount} bind:this={el}></div>
 
-    {#if failed}
+    {#if panel}
+      <div class="state" role={panel === 'error' ? 'alert' : 'status'}>
+        {#if panel === 'loading'}
+          <h2>{phaseText(library.phase, library.attempt, library.progress) || 'Loading…'}</h2>
+          <p>The first visit indexes the whole library once; later visits start from this browser's cache.</p>
+        {:else if panel === 'error' && failure}
+          <h2>{failure.title}</h2>
+          <p>{failure.next}</p>
+          {#if library.error && failure.title !== library.error}<p class="detail">{library.error}</p>{/if}
+          <div class="acts"><button class="primary" onclick={retryLibrary}>{failure.retry === 'reload' ? 'Reload' : 'Retry'}</button></div>
+        {:else if panel === 'empty'}
+          <h2>No photos in this library</h2>
+          <p>Immich returned no photos or videos for this API key. Upload some, or check that the key belongs to the user whose library you want: it sees that user's timeline and the albums shared with them.</p>
+          <div class="acts"><button onclick={retryLibrary}>Retry</button></div>
+        {:else if panel === 'nogps' && library.index}
+          <h2>None of the {fNum(library.index.n)} items have a location</h2>
+          <p>The route and map need GPS in the photos' metadata. Turn on location in the camera app, or add locations in Immich. The timeline and the lightbox work without it.</p>
+          <div class="acts">
+            <button class="primary" onclick={browseAll}>Browse them →</button>
+            <button onclick={retryLibrary}>Retry</button>
+          </div>
+        {/if}
+      </div>
+    {:else if failed}
       <div class="notice">Map unavailable: {failed}</div>
+    {:else if failure}
+      <div class="notice err">
+        Couldn't refresh the library: {failure.title}.
+        <button onclick={retryLibrary}>{failure.retry === 'reload' ? 'Reload' : 'Retry'}</button>
+      </div>
     {:else if !selection.sel}
       <div class="notice">
         {#if selection.timeline && library.index && libRows}
@@ -495,6 +555,8 @@
         {/if}
         Pick a range or album to follow a route.
       </div>
+    {:else if active && active.hi === active.lo}
+      <div class="notice">No photos or videos in this selection.</div>
     {:else if active && !gpsCount}
       <div class="notice nogps">
         None of the {active.hi - active.lo} items here have GPS.
@@ -585,6 +647,7 @@
         <strong>{fWhen(ix.t[r], ix.off[r])}</strong>
         <span class="place">{where(ix, r)}</span>
         {#if posNote}<span class="note">{posNote}</span>{/if}
+        {#if thumbNote}<span class="note warn">{thumbNote}</span>{/if}
         {#if cursor != null && Math.abs(ix.t[r] - cursor) > 30 * 60e3}
           <span class="note muted">photo {fSpan(ix.t[r] - cursor)} {ix.t[r] > cursor ? 'after' : 'before'} cursor</span>
         {/if}
@@ -599,13 +662,26 @@
   .map { position: absolute; inset: 0; background: var(--ground); }
 
   .map.dim { opacity: .35; }
-  .notice.nogps { pointer-events: auto; display: flex; gap: 12px; align-items: center; }
-  .nogps button {
+  .notice:is(.nogps, .err) { pointer-events: auto; display: flex; gap: 12px; align-items: center; }
+  .notice.err { color: var(--ink); }
+  .notice button, .state button {
     background: var(--raised); color: var(--ink); border: 1px solid var(--photo); border-radius: 999px;
     font: 500 12px var(--f-body); padding: 3px 12px; cursor: pointer;
   }
-  .nogps button:hover { background: rgba(232, 166, 78, .18); }
-  .nogps button:focus-visible { outline: 2px solid var(--photo-hi); outline-offset: 2px; }
+  .notice button:hover, .state button:hover { background: rgba(232, 166, 78, .18); }
+  .notice button:focus-visible, .state button:focus-visible { outline: 2px solid var(--photo-hi); outline-offset: 2px; }
+
+  .state {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 3;
+    width: min(440px, calc(100% - 32px)); padding: 18px 20px 16px;
+    background: rgba(11, 12, 14, .94); border: 1px solid var(--line); border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .5); color: var(--ink2); font-size: 13px; line-height: 1.5;
+  }
+  .state h2 { margin: 0 0 6px; color: var(--ink); font: 500 16px/1.3 var(--f-body); }
+  .state p { margin: 0 0 6px; }
+  .state .detail { font: 400 11px/1.4 var(--f-mono); color: var(--muted); overflow-wrap: anywhere; }
+  .state .acts { display: flex; gap: 8px; margin-top: 12px; }
+  .state button.primary { border-color: var(--photo-hi); color: var(--ink); }
   .notice {
     position: absolute; top: 14px; left: 50%; transform: translateX(-50%); z-index: 2;
     background: rgba(16, 18, 21, .88); border: 1px solid var(--line); border-radius: 999px;
@@ -707,6 +783,7 @@
   .card .place { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .card .note { color: var(--ink2); }
   .card .note.muted { color: var(--muted); }
+  .card .note.warn { color: #e07a6a; }
   .vid {
     position: absolute; left: 0; right: 0; bottom: 0; height: 16px; padding: 0 5px;
     background: linear-gradient(transparent, rgba(0, 0, 0, .6)); color: #fff; font-size: 10px; text-align: right;

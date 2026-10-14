@@ -2,7 +2,8 @@
   // Overview O-A: all-years context strip with a viewport window, zoomed √-density wave with the
   // selection brush, album rail. Writes `selection.sel` (and the URL), hover only draws a cursor here (it never moves the map).
   import {untrack} from 'svelte';
-  import {library} from '../index/store.svelte.ts';
+  import {library, phaseText} from '../index/store.svelte.ts';
+  import {explainAlbums, retryLibrary} from '../failure.ts';
   import {lowerBound, offsetNear, selection, writeUrl, type Selection} from '../selection.svelte.ts';
   import {selName} from '../nav.ts';
   import AlbumPicker from './AlbumPicker.svelte';
@@ -356,12 +357,15 @@
     return {name, head, gps: fNum(c.gps), nogps: fNum(c.photos + c.videos - c.gps)};
   });
 
+  /** Album members (members mode) that are loading or failed to load; null once they are in. */
+  const membersLoad = $derived(selection.sel?.kind === 'album' && selection.membersLoad?.albumId === selection.sel.albumId ? selection.membersLoad : null);
+
   const status = $derived.by(() => {
-    const {done, total} = library.progress, prog = total ? ` · ${done}/${total} months` : '';
+    const phase = phaseText(library.phase, library.attempt, library.progress);
     switch (library.status) {
-      case 'building': return `building index${prog}`;
-      case 'refreshing': return `refreshing${prog}`;
-      case 'cached': return 'cached · checking for changes';
+      case 'building': return phase || 'building index';
+      case 'refreshing': return `refreshing · ${phase}`;
+      case 'cached': return library.phase === 'waiting' ? `cached · ${phase}` : 'cached · checking for changes';
       case 'ready': return library.index ? `${fNum(library.index.n)} items` : 'ready';
       case 'error': return `error: ${library.error ?? 'unknown'}`;
     }
@@ -375,7 +379,8 @@
       {#if parent}
         <button class="btn back" onclick={back} title="Back (Backspace)">← {selName(parent.sel, parent.label)}</button>
       {/if}
-      <AlbumPicker albums={library.albums} current={album?.id ?? null} onpick={pickAlbum} />
+      <AlbumPicker albums={library.albums} current={album?.id ?? null} onpick={pickAlbum}
+        error={library.albumsError ? explainAlbums(library.albumsError) : null} loaded={library.albumsLoaded} />
       {#if album}
         <button class="btn icon" disabled={!neighbors.prev} onclick={() => neighbors.prev && pickAlbum(neighbors.prev)}
           title={neighbors.prev ? `Previous album: ${neighbors.prev.name}` : 'No earlier album'} aria-label="Previous album">‹</button>
@@ -386,7 +391,11 @@
     <div class="readout mono" aria-live="polite">
       {#if readout}
         {#if readout.name}<b>{readout.name}</b>{' · '}{/if}{readout.head} ·
-        {#if readout.gps == null}<span class="ink2">{selection.sel?.kind === 'album' && selection.sel.mode === 'members' ? 'loading members…' : '…'}</span>
+        {#if readout.gps == null && membersLoad?.error}
+          <span class="err">{explainAlbums(membersLoad.error, 'Album photos')}</span>
+          <button class="link" onclick={() => selection.retryMembers()}>Retry</button>
+          <button class="link" onclick={() => setMode('range')} title="Every photo taken during the album's dates">all photos in these dates</button>
+        {:else if readout.gps == null}<span class="ink2">{selection.sel?.kind === 'album' && selection.sel.mode === 'members' ? 'loading members…' : '…'}</span>
         {:else}<i class="sw gps"></i>{readout.gps} with location · <i class="sw nogps"></i>{readout.nogps} without{/if}
       {:else}
         <span class="muted">No selection: drag on the timeline, click an album bar, or pick from Albums</span>
@@ -404,6 +413,12 @@
     <button class="btn" disabled={isFull} onclick={resetZoom} title="Zoom the timeline out to all years">All years</button>
     <div class="status mono" class:err={library.status === 'error'}>
       {status}
+      {#if library.status === 'error'}
+        <button class="link" onclick={retryLibrary} title="Try again; the cached library stays">Retry</button>
+      {/if}
+      {#if library.albumsError}
+        <span class="warn">{explainAlbums(library.albumsError)}</span>
+      {/if}
       <button class="link" onclick={() => library.clearCache()} title="Drop the cached index and rebuild it">clear cache</button>
     </div>
   </div>
@@ -461,7 +476,8 @@
   .btn.icon { padding: 3px 8px; }
   .btn.back { color: var(--ink); border-color: var(--photo); max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
   .status { font-size: 11px; color: var(--muted); display: inline-flex; gap: 10px; align-items: baseline; }
-  .status.err { color: #e07a6a; }
+  .status.err, .err { color: #e07a6a; }
+  .warn { color: var(--ink2); }
   .link { background: none; border: 0; padding: 0; color: var(--ink2); font: inherit; text-decoration: underline dotted; cursor: pointer; }
   .link:hover { color: var(--ink); }
   canvas { display: block; width: 100%; touch-action: none; }

@@ -3,7 +3,10 @@
   import type {AlbumSummary} from '../../../../shared/api.ts';
   import {albumLabel, DAY, fDay, fNum, railAlbums, TRIP_DAYS, type RailAlbum} from './data.ts';
 
-  let {albums, current, onpick}: {albums: AlbumSummary[]; current: string | null; onpick: (a: RailAlbum) => void} = $props();
+  /** `error`: why the album list couldn't be (re)loaded; `loaded`: the list is final (not still on its way). */
+  let {albums, current, onpick, error = null, loaded = true}: {
+    albums: AlbumSummary[]; current: string | null; onpick: (a: RailAlbum) => void; error?: string | null; loaded?: boolean;
+  } = $props();
 
   /** The picker's own filter: the rail under the timeline always shows trips. */
   let showAll = $state(false);
@@ -72,6 +75,7 @@
           <button aria-pressed={showAll} onclick={() => setAll(true)}>all</button>
         </div>
       </div>
+      {#if error && albums.length}<div class="err">{error} (showing the last list)</div>{/if}
       <ul id="album-list" role="listbox" aria-label="Albums" bind:this={list}>
         {#each items as a, i (a.id)}
           <li id="alb-{a.id}" role="option" aria-selected={i === hi} class:hi={i === hi} class:cur={a.id === current}
@@ -80,7 +84,11 @@
             <span class="meta">{fDay(a.start)} · {days(a)} d · {fNum(a.count)}</span>
           </li>
         {:else}
-          <li class="empty">No albums match{showAll ? '' : ' (only trips are listed: try “all”)'}</li>
+          {#if !albums.length}
+            <li class="empty">{error ?? (loaded ? 'No albums in this library' : 'Loading albums…')}</li>
+          {:else}
+            <li class="empty">No albums match{showAll ? '' : ' (only trips are listed: try “all”)'}</li>
+          {/if}
         {/each}
       </ul>
     </div>
@@ -95,7 +103,7 @@
   .pop {
     position: absolute; left: 0; top: calc(100% + 6px); z-index: 20; width: 380px; max-width: calc(100vw - 32px);
     background: #0B0C0E; border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 10px 30px rgba(0, 0, 0, .6);
-    display: grid; grid-template-rows: auto 1fr;
+    display: grid; grid-template-rows: auto auto 1fr;
   }
   .top { display: flex; gap: 8px; padding: 8px; border-bottom: 1px solid var(--line); }
   input { flex: 1; min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 4px; color: var(--ink); font: 13px var(--f-body); padding: 4px 8px; }
@@ -111,4 +119,5 @@
   .name em { color: var(--video); font-style: normal; font-size: 11px; }
   .meta { color: var(--muted); font: 11px var(--f-mono); }
   .empty { color: var(--muted); cursor: default; }
+  .err { padding: 6px 12px 0; color: #e07a6a; font-size: 12px; }
 </style>

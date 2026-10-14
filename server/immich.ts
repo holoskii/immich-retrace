@@ -25,6 +25,8 @@ export interface ImmichOptions {
   fetch?: typeof fetch;
   wakeTimeoutMs?: number;
   pollMs?: number;
+  /** Per upstream request, until its headers arrive (a video body may then stream for as long as it takes). */
+  requestTimeoutMs?: number;
 }
 
 // While Immich starts, the gate answers every request with its loading page: 200 text/html.
@@ -98,12 +100,18 @@ export class ImmichClient {
       await this.wake();
       opts.signal?.throwIfAborted();
       let res: Response;
+      const ms = this.opts.requestTimeoutMs ?? 30_000, timeout = new AbortController();
+      const timer = setTimeout(() => timeout.abort(), ms);
       try {
-        res = await this.fetch(this.url(path, opts.query), {method: opts.method ?? 'GET', headers: opts.headers, redirect: 'manual', signal: opts.signal});
+        const signal = opts.signal ? AbortSignal.any([opts.signal, timeout.signal]) : timeout.signal;
+        res = await this.fetch(this.url(path, opts.query), {method: opts.method ?? 'GET', headers: opts.headers, redirect: 'manual', signal});
       } catch (err) {
         if (opts.signal?.aborted) throw err;
         this.state = 'unknown';
+        if (timeout.signal.aborted) throw new HttpError(503, `Immich didn't answer within ${ms / 1000} s.`, 'unavailable');
         throw unavailable();
+      } finally {
+        clearTimeout(timer);
       }
       if (isGatePage(res) || res.status === 503) {
         await res.body?.cancel();

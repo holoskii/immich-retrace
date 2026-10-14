@@ -5,7 +5,7 @@ import {SCHEMA_VERSION, type AlbumSummary, type AssetColumns, type MonthColumns}
 import {DB_NAME, dropOtherSchemas, memoryKV, openKV, type KV} from '../web/src/lib/index/idb.ts';
 import {buildIndex, columnsOf, summarize, withLookup} from '../web/src/lib/index/model.ts';
 import {albumMembers, ApiFailure, libraryCache, refreshIndex, type Ctx} from '../web/src/lib/index/refresh.ts';
-import {LibraryStore} from '../web/src/lib/index/store.svelte.ts';
+import {LibraryStore, phaseText} from '../web/src/lib/index/store.svelte.ts';
 
 // Synthetic data only. Rows within a month are deliberately not in time order.
 function month(m: string, n = 3): MonthColumns {
@@ -191,6 +191,31 @@ describe('refreshIndex', () => {
     expect(down.calls.length).toBe(3);
   });
 
+  it('albums fail on their own: the index completes, the run resolves with albums null', async () => {
+    const kv = await freshKV(), api = fakeApi({override: p => p === '/api/albums' ? auth() : undefined});
+    const errors: unknown[] = [];
+    const r = await refreshIndex(ctx(kv, api), {onAlbumsError: e => errors.push(e)});
+    expect([r.index.n, r.albums]).toEqual([21, null]);
+    expect(api.monthCalls()).toHaveLength(7);
+    expect(errors).toHaveLength(1);
+    expect((errors[0] as ApiFailure).code).toBe('auth');
+    expect((await libraryCache(kv).snapshot('lib-a'))?.cols.n).toBe(21);
+  });
+
+  it('reports each 503 retry (attempt 1, 2, …) before backing off', async () => {
+    let n = 0;
+    const attempts: number[] = [];
+    const api = fakeApi({override: p => p === '/api/index' && n++ < 2 ? json({error: 'Immich is starting.', code: 'unavailable'}, 503) : undefined});
+    await refreshIndex(ctx(await freshKV(), api, {onRetry: a => attempts.push(a)}));
+    expect(attempts).toEqual([1, 2]);
+  });
+
+  it('a backend that doesn\'t answer at all is a network failure, not retried', async () => {
+    const api = fakeApi();
+    const err = await refreshIndex(ctx(await freshKV(), api, {fetch: () => Promise.reject(new TypeError('Failed to fetch'))})).catch(e => e);
+    expect([err instanceof ApiFailure, err.code]).toEqual([true, 'network']);
+  });
+
   it('writes nothing once aborted while a staging write is pending: no swap', async () => {
     const ac = new AbortController();
     let release!: () => void;
@@ -319,15 +344,48 @@ describe('store', () => {
     expect(await libraryCache(kv).staged('lib-a')).toEqual([]);
   });
 
-  it('an auth failure from membersOf clears what is shown and the cache', async () => {
+  it('an auth failure from membersOf (no album.read) is the album\'s error: library and cache stay', async () => {
     const kv = await freshKV(), lib = store(kv, fakeApi());
     await lib.load();
     vi.stubGlobal('fetch', fakeApi({override: p => p.endsWith('/assets') ? auth() : undefined}).fetch);
     await expect(lib.membersOf('alb-1')).rejects.toThrow('rejected');
-    expect([lib.status, lib.index, lib.albums, lib.provisional]).toEqual(['error', null, [], null]);
-    expect(await libraryCache(kv).snapshot('lib-a')).toBeUndefined();
-    expect(await libraryCache(kv).albums('lib-a')).toBeUndefined();
+    expect([lib.status, lib.index?.n, lib.albums.length]).toEqual(['ready', 21, 1]);
+    expect((await libraryCache(kv).snapshot('lib-a'))?.cols.n).toBe(21);
   });
+
+  it('a key without album.read: albums unavailable, the cached library is never purged', async () => {
+    const kv = await freshKV();
+    await store(kv, fakeApi()).load();
+    const {kv: spy, writes} = spyKV(kv);
+    const lib = store(spy, fakeApi({override: p => p === '/api/albums' ? auth() : undefined}));
+    await lib.load();
+    expect([lib.status, lib.index?.n, lib.albums, lib.albumsLoaded]).toEqual(['ready', 21, [], true]);
+    expect((lib.albumsError as ApiFailure).code).toBe('auth');
+    expect(writes.flatMap(w => w.clear)).not.toContain('lib-a/');
+    expect((await libraryCache(kv).snapshot('lib-a'))?.cols.n).toBe(21);
+    expect(await libraryCache(kv).albums('lib-a')).toEqual(ALBUMS);
+  });
+
+  it('only an index failure means a bad key: an index 403 still purges', async () => {
+    const kv = await freshKV();
+    await store(kv, fakeApi()).load();
+    const lib = store(kv, fakeApi({override: p => p === '/api/index' ? auth() : undefined}));
+    await lib.load();
+    expect([lib.status, lib.index, (lib.failure as ApiFailure).code, lib.albumsLoaded]).toEqual(['error', null, 'auth', true]);
+    expect(await libraryCache(kv).snapshot('lib-a')).toBeUndefined();
+  });
+
+  it('shows the load phases: connecting, waiting for Immich (attempt n), loading months', async () => {
+    let n = 0;
+    const seen = new Set<string>();
+    const lib = store(await freshKV(), fakeApi({override: p => p === '/api/index' && n++ < 1 ? json({error: 'starting', code: 'unavailable'}, 503) : undefined}));
+    const p = lib.load();
+    const watch = setInterval(() => seen.add(phaseText(lib.phase, lib.attempt, lib.progress).replace(/\d+\/\d+/, 'x/y')), 0);
+    // The real backoff is 2 s; let it run.
+    await p.finally(() => clearInterval(watch));
+    expect([...seen]).toEqual(expect.arrayContaining(['Connecting to Immich…', 'Waiting for Immich to start (attempt 2)…', 'Loading x/y months']));
+    expect(lib.phase).toBeNull();
+  }, 10_000);
 
   it('membersOf returns the album as its own index', async () => {
     const lib = store(await freshKV(), fakeApi());

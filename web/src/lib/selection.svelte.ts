@@ -43,6 +43,8 @@ class SelectionStore {
   zoomLabel = $state<string | null>(null);
   /** Album member index, loaded when an album is selected in members mode. */
   members = $state.raw<{albumId: string; version: string; ix: LibraryIndex} | null>(null);
+  /** The members of the selected album (members mode) being fetched, or why they couldn't be. */
+  membersLoad = $state.raw<{albumId: string; error: unknown} | null>(null);
 
   /** Open lightbox: a row of `active.ix` (←/→ walks active.lo..hi-1). Stage 5 owns the UI; the map card opens it. */
   lightbox = $state<number | null>(null);
@@ -65,14 +67,28 @@ class SelectionStore {
     return {ix: lib, lo: lowerBound(lib.t, s.t0), hi: lowerBound(lib.t, s.t1), t0: s.t0, t1: s.t1};
   });
 
+  /** Rejects when an album's members can't be loaded; `membersLoad` keeps the error for the UI either way. */
   async select(s: Selection | null) {
     this.sel = s;
+    this.membersLoad = null;
     if (s?.kind !== 'album' || s.mode !== 'members') return;
     // Keyed by version too: an album edited in Immich must not keep its old member list.
     const version = library.albums.find(a => a.id === s.albumId)?.version ?? '';
     if (this.members?.albumId === s.albumId && this.members.version === version) return;
-    const ix = await library.membersOf(s.albumId);
-    if (this.sel === s) this.members = {albumId: s.albumId, version, ix};
+    this.membersLoad = {albumId: s.albumId, error: null};
+    try {
+      const ix = await library.membersOf(s.albumId);
+      if (this.sel === s) { this.members = {albumId: s.albumId, version, ix}; this.membersLoad = null; }
+    } catch (e) {
+      if (this.sel === s) this.membersLoad = {albumId: s.albumId, error: e};
+      throw e;
+    }
+  }
+
+  /** Loads the selected album's members again after a failure. */
+  retryMembers() {
+    const s = this.sel;
+    if (s) this.select(s).catch(e => console.warn('album members:', e));
   }
 
   /** Narrows to `sel` remembering the current selection and cursor; `label` names the new level. */
@@ -223,7 +239,18 @@ export function applyUrl(albums: {id: string; start: number | null; end: number 
   selection.select(sel).catch(e => console.warn('album members:', e));
   selection.cursor = q.has('at') && Number.isFinite(at) ? at : null;
   if (lb !== selection.lightboxId) selection.lightbox = null;
-  pendingLb = lb;
+  // Without a selection (none in the URL, or an album that isn't there) `lb` has nothing to open in.
+  pendingLb = sel ? lb : null;
+}
+
+/**
+ * Whether the URL can be applied: the index is in, and an `album` in it is either in the list or
+ * the list has finished loading (or failing) — with no albums at all it resolves to no selection.
+ */
+export function urlReady(q: URLSearchParams, hasIndex: boolean, albums: {id: string}[], albumsLoaded: boolean) {
+  if (!hasIndex) return false;
+  const album = q.get('album');
+  return !album || albumsLoaded || albums.some(a => a.id === album);
 }
 
 /**
@@ -243,8 +270,7 @@ export function startUrlSync() {
       pendingLb = null;
     });
     $effect(() => {
-      if (applied || !library.index) return;
-      if (new URLSearchParams(location.search).has('album') && !library.albums.length) return;
+      if (applied || !urlReady(new URLSearchParams(location.search), !!library.index, library.albums, library.albumsLoaded)) return;
       applied = true;
       applyUrl(library.albums);
     });

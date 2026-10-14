@@ -4,7 +4,7 @@ import {
   smooth, snapDay, sumRange, fLength, trimOutliers, viewAround, viewToShow, zoomAt, albumLabel,
 } from '../web/src/lib/overview/data.ts';
 import {withLookup, type IndexColumns} from '../web/src/lib/index/model.ts';
-import {applyUrl, selection, selectionFromUrl, selectionToQuery, writeUrl, type Selection} from '../web/src/lib/selection.svelte.ts';
+import {applyUrl, lightboxPending, selection, selectionFromUrl, selectionToQuery, urlReady, writeUrl, type Selection} from '../web/src/lib/selection.svelte.ts';
 import type {AlbumSummary} from '../shared/api.ts';
 import {zoomSpan} from '../web/src/lib/nav.ts';
 
@@ -282,6 +282,21 @@ describe('URL', () => {
     expect(selectionFromUrl(q, [])).toEqual(sel);
     expect(selectionFromUrl(new URLSearchParams('from=2024-05-03T14:00&to=2024-05-04'), [])).toBeNull();
   });
+  it('an album URL is ready once the album is listed, or once the list has loaded, even empty', () => {
+    const q = new URLSearchParams('album=alb&at=5');
+    expect(urlReady(q, false, albums, true)).toBe(false);
+    expect(urlReady(q, true, [], false)).toBe(false);
+    expect(urlReady(q, true, albums, false)).toBe(true);
+    expect(urlReady(q, true, [], true)).toBe(true);
+    expect(urlReady(new URLSearchParams('from=2024-05-01&to=2024-05-02'), true, [], false)).toBe(true);
+  });
+  it('an album that isn\'t there resolves to no selection and drops a pending lb', () => {
+    vi.stubGlobal('location', {search: '?album=gone&lb=x'});
+    try {
+      applyUrl([]);
+      expect([selection.sel, lightboxPending()]).toEqual([null, false]);
+    } finally { vi.unstubAllGlobals(); }
+  });
   it('no selection clears the keys', () => {
     expect(selectionToQuery(null, 5, new URLSearchParams('from=2024-01-01&to=2024-01-02&at=5&q=1')).toString()).toBe('q=1');
   });
@@ -381,3 +396,4 @@ describe('fLength', () => {
     expect(fLength(D('2023-04-29') + 19 * H, D('2023-05-06') + 21 * H)).toBe('8d'); // album: days touched
   });
 });
+

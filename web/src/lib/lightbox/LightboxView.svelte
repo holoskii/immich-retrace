@@ -7,6 +7,7 @@
   import {base64Bytes, thumbHashDataUrl, thumbHashRatio} from '../thumbhash.ts';
   import {fDuration} from '../map/format.ts';
   import {getConfig, immichLink, thumbUrl, videoUrl} from './media.ts';
+  import {explainMedia, probeMedia, type MediaFailure} from '../failure.ts';
   import {bins, fClock, fCoords, fLongDate, fOffset, fPlace, fPosition, neighbours, step} from './model.ts';
   import MiniMap from './MiniMap.svelte';
 
@@ -39,7 +40,18 @@
 
   // Per-asset load state; keyed by id so a late event of the previous asset can't leak in.
   let loaded = $state<string | null>(null);
-  let failed = $state<string | null>(null);
+  /** `kind` null while the relay is asked why (elements don't expose the HTTP status). */
+  let failed = $state<{id: string; kind: MediaFailure | null} | null>(null);
+  /** Bumped by Retry: remounts the element so it requests again. */
+  let tries = $state(0);
+  const failure = $derived(failed?.id === id && failed.kind ? explainMedia(failed.kind, isVideo) : null);
+
+  function fail(url: string) {
+    const at = id;
+    failed = {id: at, kind: null};
+    void probeMedia(url).then(kind => { if (failed?.id === at) failed = {id: at, kind}; });
+  }
+  function retry() { failed = null; tries++; }
 
   const go = (r: number | null) => { if (r != null) selection.lightbox = r; };
   const close = () => { selection.lightbox = null; };
@@ -47,11 +59,11 @@
   function onKey(e: KeyboardEvent) {
     if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
     if (e.key === 'Escape') { e.preventDefault(); close(); return; }
+    if (e.key === 'Tab') { trapTab(e); return; }
     // Arrow keys on a focused <video> seek; leave them to it.
     if ((e.target as HTMLElement | null)?.tagName === 'VIDEO') return;
     if (e.key === 'ArrowLeft') { e.preventDefault(); go(prevRow); }
     else if (e.key === 'ArrowRight') { e.preventDefault(); go(nextRow); }
-    else if (e.key === 'Tab') trapTab(e);
   }
 
   let overlay: HTMLDivElement;
@@ -118,20 +130,20 @@
     <div class="stage" bind:this={stage} bind:clientWidth={sw} bind:clientHeight={sh}>
       <div class="box" style:width="{box.w}px" style:height="{box.h}px"
         style:background-image={placeholder ? `url(${placeholder})` : undefined}>
-        {#key id}
-          {#if isVideo && failed !== id}
+        {#key `${id}:${tries}`}
+          {#if isVideo && failed?.id !== id}
             <!-- svelte-ignore a11y_media_has_caption (personal footage, no captions exist) -->
             <video src={videoUrl(id)} poster={preview} controls autoplay muted playsinline preload="metadata"
-              onerror={() => (failed = id)}></video>
+              onerror={() => fail(videoUrl(id))}></video>
           {:else}
             <img src={preview} alt="" draggable="false" class:shown={loaded === id}
-              onload={() => (loaded = id)} onerror={() => { if (!isVideo) failed = id; }} />
+              onload={() => (loaded = id)} onerror={() => { if (!isVideo) fail(preview); }} />
           {/if}
         {/key}
-        {#if failed === id}
+        {#if failure}
           <div class="msg" role="status">
-            {#if isVideo}This video can't be played here: the browser doesn't support its format.{#if link} Open it in Immich.{/if}
-            {:else}The preview couldn't be loaded.{/if}
+            {failure.text}{#if failed?.kind === 'decode' && isVideo && link} Open it in Immich.{/if}
+            {#if failure.retry}<button class="retry" onclick={retry}>Retry</button>{/if}
           </div>
         {/if}
       </div>
@@ -164,6 +176,7 @@
       {#if link}
         <a class="immich" href={link} target="_blank" rel="noopener noreferrer">Open in Immich ↗</a>
       {/if}
+      <div class="keys" aria-hidden="true">←/→ previous / next · Esc close</div>
     </aside>
   </div>
 </div>
@@ -193,6 +206,11 @@
     padding: 8px 12px; border-radius: 4px; background: rgba(6, 7, 8, .85); color: var(--ink);
     font-size: 13px; text-align: center;
   }
+  .retry {
+    margin-left: 8px; background: none; border: 1px solid var(--photo-hi); border-radius: 999px;
+    color: var(--ink); font: 500 12px var(--f-body); padding: 2px 10px; cursor: pointer;
+  }
+  .retry:focus-visible { outline: 2px solid var(--photo-hi); outline-offset: 2px; }
   .nav {
     position: absolute; top: 50%; transform: translateY(-50%); width: 48px; height: 96px;
     display: grid; place-items: center; border: 0; border-radius: 4px; cursor: pointer;
@@ -226,6 +244,7 @@
     color: var(--ink); text-decoration: none; font-size: 13px; align-self: stretch;
   }
   .immich:hover, .immich:focus-visible { border-color: var(--muted); }
+  .keys { margin-top: auto; padding-top: 16px; font: 400 11px var(--f-mono); color: var(--muted); }
   @media (prefers-reduced-motion: reduce) {
     .box img, .box video { transition: none; }
   }

@@ -3,8 +3,11 @@ import type {AlbumMembers, AlbumSummary, ApiError, IndexManifest, MonthColumns} 
 import type {KV} from './idb.ts';
 import {buildIndex, columnsOf, withLookup, type IndexColumns, type LibraryIndex} from './model.ts';
 
-/** `signed-out`: the viewer's own session (Authelia) expired; nothing is wrong with the library. */
-export type FailureCode = ApiError['code'] | 'signed-out';
+/**
+ * `signed-out`: the viewer's own session (Authelia) expired; nothing is wrong with the library.
+ * `network`: the viewer's backend didn't answer at all. `outdated`: the backend speaks another schema.
+ */
+export type FailureCode = ApiError['code'] | 'signed-out' | 'network' | 'outdated';
 
 export class ApiFailure extends Error {
   status: number;
@@ -59,6 +62,8 @@ export interface Ctx {
   locks?: Pick<LockManager, 'request'>;
   /** Backoff before each retry of a 503; Immich may be waking behind its gate (30–60 s). */
   delays?: number[];
+  /** Called before each such retry (attempt 1, 2, …), for "waiting for Immich to start". */
+  onRetry?(attempt: number, err: ApiFailure): void;
   concurrency?: number;
   now?: () => number;
 }
@@ -81,7 +86,11 @@ async function getJson<T>(ctx: Ctx, path: string): Promise<T> {
   const f = ctx.fetch ?? globalThis.fetch.bind(globalThis), delays = ctx.delays ?? DELAYS;
   for (let attempt = 0; ; attempt++) {
     // An expired Authelia session redirects to its login page; following it would just yield HTML.
-    const res = await f(path, {signal, redirect: 'manual'});
+    let res: Response;
+    try { res = await f(path, {signal, redirect: 'manual'}); } catch (e) {
+      if (signal?.aborted) throw e;
+      throw new ApiFailure(0, 'Can\'t reach the viewer\'s server.', 'network');
+    }
     if (res.type === 'opaqueredirect') throw signedOut();
     if (res.ok && !res.headers.get('content-type')?.includes('json')) throw new ApiFailure(res.status, 'Unexpected answer from the viewer backend.');
     if (res.ok) return await res.json() as T;
@@ -90,6 +99,7 @@ async function getJson<T>(ctx: Ctx, path: string): Promise<T> {
     if ((res.status === 401 || res.status === 403) && typeof body.error !== 'string') throw signedOut();
     const err = new ApiFailure(res.status, body.error ?? `${path}: HTTP ${res.status}`, body.code);
     if ((res.status !== 503 && err.code !== 'unavailable') || attempt >= delays.length) throw err;
+    ctx.onRetry?.(attempt + 1, err);
     await sleep(delays[attempt], signal);
   }
 }
@@ -124,22 +134,26 @@ export interface RefreshHooks {
   onManifest?(m: IndexManifest): void;
   onProgress?(done: number, total: number): void;
   onAlbums?(a: AlbumSummary[]): void;
+  /** The album list failed; the index goes on (a key without album.read still shows the timeline). */
+  onAlbumsError?(e: unknown): void;
 }
 
 /**
  * Full refresh: manifest → every month → build → atomic swap. There is no change feed for API
  * keys, so nothing is incremental. No cache write and no hook happens once the run is aborted.
+ * Albums load alongside but on their own: their failure is reported (`albums: null`, onAlbumsError)
+ * and neither stops the index nor fails the run; only an index failure rejects.
  */
-export async function refreshIndex(ctx: Ctx, hooks: RefreshHooks = {}): Promise<{manifest: IndexManifest; index: LibraryIndex; albums: AlbumSummary[]}> {
+export async function refreshIndex(ctx: Ctx, hooks: RefreshHooks = {}): Promise<{manifest: IndexManifest; index: LibraryIndex; albums: AlbumSummary[] | null}> {
   const {cache} = ctx, now = ctx.now ?? Date.now;
-  // One controller for the whole run: any failure stops the other requests too.
+  // One controller for the index: any month failing stops the other requests (and the albums) too.
   const ac = new AbortController(), {signal} = ac, stop = () => ac.abort(ctx.signal!.reason);
   ctx.signal?.addEventListener('abort', stop, {once: true});
   if (ctx.signal?.aborted) stop();
   const sub = {...ctx, signal};
   try {
     const manifest = await getJson<IndexManifest>(sub, '/api/index');
-    if (manifest.schema !== SCHEMA_VERSION) throw new ApiFailure(0, 'The viewer was updated; reload the page.');
+    if (manifest.schema !== SCHEMA_VERSION) throw new ApiFailure(0, 'The viewer was updated; reload the page.', 'outdated');
     const lib = manifest.library, startedAt = now();
     signal.throwIfAborted();
     await cache.setLast(lib);
@@ -151,6 +165,9 @@ export async function refreshIndex(ctx: Ctx, hooks: RefreshHooks = {}): Promise<
       await cache.setAlbums(lib, a);
       if (!signal.aborted) hooks.onAlbums?.(a);
       return a;
+    }).catch(e => {
+      if (!signal.aborted) hooks.onAlbumsError?.(e);
+      return null;
     });
     const index = locked(ctx, lib, signal, async (): Promise<LibraryIndex> => {
       const prev = await cache.snapshot(lib);
@@ -177,7 +194,10 @@ export async function refreshIndex(ctx: Ctx, hooks: RefreshHooks = {}): Promise<
       await cache.swap(lib, {manifest, cols: columnsOf(index), savedAt: now()});
       return index;
     });
-    const [a, ix] = await settle<unknown>(ac, [albums, index]) as [AlbumSummary[], LibraryIndex];
+    // The albums settle before this returns or throws (they never reject): no album write can land
+    // after the caller reacts, e.g. purges on a rejected key.
+    const [ix] = await settle(ac, [index]).finally(() => albums);
+    const a = await albums;
     signal.throwIfAborted();
     await cache.dropOthers(lib);
     return {manifest, index: ix, albums: a};

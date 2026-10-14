@@ -162,6 +162,26 @@ describe('failures', () => {
     expect((await app.request(`/api/assets/${ID}/thumbnail`)).status).toBe(200);
     expect(immich.state).toBe('up');
   });
+
+  it('times out a request whose headers never come, without bounding a streaming body', async () => {
+    let hang = true;
+    const immich = new ImmichClient({baseUrl: 'http://gate:2284', apiKey: 'k', pollMs: 1, requestTimeoutMs: 30,
+      fetch: ((u: string | URL, init: RequestInit = {}) => {
+        if (String(u).endsWith('/ping')) return Promise.resolve(json({res: 'pong'}));
+        if (hang) return new Promise((_, reject) => init.signal!.addEventListener('abort', () => reject(init.signal!.reason)));
+        // Headers at once, body only after the timeout would have fired.
+        const body = new ReadableStream({start: c => { setTimeout(() => { c.enqueue(new Uint8Array([1])); c.close(); }, 60); }});
+        return Promise.resolve(new Response(body, {status: 200, headers: {'content-type': 'video/mp4'}}));
+      }) as typeof fetch});
+    const app = createApp(immich);
+    const res = await app.request(`/api/assets/${ID}/video`);
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({error: 'Immich didn\'t answer within 0.03 s.', code: 'unavailable'});
+    hang = false;
+    const ok = await app.request(`/api/assets/${ID}/video`);
+    expect(ok.status).toBe(200);
+    expect(new Uint8Array(await ok.arrayBuffer())).toEqual(new Uint8Array([1]));
+  });
 });
 
 describe('input validation', () => {
