@@ -7,7 +7,7 @@
   import {selName} from '../nav.ts';
   import AlbumPicker from './AlbumPicker.svelte';
   import {
-    clamp, countRows, albumLabel, DAY, daysFromIndex, daysFromMonths, defaultView, dragTo, fDay, fNum, hitGrip, railAlbums,
+    clamp, countRows, albumLabel, fLength, DAY, daysFromIndex, daysFromMonths, defaultView, dragTo, fDay, fNum, hitGrip, railAlbums,
     snapDay, viewAround, viewToShow, zoomAt, type Grip, type RailAlbum, type Span,
   } from './data.ts';
   import {CTX, drawContext, drawMain, MAIN, type RailHit} from './draw.ts';
@@ -334,12 +334,12 @@
     const d = draft, s: Selection | null = d ? {kind: 'range', t0: d[0], t1: d[1]} : selection.sel;
     if (!s) return null;
     const name = selection.zoomLabel && !d ? selection.zoomLabel : s.kind === 'album' ? (album ? albumLabel(album.name) : 'Album') : null;
-    const head = `${fDay(s.t0)} → ${fDay(s.t1 - 1)} · ${Math.floor((s.t1 - 1) / DAY) - Math.floor(s.t0 / DAY) + 1} d`;
+    const head = `${fDay(s.t0)} → ${fDay(s.t1 - 1)} · ${fLength(s.t0, s.t1)}`;
     const lib = library.index;
     const a = d ? (lib ? {ix: lib, lo: lowerBound(lib.t, d[0]), hi: lowerBound(lib.t, d[1])} : null) : selection.active;
-    if (!a) return {name, head, rest: s.kind === 'album' && s.mode === 'members' ? 'loading members…' : '…'};
+    if (!a) return {name, head, gps: null, nogps: null};
     const c = countRows(a.ix, a.lo, a.hi);
-    return {name, head, rest: `${fNum(c.photos)} photos · ${fNum(c.videos)} videos · ${fNum(c.gps)} with GPS`};
+    return {name, head, gps: fNum(c.gps), nogps: fNum(c.photos + c.videos - c.gps)};
   });
 
   const status = $derived.by(() => {
@@ -371,7 +371,9 @@
     </div>
     <div class="readout mono" aria-live="polite">
       {#if readout}
-        {#if readout.name}<b>{readout.name}</b>{' · '}{/if}{readout.head} · <span class="ink2">{readout.rest}</span>
+        {#if readout.name}<b>{readout.name}</b>{' · '}{/if}{readout.head} ·
+        {#if readout.gps == null}<span class="ink2">{selection.sel?.kind === 'album' && selection.sel.mode === 'members' ? 'loading members…' : '…'}</span>
+        {:else}<span class="gps">{readout.gps} with GPS</span> · <span class="nogps">{readout.nogps} without</span>{/if}
       {:else}
         <span class="muted">No selection: drag on the timeline, click an album bar, or pick from Albums</span>
       {/if}
@@ -422,6 +424,8 @@
   .readout b { font-weight: 500; color: var(--photo-hi); }
   .mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
   .ink2 { color: var(--ink2); }
+  .gps { color: var(--gps); }
+  .nogps { color: var(--nogps); filter: brightness(1.35); }
   .muted { color: var(--muted); }
   .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
   .seg button { background: none; border: 0; color: var(--muted); font: 12px var(--f-body); padding: 2px 9px; cursor: pointer; }

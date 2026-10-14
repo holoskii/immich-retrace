@@ -3,6 +3,8 @@
   --ground: #101215; --surface: #171A1F; --raised: #20242B; --line: #2A2F37;
   --ink: #E9E6DF; --ink2: #B5B9C0; --muted: #7F858E;
   --photo: #C98128; --photo-hi: #E8A64E; --video: #3A9BD6;
+  /* Timeline density: media with GPS (map-worthy) vs. without (bright vs. dim, not hue alone). */
+  --gps: #4CB782; --nogps: #A0504A;
   --f-body: "IBM Plex Sans", system-ui, sans-serif;
   --f-mono: "IBM Plex Mono", ui-monospace, monospace;
 }

@@ -1,7 +1,7 @@
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {
   countRows, DAY, daysFromIndex, daysFromMonths, defaultView, dens, dragTo, hitGrip, packLanes, railAlbums, sample,
-  smooth, snapDay, sumRange, viewAround, viewToShow, zoomAt, albumLabel,
+  smooth, snapDay, sumRange, fLength, viewAround, viewToShow, zoomAt, albumLabel,
 } from '../web/src/lib/overview/data.ts';
 import {withLookup, type IndexColumns} from '../web/src/lib/index/model.ts';
 import {applyUrl, selection, selectionFromUrl, selectionToQuery, writeUrl, type Selection} from '../web/src/lib/selection.svelte.ts';
@@ -37,18 +37,18 @@ describe('daysFromIndex', () => {
     expect(h.t0 + h.nd * DAY).toBe(D('2024-03-11'));
   });
 
-  it('buckets by local calendar day, photos and videos apart', () => {
+  it('buckets by local calendar day, with and without GPS apart', () => {
     const k = (D('2023-05-02') - h.t0) / DAY;
-    expect([h.photo[k], h.video[k]]).toEqual([2, 1]);
-    expect(h.photo[k - 1] + h.video[k - 1]).toBe(0);
+    expect([h.gps[k], h.nogps[k]]).toEqual([1, 2]);
+    expect(h.gps[k - 1] + h.nogps[k - 1]).toBe(0);
     expect(h.sq).toBeCloseTo(Math.sqrt(3));
   });
 
   it('prefix sums answer dens / sumRange', () => {
-    expect(sumRange(h, D('2023-05-01'), D('2023-05-03'))).toEqual([2, 1]);
-    expect(sumRange(h, D('2020-01-01'), D('2030-01-01'))).toEqual([3, 1]);
-    expect(dens(h, D('2023-05-02') + 2 * H, D('2023-05-02') + 3 * H)).toEqual([2, 1]); // sub-day: that day's counts
-    expect(dens(h, D('2023-05-01'), D('2023-05-05'))).toEqual([0.5, 0.25]);            // mean over 4 days
+    expect(sumRange(h, D('2023-05-01'), D('2023-05-03'))).toEqual([1, 2]);
+    expect(sumRange(h, D('2020-01-01'), D('2030-01-01'))).toEqual([2, 2]);
+    expect(dens(h, D('2023-05-02') + 2 * H, D('2023-05-02') + 3 * H)).toEqual([1, 2]); // sub-day: that day's counts
+    expect(dens(h, D('2023-05-01'), D('2023-05-05'))).toEqual([0.25, 0.5]);            // mean over 4 days
     expect(dens(h, D('2000-01-01'), D('2000-01-01') + H)).toEqual([0, 0]);
   });
 
@@ -71,8 +71,8 @@ describe('daysFromMonths (provisional)', () => {
   it('spreads each month over its days as photos', () => {
     const h = daysFromMonths([{month: '2024-02', count: 29}, {month: '2024-04', count: 300}, {month: 'junk', count: 5}], D('2024-04-10'))!;
     expect(h.t0).toBe(D('2024-01-01'));
-    expect(h.photo[(D('2024-02-10') - h.t0) / DAY]).toBeCloseTo(1);
-    expect(h.photo[(D('2024-04-30') - h.t0) / DAY]).toBeCloseTo(10);
+    expect(h.gps[(D('2024-02-10') - h.t0) / DAY]).toBeCloseTo(1);
+    expect(h.gps[(D('2024-04-30') - h.t0) / DAY]).toBeCloseTo(10);
     expect(h.t0 + h.nd * DAY).toBe(D('2024-05-01'));
     expect(sumRange(h, h.t0, D('2025-01-01'))).toEqual([expect.closeTo(329), 0]);
   });
@@ -87,7 +87,7 @@ describe('sample / smooth', () => {
     expect(s[0]).toBeCloseTo(9 * 1 / 6);
   });
   it('one sample per pixel; no smoothing when zoomed in under 8 h/px', () => {
-    const h = daysFromIndex(ix([['2024-01-05T12:00:00Z', 0, 0, 0]]), D('2024-01-10'))!;
+    const h = daysFromIndex(ix([['2024-01-05T12:00:00Z', 0, 0, 1]]), D('2024-01-10'))!;
     const {I} = sample(h, D('2024-01-01'), D('2024-01-09'), 64); // 3 h/px
     expect(I.length).toBe(64);
     expect(I.filter(v => v > 0).length).toBe(8); // exactly the 8 pixels of 5 Jan
@@ -292,5 +292,16 @@ describe('writeUrl history', () => {
     writeUrl('commit', at + H);
     expect(h.entries.at(-1)!.href).toBe(`http://x/?from=2024-01-01&to=2024-01-04&at=${at + H}`);
     expect(h.entries.length).toBe(2);
+  });
+});
+
+describe('fLength', () => {
+  it('calendar years, months, days; hours under two days', () => {
+    expect(fLength(D('2013-01-07'), D('2022-04-06'))).toBe('9y 2m 30d');
+    expect(fLength(D('2023-04-29'), D('2023-05-07'))).toBe('8d');
+    expect(fLength(D('2024-01-31'), D('2024-03-01'))).toBe('1m 1d');
+    expect(fLength(D('2023-05-02') + 14 * H, D('2023-05-03') + 18 * H)).toBe('28h');
+    expect(fLength(D('2024-01-01'), D('2025-01-01'))).toBe('1y');
+    expect(fLength(D('2023-04-29') + 19 * H, D('2023-05-06') + 21 * H)).toBe('8d'); // album: days touched
   });
 });

@@ -3,7 +3,7 @@ import {albumLabel, clamp, DAY, fDayMonth, fMonth, packLanes, sample, type Days,
 
 export const C = {
   ground: '#101215', line: '#2A2F37', ink: '#E9E6DF', ink2: '#B5B9C0', muted: '#7F858E',
-  photo: '#C98128', photoHi: '#E8A64E', video: '#3A9BD6', rail: '#5b4426', railHover: '#8a6534',
+  photo: '#C98128', photoHi: '#E8A64E', video: '#3A9BD6', gps: '#4CB782', nogps: '#A0504A', rail: '#5b4426', railHover: '#8a6534',
 };
 const MONO = '500 11px "IBM Plex Mono", ui-monospace, monospace';
 const MONO_S = '400 10px "IBM Plex Mono", ui-monospace, monospace';
@@ -23,8 +23,11 @@ export function fit(cv: HTMLCanvasElement, h: number) {
   return {ctx, w, h};
 }
 
-/** Stacked √ area: photos from the baseline, videos on top, split proportionally (sketch `area`). */
-function area(ctx: CanvasRenderingContext2D, I: Float32Array, V: Float32Array, base: number, H: number, sq: number) {
+/**
+ * Stacked √ area: media with GPS from the baseline, without GPS on top, split proportionally (sketch `area`):
+ * red stretches have nothing to show on the map. Provisional counts (GPS unknown) are drawn neutral.
+ */
+function area(ctx: CanvasRenderingContext2D, I: Float32Array, V: Float32Array, base: number, H: number, sq: number, provisional = false) {
   const n = I.length;
   if (!n) return;
   const top = new Float32Array(n), mid = new Float32Array(n);
@@ -38,8 +41,8 @@ function area(ctx: CanvasRenderingContext2D, I: Float32Array, V: Float32Array, b
     for (let x = n - 1; x >= 0; x--) ctx.lineTo(x + .5, base - (g ? g[x] : 0));
     ctx.closePath(); ctx.fill();
   };
-  ctx.fillStyle = C.photo; path(mid, null);
-  ctx.fillStyle = C.video; path(top, mid);
+  ctx.fillStyle = provisional ? C.muted : C.gps; path(mid, null);
+  ctx.fillStyle = provisional ? C.muted : C.nogps; path(top, mid);
 }
 
 /** Dims outside [x0, x1], draws edges with grab handles (sketch `drawSel`). */
@@ -60,7 +63,7 @@ export function drawContext(cv: HTMLCanvasElement, days: Days | null, view: Span
   const {I, V} = sample(days, T0, T1, w);
   let peak = 0;
   for (let x = 0; x < I.length; x++) peak = Math.max(peak, I[x] + V[x]);
-  area(ctx, I, V, CTX.base, CTX.H, Math.sqrt(peak) || 1);
+  area(ctx, I, V, CTX.base, CTX.H, Math.sqrt(peak) || 1, days.provisional);
   ctx.font = MONO_S; ctx.fillStyle = C.muted;
   const y0 = new Date(T0).getUTCFullYear(), y1 = new Date(T1).getUTCFullYear(), every = Math.ceil(40 / ((365 * DAY) / sc));
   for (let y = y0 + 1; y <= y1; y++) {
@@ -90,7 +93,7 @@ export function drawMain(cv: HTMLCanvasElement, s: MainState): RailHit[] {
   const {ctx, w} = fit(cv, MAIN.h);
   if (w <= 0) return [];
   const [V0, V1] = s.view, span = V1 - V0, sc = span / w, X = (t: number) => (t - V0) / sc;
-  if (s.days) { const {I, V} = sample(s.days, V0, V1, w); area(ctx, I, V, MAIN.base, MAIN.H, s.days.sq); }
+  if (s.days) { const {I, V} = sample(s.days, V0, V1, w); area(ctx, I, V, MAIN.base, MAIN.H, s.days.sq, s.days.provisional); }
   ctx.fillStyle = C.line; ctx.fillRect(0, MAIN.base, w, 1);
 
   // ticks: months (labels thinned to quarters on wide views) or days/weeks

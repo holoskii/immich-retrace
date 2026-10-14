@@ -9,11 +9,12 @@ export const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b
 
 /**
  * Counts per LOCAL calendar day over [t0, t0 + nd·DAY). Times on this axis are local wall time
- * read as UTC (see `localTime` in model.ts). `pP`/`pV` are prefix sums (length nd + 1).
+ * read as UTC (see `localTime` in model.ts). `gps` / `nogps`: media with / without GPS. `pP`/`pV` are their
+ * prefix sums (length nd + 1). `provisional`: counts from the month manifest, GPS unknown (all in `gps`).
  */
 export interface Days {
   t0: number; nd: number;
-  photo: Float32Array; video: Float32Array;
+  gps: Float32Array; nogps: Float32Array; provisional?: true;
   pP: Float64Array; pV: Float64Array;
   /** Top of the √ scale: sqrt of the 99.5th-percentile busy day, so one outlier day (a 2 000-photo event) doesn't flatten the rest; taller days clip. */
   sq: number;
@@ -26,7 +27,7 @@ function domain(first: number, last: number, now: number) {
   return {t0, nd: Math.max(1, Math.round((end - t0) / DAY))};
 }
 
-function finish(t0: number, nd: number, photo: Float32Array, video: Float32Array): Days {
+function finish(t0: number, nd: number, photo: Float32Array, video: Float32Array, provisional = false): Days {
   const pP = new Float64Array(nd + 1), pV = new Float64Array(nd + 1);
   const busy: number[] = [];
   for (let k = 0; k < nd; k++) {
@@ -35,7 +36,7 @@ function finish(t0: number, nd: number, photo: Float32Array, video: Float32Array
   }
   busy.sort((a, b) => a - b);
   const top = busy.length ? busy[Math.min(busy.length - 1, Math.floor(busy.length * 0.995))] : 1;
-  return {t0, nd, photo, video, pP, pV, sq: Math.sqrt(Math.max(1, top))};
+  return {t0, nd, gps: photo, nogps: video, pP, pV, sq: Math.sqrt(Math.max(1, top)), ...(provisional ? {provisional: true as const} : {})};
 }
 
 export function daysFromIndex(ix: IndexColumns, now = Date.now()): Days | null {
@@ -45,12 +46,12 @@ export function daysFromIndex(ix: IndexColumns, now = Date.now()): Days | null {
   const {t0, nd} = domain(first, last, now), photo = new Float32Array(nd), video = new Float32Array(nd);
   for (let r = 0; r < ix.n; r++) {
     const k = Math.floor((ix.t[r] + ix.off[r] * HOUR - t0) / DAY);
-    if (k >= 0 && k < nd) (ix.video[r] ? video : photo)[k]++;
+    if (k >= 0 && k < nd) (ix.gps[r] ? photo : video)[k]++;
   }
   return finish(t0, nd, photo, video);
 }
 
-/** Provisional overview while the first index builds: each month's count spread evenly over its days, all as photos. */
+/** Provisional overview while the first index builds: each month's count spread evenly over its days (GPS unknown). */
 export function daysFromMonths(months: IndexManifest['months'], now = Date.now()): Days | null {
   const ms = months.filter(m => /^\d{4}-\d{2}$/.test(m.month) && m.count > 0);
   if (!ms.length) return null;
@@ -62,7 +63,7 @@ export function daysFromMonths(months: IndexManifest['months'], now = Date.now()
     const a = Math.round((start(m.month) - t0) / DAY), b = Math.round((next(m.month) - t0) / DAY), per = m.count / (b - a);
     for (let k = Math.max(0, a); k < Math.min(nd, b); k++) photo[k] += per;
   }
-  return finish(t0, nd, photo, video);
+  return finish(t0, nd, photo, video, true);
 }
 
 /** Mean per-day density over [ta, tb): a sub-day span reads the day containing its midpoint (sketch `dens`). */
@@ -70,7 +71,7 @@ export function dens(h: Days, ta: number, tb: number, out: [number, number] = [0
   const a = (ta - h.t0) / DAY, b = (tb - h.t0) / DAY;
   if (b - a < 1) {
     const k = Math.floor((a + b) / 2);
-    if (k < 0 || k >= h.nd) { out[0] = out[1] = 0; } else { out[0] = h.photo[k]; out[1] = h.video[k]; }
+    if (k < 0 || k >= h.nd) { out[0] = out[1] = 0; } else { out[0] = h.gps[k]; out[1] = h.nogps[k]; }
     return out;
   }
   const ka = clamp(Math.floor(a), 0, h.nd), kb = clamp(Math.ceil(b), 0, h.nd), n = Math.max(1, kb - ka);
@@ -216,3 +217,22 @@ export const fDay = (t: number) => F_DAY.format(t);
 export const fMonth = (t: number) => F_MON.format(t);
 export const fDayMonth = (t: number) => F_DM.format(t);
 export const fNum = (n: number) => Math.round(n).toLocaleString('en-US').replace(/,/g, ' ');
+
+/**
+ * Calendar length of [t0, t1) (UTC): "2y 3m 14d", "5d", or hours under two days ("30h", a cluster zoom).
+ * Days are the calendar days touched, so 1 May 00:00 → 3 May 00:00 (exclusive) is "2d" and an album 29 Apr → 6 May is "8d".
+ */
+export function fLength(t0: number, t1: number) {
+  if (t1 - t0 < 2 * DAY) return `${Math.max(1, Math.round((t1 - t0) / HOUR))}h`;
+  // Inclusive calendar days: the day of t0 through the day of the last instant (t1 is exclusive).
+  const a = new Date(Math.floor(t0 / DAY) * DAY), b = (Math.floor((t1 - 1) / DAY) + 1) * DAY;
+  // a + k months, clamped to the month's last day (31 Jan + 1m = 28/29 Feb).
+  const plus = (k: number) => {
+    const y = a.getUTCFullYear(), m = a.getUTCMonth() + k;
+    return Date.UTC(y, m, Math.min(a.getUTCDate(), new Date(Date.UTC(y, m + 1, 0)).getUTCDate()));
+  };
+  let k = (new Date(b).getUTCFullYear() - a.getUTCFullYear()) * 12 + new Date(b).getUTCMonth() - a.getUTCMonth();
+  if (plus(k) > b) k--;
+  const y = Math.floor(k / 12), m = k % 12, d = Math.round((b - plus(k)) / DAY);
+  return [y && `${y}y`, m && `${m}m`, d && `${d}d`].filter(Boolean).join(' ') || '0d';
+}

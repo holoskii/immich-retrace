@@ -184,15 +184,15 @@ export function stepTime(ix: IndexColumns, lo: number, hi: number, c: number, di
   return a < hi ? ix.t[a] : null;
 }
 
-/** Photos / videos per bin over t0..t1. */
+/** Media with / without GPS per bin over t0..t1. */
 export function densityBins(ix: IndexColumns, lo: number, hi: number, t0: number, t1: number, nb: number) {
-  const photo = new Float32Array(nb), video = new Float32Array(nb), span = t1 - t0;
+  const gps = new Float32Array(nb), nogps = new Float32Array(nb), span = t1 - t0;
   for (let r = lo; r < hi; r++) {
     const b = Math.floor((ix.t[r] - t0) / span * nb);
     if (b < 0 || b >= nb) continue;
-    (ix.video[r] ? video : photo)[b]++;
+    (ix.gps[r] ? gps : nogps)[b]++;
   }
-  return {photo, video};
+  return {gps, nogps};
 }
 
 /** Median local offset (hours) of rows lo..hi-1: the selection's "home" time zone for axis labels. */

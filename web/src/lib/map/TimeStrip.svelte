@@ -1,5 +1,5 @@
 <script lang="ts">
-  // M-B strip under the map: photo/video density over the selection, with the shared time cursor.
+  // M-B strip under the map: density over the selection (with / without GPS, as on the overview), with the shared time cursor.
   // Drag (or ←/→, Home/End when focused) to scrub; the URL gets the cursor when the gesture ends.
   // Enter opens the lightbox at the asset nearest to the cursor.
   import type {Active} from '../selection.svelte.ts';
@@ -12,7 +12,7 @@
 
   const H = 64, BARS = 40, BIN = 3;
   const DAY = 86400e3;
-  const C = {photo: '#C98128', photoDim: '#5a4426', video: '#3A9BD6', videoDim: '#24465c', line: '#2A2F37', muted: '#7F858E', ink: '#E9E6DF'};
+  const C = {gps: '#4CB782', gpsDim: '#2B5A45', nogps: '#A0504A', nogpsDim: '#4E2C2A', line: '#2A2F37', muted: '#7F858E', ink: '#E9E6DF'};
 
   let cv = $state<HTMLCanvasElement>();
   let width = $state(0);
@@ -76,7 +76,7 @@
       if (tk.label && !hidden && tx + 4 + tw < width) { ctx.fillStyle = C.muted; ctx.fillText(tk.label, tx + 4, BARS + 15); }
     }
     // √ scale: one busy day mustn't flatten the rest.
-    const {photo, video} = bins;
+    const {gps: photo, nogps: video} = bins;
     let max = 0;
     for (let i = 0; i < nb; i++) max = Math.max(max, photo[i] + video[i]);
     for (let i = 0; i < nb; i++) {
@@ -84,8 +84,8 @@
       if (!tot) continue;
       const h = Math.max(2, Math.sqrt(tot / max) * (BARS - 6)), hv = h * video[i] / tot, bx = i * BIN;
       const past = cx == null || bx + 1 <= cx;
-      ctx.fillStyle = past ? C.photo : C.photoDim; ctx.fillRect(bx, BARS - h, BIN - 1, h - hv);
-      if (hv) { ctx.fillStyle = past ? C.video : C.videoDim; ctx.fillRect(bx, BARS - hv, BIN - 1, hv); }
+      ctx.fillStyle = past ? C.gps : C.gpsDim; ctx.fillRect(bx, BARS - h, BIN - 1, h - hv);
+      if (hv) { ctx.fillStyle = past ? C.nogps : C.nogpsDim; ctx.fillRect(bx, BARS - hv, BIN - 1, hv); }
     }
     ctx.fillStyle = C.line; ctx.fillRect(0, BARS, width, 1);
     if (cx != null) {

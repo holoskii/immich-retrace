@@ -161,9 +161,9 @@ describe('selection helpers', () => {
     expect(pinsGeoJSON(ix, 0, ix.n, 7).features.map(f => f.properties)).toEqual([{r: 1, v: 1, t: T0 + 10 * M, g: 7}, {r: 2, v: 0, t: T0 + 20 * M, g: 7}]);
     expect(gpsBounds(ix, 0, ix.n)).toEqual([75, 41, 76, 42]);
     expect(gpsBounds(ix, 0, 1)).toBeNull();
-    const {photo, video} = densityBins(ix, 0, ix.n, T0, T0 + 40 * M, 4);
-    expect([...photo]).toEqual([1, 0, 1, 1]);
-    expect([...video]).toEqual([0, 1, 0, 0]);
+    const {gps, nogps} = densityBins(ix, 0, ix.n, T0, T0 + 40 * M, 4);
+    expect([...gps]).toEqual([0, 1, 1, 0]);
+    expect([...nogps]).toEqual([1, 0, 0, 1]);
     expect(typicalOffset(ix, 0, ix.n)).toBe(6);
   });
 
