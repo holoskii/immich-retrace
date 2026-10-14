@@ -161,13 +161,12 @@ export function countRows(ix: IndexColumns, lo: number, hi: number) {
 
 // ---- album rail ----
 
-export const TRIP_DAYS = 45;
 export type RailAlbum = AlbumSummary & {start: number; end: number};
 
-/** Albums with a date span, oldest first; trip-like only (span ≤ 45 days) unless `all`. */
-export function railAlbums(albums: AlbumSummary[], all: boolean): RailAlbum[] {
+/** Albums with a date span, oldest first; only those `keep` accepts when given (trips: `Trips.isTrip` in trips.ts). */
+export function railAlbums(albums: AlbumSummary[], keep?: (a: AlbumSummary) => boolean): RailAlbum[] {
   return albums
-    .filter((a): a is RailAlbum => a.start != null && a.end != null && a.count > 0 && (all || a.end - a.start <= TRIP_DAYS * DAY))
+    .filter((a): a is RailAlbum => a.start != null && a.end != null && a.count > 0 && (!keep || keep(a)))
     .sort((a, b) => a.start - b.start || a.end - b.end);
 }
 

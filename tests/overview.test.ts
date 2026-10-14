@@ -7,6 +7,7 @@ import {withLookup, type IndexColumns} from '../web/src/lib/index/model.ts';
 import {applyUrl, lightboxPending, selection, selectionFromUrl, selectionToQuery, urlReady, writeUrl, type Selection} from '../web/src/lib/selection.svelte.ts';
 import type {AlbumSummary} from '../shared/api.ts';
 import {zoomSpan} from '../web/src/lib/nav.ts';
+import {shortAlbum} from '../web/src/lib/overview/trips.ts';
 
 const D = (s: string) => Date.parse(s + 'T00:00:00Z');
 const H = 3600e3;
@@ -183,9 +184,9 @@ describe('countRows', () => {
 describe('album rail', () => {
   const al = (id: string, s: string, e: string, name = id): AlbumSummary => ({id, name, start: D(s), end: D(e), count: 5, shared: false, version: 'v'});
   const albums = [al('long', '2023-01-01', '2023-12-31'), al('trip', '2023-06-01', '2023-06-10'), {...al('empty', '2023-01-01', '2023-01-01'), start: null, end: null, count: 0}, al('a', '2023-02-01', '2023-03-17')];
-  it('trips only (≤45 d) by default, all on request, oldest first, empties never', () => {
-    expect(railAlbums(albums, false).map(a => a.id)).toEqual(['a', 'trip']);
-    expect(railAlbums(albums, true).map(a => a.id)).toEqual(['long', 'a', 'trip']);
+  it('filtered on request (here: ≤45 d), else all, oldest first, empties never', () => {
+    expect(railAlbums(albums, shortAlbum).map(a => a.id)).toEqual(['a', 'trip']);
+    expect(railAlbums(albums).map(a => a.id)).toEqual(['long', 'a', 'trip']);
   });
   it('labels drop folder prefixes', () => {
     expect(albumLabel('2025-09_Kyrgyzstan')).toBe('Kyrgyzstan');

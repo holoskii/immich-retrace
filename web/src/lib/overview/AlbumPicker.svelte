@@ -1,14 +1,21 @@
 <script lang="ts">
   // Album chooser: a popup with search, trips/all filter and keyboard navigation (↑/↓, Enter, Esc).
+  // The first tab says "trips" only when the trip heuristic (trips.ts) is confident; otherwise "albums" (the short ones).
   import type {AlbumSummary} from '../../../../shared/api.ts';
-  import {albumLabel, DAY, fDay, fNum, railAlbums, TRIP_DAYS, type RailAlbum} from './data.ts';
+  import {albumLabel, DAY, fDay, fNum, railAlbums, type RailAlbum} from './data.ts';
+  import {AWAY_KM, TRIP_DAYS, tripReason, type Trips} from './trips.ts';
 
   /** `error`: why the album list couldn't be (re)loaded; `loaded`: the list is final (not still on its way). */
-  let {albums, current, onpick, error = null, loaded = true}: {
-    albums: AlbumSummary[]; current: string | null; onpick: (a: RailAlbum) => void; error?: string | null; loaded?: boolean;
+  let {albums, trips, current, onpick, error = null, loaded = true}: {
+    albums: AlbumSummary[]; trips: Trips; current: string | null; onpick: (a: RailAlbum) => void; error?: string | null; loaded?: boolean;
   } = $props();
 
-  /** The picker's own filter: the rail under the timeline always shows trips. */
+  const tab = $derived(trips.confident ? 'trips' : 'albums');
+  const tabTitle = $derived(trips.confident
+    ? `Albums that look like trips: up to ${TRIP_DAYS} days, mostly ≥ ${AWAY_KM} km from home (hover an album for why)`
+    : `Albums spanning at most ${TRIP_DAYS} days (too little GPS to tell trips from other albums)`);
+
+  /** The picker's own filter: the rail under the timeline always shows the first tab's albums. */
   let showAll = $state(false);
 
   let open = $state(false);
@@ -22,7 +29,7 @@
   /** Newest first; the search matches the name (with or without the folder prefix) and the year. */
   const items = $derived.by(() => {
     const words = q.toLowerCase().split(/\s+/).filter(Boolean);
-    return railAlbums(albums, showAll)
+    return railAlbums(albums, showAll ? undefined : trips.isTrip)
       .filter(a => words.every(w => a.name.toLowerCase().includes(w) || String(new Date(a.start).getUTCFullYear()).startsWith(w)))
       .reverse();
   });
@@ -59,6 +66,11 @@
   });
 
   const days = (a: RailAlbum) => Math.round((a.end - a.start) / DAY) + 1;
+  /** Tooltip: why the heuristic did or didn't call it a trip (only albums it judged). */
+  const why = (a: RailAlbum) => {
+    const v = trips.verdicts.get(a.id);
+    return v && trips.confident ? `${v.trip ? 'Trip' : 'Not a trip'}: ${tripReason(v)}` : undefined;
+  };
 </script>
 
 <div class="picker" bind:this={root}>
@@ -71,7 +83,7 @@
           role="combobox" aria-expanded="true" aria-autocomplete="list" aria-label="Search albums"
           aria-controls="album-list" aria-activedescendant={items[hi] ? `alb-${items[hi].id}` : undefined} />
         <div class="seg" role="group" aria-label="Which albums">
-          <button aria-pressed={!showAll} onclick={() => setAll(false)} title="Albums spanning at most {TRIP_DAYS} days">trips</button>
+          <button aria-pressed={!showAll} onclick={() => setAll(false)} title={tabTitle}>{tab}</button>
           <button aria-pressed={showAll} onclick={() => setAll(true)}>all</button>
         </div>
       </div>
@@ -79,7 +91,7 @@
       <ul id="album-list" role="listbox" aria-label="Albums" bind:this={list}>
         {#each items as a, i (a.id)}
           <li id="alb-{a.id}" role="option" aria-selected={i === hi} class:hi={i === hi} class:cur={a.id === current}
-            onpointerenter={() => (hi = i)} onclick={() => pick(a)} onkeydown={() => {}}>
+            onpointerenter={() => (hi = i)} onclick={() => pick(a)} onkeydown={() => {}} title={why(a)}>
             <span class="name">{albumLabel(a.name)}{#if a.shared}<em> shared</em>{/if}</span>
             <span class="meta">{fDay(a.start)} · {days(a)} d · {fNum(a.count)}</span>
           </li>
@@ -87,7 +99,7 @@
           {#if !albums.length}
             <li class="empty">{error ?? (loaded ? 'No albums in this library' : 'Loading albums…')}</li>
           {:else}
-            <li class="empty">No albums match{showAll ? '' : ' (only trips are listed: try “all”)'}</li>
+            <li class="empty">No albums match{showAll ? '' : ` (only ${tab === 'trips' ? 'trips' : `albums up to ${TRIP_DAYS} days`} are listed: try “all”)`}</li>
           {/if}
         {/each}
       </ul>

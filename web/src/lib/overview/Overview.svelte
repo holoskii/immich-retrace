@@ -7,6 +7,7 @@
   import {lowerBound, offsetNear, selection, writeUrl, type Selection} from '../selection.svelte.ts';
   import {selName} from '../nav.ts';
   import AlbumPicker from './AlbumPicker.svelte';
+  import {tripsOf} from './trips.ts';
   import {
     clamp, countRows, albumLabel, fLength, DAY, daysFromIndex, daysFromMonths, defaultView, dragTo, fDay, fNum, hitGrip, railAlbums,
     snapDay, viewAround, viewToShow, zoomAt, type Grip, type RailAlbum, type Span,
@@ -28,7 +29,8 @@
   // Histogram once per index (or per manifest while the first index builds).
   const days = $derived(library.index ? daysFromIndex(library.index) : library.provisional ? daysFromMonths(library.provisional) : null);
   const dom = $derived<Span | null>(days ? [days.t0, days.t0 + days.nd * DAY] : null);
-  const rail = $derived(railAlbums(library.albums, false));
+  const trips = $derived(tripsOf(library.albums, library.index));
+  const rail = $derived(railAlbums(library.albums, trips.isTrip));
   /**
    * The brush while it is dragged (or moved by held keys). The selection itself — and so the whole map:
    * route, pins, camera track — follows only when the brush rests or is released, not on every move.
@@ -379,7 +381,7 @@
       {#if parent}
         <button class="btn back" onclick={back} title="Back (Backspace)">← {selName(parent.sel, parent.label)}</button>
       {/if}
-      <AlbumPicker albums={library.albums} current={album?.id ?? null} onpick={pickAlbum}
+      <AlbumPicker albums={library.albums} {trips} current={album?.id ?? null} onpick={pickAlbum}
         error={library.albumsError ? explainAlbums(library.albumsError) : null} loaded={library.albumsLoaded} />
       {#if album}
         <button class="btn icon" disabled={!neighbors.prev} onclick={() => neighbors.prev && pickAlbum(neighbors.prev)}
