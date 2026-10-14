@@ -12,7 +12,13 @@ export default defineConfig({
     name: 'precompress', apply: 'build',
     async closeBundle() { await precompressDir(outDir); },
   }],
-  build: {outDir, emptyOutDir: true},
+  build: {
+    outDir, emptyOutDir: true,
+    // MapLibre is one lazy chunk shared by MapView and the lightbox mini-map (App.svelte loads it
+    // after the overview); named, rather than after whichever module rolldown picks first.
+    rolldownOptions: {output: {codeSplitting: {groups: [{name: 'maplibre', test: /node_modules[\\/]maplibre-gl[\\/]/}]}}},
+    chunkSizeWarningLimit: 1100,
+  },
   server: {proxy: {'/api': 'http://localhost:8080'}},
   test: {root: '.', include: ['tests/**/*.test.ts']},
 });

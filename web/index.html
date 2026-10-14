@@ -3,10 +3,17 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
   <title>Immich Viewer</title>
+  <!-- The shell paints before any script or stylesheet arrives; colours mirror src/app.css (--ground, --muted). -->
+  <style>
+    html, body, #app { height: 100%; margin: 0; }
+    body { background: #101215; color: #8A9099; font: 13px/1.5 system-ui, sans-serif; }
+    .shell { height: 100%; display: flex; align-items: center; justify-content: center; }
+  </style>
 </head>
 <body>
-  <div id="app"></div>
+  <div id="app"><div class="shell" role="status">Loading…</div></div>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>
