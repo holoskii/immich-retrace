@@ -37,6 +37,9 @@ export function zoomName(sel: Selection | null, t0: number, t1: number, place: s
   return name && place ? `${name} › ${place}` : name || place;
 }
 
+/** The UTC day around instant t (what a pin click selects without a selection; the brush and URL use UTC days too). */
+export const dayAround = (t: number): [number, number] => { const d = Math.floor(t / DAY) * DAY; return [d, d + DAY]; };
+
 const HOUR = 3600e3, MIN = 60e3;
 /** Whole UTC hours around [t0, t1] (inclusive instants): a cluster zoom's span. Days would pull in travel days. */
 export const hourCover = (t0: number, t1: number): [number, number] => [Math.floor(t0 / HOUR) * HOUR, (Math.floor(t1 / HOUR) + 1) * HOUR];

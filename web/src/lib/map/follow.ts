@@ -9,6 +9,25 @@ export type CamMode = 'follow' | 'whole' | 'manual';
 export type XY = {x: number; y: number};
 export type View = {x: number; y: number; z: number};
 
+/**
+ * The camera control (a Follow toggle + Fit). `mode` drives the Follower; `auto` is what a new selection
+ * starts in: the toggle's last explicit state (on → follow, off or Fit → frame the whole selection).
+ * A pan or zoom on the map only pauses (manual) and keeps `auto`, so the next selection follows again.
+ */
+export interface CamState { mode: CamMode; auto: 'follow' | 'whole' }
+export type CamEvent = 'follow' | 'unfollow' | 'fit' | 'pan' | 'select';
+
+export function camNext(s: CamState, ev: CamEvent): CamState {
+  switch (ev) {
+    case 'follow': return {mode: 'follow', auto: 'follow'};
+    // Off leaves the map where it is; the next selection is framed whole rather than followed.
+    case 'unfollow': return {mode: 'manual', auto: 'whole'};
+    case 'fit': return {mode: 'whole', auto: 'whole'};
+    case 'pan': return s.mode === 'manual' ? s : {mode: 'manual', auto: s.auto};
+    case 'select': return {mode: s.auto, auto: s.auto};
+  }
+}
+
 export const FOLLOW = {
   /** Spring stiffness (ω, 1/s): pan, zoom (log2 scale), marker. */
   pan: 5, zoom: 3.5, marker: 14,

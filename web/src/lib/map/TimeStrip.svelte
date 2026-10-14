@@ -165,10 +165,17 @@
     onkeydown={key}
     onkeyup={keyUp}
   ></canvas>
+  <!-- The slider's aria-label, visible: scrubbing isn't discoverable from the bars alone. -->
+  <p class="hint" aria-hidden="true">Drag along the strip to move through time · <kbd>←</kbd> <kbd>→</kbd> step photo by photo · <kbd>Enter</kbd> opens the photo</p>
 </div></div>
 
 <style>
   .strip { padding: 6px 12px 2px; background: var(--surface); border-top: 1px solid var(--line); }
   canvas { display: block; width: 100%; cursor: ew-resize; touch-action: none; }
   canvas:focus-visible { outline: 2px solid var(--photo-hi); outline-offset: 2px; }
+  .hint { margin: 1px 0 3px; font-size: 11px; line-height: 1.4; color: var(--muted); }
+  kbd {
+    display: inline-block; padding: 0 4px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 3px;
+    background: var(--raised); color: var(--ink2); font: 400 10px/1.4 var(--f-mono);
+  }
 </style>

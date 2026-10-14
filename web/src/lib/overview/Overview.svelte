@@ -2,12 +2,13 @@
   // Overview O-A: all-years context strip with a viewport window, zoomed √-density wave with the
   // selection brush, album rail. Writes `selection.sel` (and the URL), hover only draws a cursor here (it never moves the map).
   import {untrack} from 'svelte';
-  import {library, phaseText} from '../index/store.svelte.ts';
+  import {headerStatus, library} from '../index/store.svelte.ts';
   import {explainAlbums, retryLibrary} from '../failure.ts';
   import {lowerBound, offsetNear, selection, writeUrl, type Selection} from '../selection.svelte.ts';
   import {selName} from '../nav.ts';
   import AlbumPicker from './AlbumPicker.svelte';
   import {tripsOf} from './trips.ts';
+  import Help from '../Help.svelte';
   import {
     clamp, countRows, albumLabel, fLength, DAY, daysFromIndex, daysFromMonths, defaultView, dragTo, fDay, fNum, hitGrip, railAlbums,
     snapDay, viewAround, viewToShow, zoomAt, type Grip, type RailAlbum, type Span,
@@ -277,8 +278,13 @@
     if (!vdrag) {
       const g = hitGrip(x, ctxX(view[0]), ctxX(view[1]));
       ctxCv!.style.cursor = g === 'l' || g === 'r' ? 'ew-resize' : g === 'm' ? 'grab' : 'crosshair';
+      // Inside the window: what it is; in the shaded part outside: what a click does.
+      tip = g === 'n'
+        ? {x: ev.clientX, y: ev.clientY, title: 'Outside the timeline below', text: 'Click to move the timeline here, or drag the bright window'}
+        : {x: ev.clientX, y: ev.clientY, title: `Timeline below: ${fDay(view[0])} → ${fDay(view[1])}`, text: 'Drag the window to move it, its edges to resize; scroll to zoom'};
       return;
     }
+    tip = null;
     if (!vdrag.moved && Math.abs(x - vdrag.x) < 3) return;
     vdrag.moved = true;
     const e = strip ?? dom, r = dragTo(vdrag.grip, vdrag.anchor, ctxT(x), vdrag.cur, e[0], e[1], 7 * DAY);
@@ -362,19 +368,26 @@
   /** Album members (members mode) that are loading or failed to load; null once they are in. */
   const membersLoad = $derived(selection.sel?.kind === 'album' && selection.membersLoad?.albumId === selection.sel.albumId ? selection.membersLoad : null);
 
-  const status = $derived.by(() => {
-    const phase = phaseText(library.phase, library.attempt, library.progress);
-    switch (library.status) {
-      case 'building': return phase || 'building index';
-      case 'refreshing': return `refreshing · ${phase}`;
-      case 'cached': return library.phase === 'waiting' ? `cached · ${phase}` : 'cached · checking for changes';
-      case 'ready': return library.index ? `${fNum(library.index.n)} items` : 'ready';
-      case 'error': return `error: ${library.error ?? 'unknown'}`;
-    }
-  });
+  const status = $derived(headerStatus({
+    status: library.status, phase: library.phase, attempt: library.attempt, progress: library.progress,
+    items: library.index ? `${fNum(library.index.n)} items` : '', error: library.error,
+  }));
+
+  // ⋯ menu: background refresh state and cache housekeeping, out of the bar.
+  let more = $state(false);
+  let moreEl = $state<HTMLDivElement>();
+  function onWindowDown(ev: PointerEvent) {
+    if (more && moreEl && !moreEl.contains(ev.target as Node)) more = false;
+  }
+  function onMoreKey(ev: KeyboardEvent) {
+    if (ev.key !== 'Escape' || !more) return;
+    ev.preventDefault(); ev.stopPropagation();
+    more = false;
+    moreEl?.querySelector<HTMLButtonElement>('.more')?.focus();
+  }
 </script>
 
-<svelte:window onkeydown={onWindowKey} />
+<svelte:window onkeydown={onWindowKey} onpointerdown={onWindowDown} />
 <section class="overview" aria-label="Overview">
   <div class="bar">
     <div class="nav">
@@ -413,15 +426,29 @@
       </div>
     {/if}
     <button class="btn" disabled={isFull} onclick={resetZoom} title="Zoom the timeline out to all years">All years</button>
-    <div class="status mono" class:err={library.status === 'error'}>
-      {status}
+    <div class="status mono" class:err={library.status === 'error'} aria-live="polite">
+      {status.shown}
       {#if library.status === 'error'}
         <button class="link" onclick={retryLibrary} title="Try again; the cached library stays">Retry</button>
       {/if}
       {#if library.albumsError}
         <span class="warn">{explainAlbums(library.albumsError)}</span>
       {/if}
-      <button class="link" onclick={() => library.clearCache()} title="Drop the cached index and rebuild it">clear cache</button>
+    </div>
+    <div class="tools">
+      <Help />
+      <!-- svelte-ignore a11y_no_static_element_interactions (Esc inside the menu closes it) -->
+      <div class="morewrap" bind:this={moreEl} onkeydown={onMoreKey}>
+        <button class="more" class:busy={status.busy} aria-haspopup="true" aria-expanded={more} onclick={() => (more = !more)}
+          title={status.busy ? `More · ${status.detail}` : 'More'} aria-label="More">⋯</button>
+        {#if more}
+          <div class="pop" role="group" aria-label="Library">
+            <p class="mono">{status.detail}</p>
+            <button onclick={() => { more = false; void library.clearCache(); }}>Clear cache and rebuild</button>
+            <p class="sub">Drops this browser's copy of the index and loads the whole library again.</p>
+          </div>
+        {/if}
+      </div>
     </div>
   </div>
 
@@ -429,6 +456,7 @@
     bind:this={ctxCv} class="ctx" style:height="{CTX.h}px"
     aria-label="All years; drag the window to choose the zoomed period"
     onpointerdown={onCtxDown} onpointermove={onCtxMove} onpointerup={onCtxUp} onpointercancel={() => { vdrag = null; frozen = null; }}
+    onpointerleave={() => { if (!vdrag) tip = null; }}
     onwheel={ev => onWheel(ev, ctxCv!, true)}
   ></canvas>
   <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
@@ -446,7 +474,7 @@
       {#if days?.provisional}<i class="sw pending"></i>counting (location not known yet)
       {:else}<i class="sw gps"></i>with location <i class="sw nogps"></i>without location{/if}
     </span>
-    <span>scroll = zoom · drag = select · edges = resize · bars = albums · ←/→ move · Alt+←/→ resize · Esc clear</span>
+    <span class="plain">Drag across the timeline to pick dates · click a coloured bar below it to open an album · scroll to zoom · <kbd>?</kbd> all shortcuts</span>
   </div>
 
   {#if tip}
@@ -478,6 +506,37 @@
   .btn.icon { padding: 3px 8px; }
   .btn.back { color: var(--ink); border-color: var(--photo); max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
   .status { font-size: 11px; color: var(--muted); display: inline-flex; gap: 10px; align-items: baseline; }
+  .tools { display: inline-flex; gap: 6px; align-items: center; }
+  .morewrap { position: relative; }
+  .more {
+    position: relative; width: 28px; height: 24px; padding: 0; border-radius: 4px; cursor: pointer;
+    background: var(--raised); border: 1px solid var(--line); color: var(--ink2); font: 600 14px/1 var(--f-body);
+  }
+  .more:hover, .more[aria-expanded='true'] { color: var(--ink); border-color: var(--muted); }
+  /* A background refresh is running: a small dot instead of status text in the bar. */
+  .more.busy::after {
+    content: ''; position: absolute; right: 3px; top: 3px; width: 5px; height: 5px; border-radius: 50%;
+    background: var(--photo-hi); animation: pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes pulse { 50% { opacity: .3; } }
+  @media (prefers-reduced-motion: reduce) { .more.busy::after { animation: none; } }
+  .pop {
+    position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; width: 260px; padding: 10px 12px;
+    background: #0B0C0E; border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 8px 24px rgba(0, 0, 0, .5);
+    display: grid; gap: 6px; font-size: 12px; color: var(--ink2);
+  }
+  .pop p { margin: 0; }
+  .pop .mono { font-size: 11px; color: var(--ink2); }
+  .pop .sub { font-size: 11px; color: var(--muted); }
+  .pop button {
+    justify-self: start; background: var(--raised); border: 1px solid var(--line); border-radius: 4px; color: var(--ink);
+    font: 500 12px var(--f-body); padding: 3px 10px; cursor: pointer;
+  }
+  .pop button:hover { border-color: var(--muted); }
+  .plain kbd {
+    display: inline-block; padding: 0 4px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 3px;
+    background: var(--raised); color: var(--ink); font: 400 10px/1.4 var(--f-mono);
+  }
   .status.err, .err { color: #e07a6a; }
   .warn { color: var(--ink2); }
   .link { background: none; border: 0; padding: 0; color: var(--ink2); font: inherit; text-decoration: underline dotted; cursor: pointer; }

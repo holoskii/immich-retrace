@@ -62,8 +62,8 @@ function area(ctx: CanvasRenderingContext2D, I: Float32Array, V: Float32Array, b
 }
 
 /** Dims outside [x0, x1], draws edges with grab handles (sketch `drawSel`). */
-function drawSel(ctx: CanvasRenderingContext2D, x0: number, x1: number, y0: number, y1: number, w: number, focus = false) {
-  ctx.fillStyle = 'rgba(16,18,21,.6)';
+function drawSel(ctx: CanvasRenderingContext2D, x0: number, x1: number, y0: number, y1: number, w: number, focus = false, shade = 'rgba(16,18,21,.6)') {
+  ctx.fillStyle = shade;
   ctx.fillRect(0, y0, Math.max(0, x0), y1 - y0); ctx.fillRect(x1, y0, Math.max(0, w - x1), y1 - y0);
   ctx.strokeStyle = focus ? C.photoHi : C.ink; ctx.lineWidth = 1.5;
   ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x0, y1); ctx.moveTo(x1, y0); ctx.lineTo(x1, y1); ctx.stroke();
@@ -98,7 +98,10 @@ export function drawContext(cv: HTMLCanvasElement, days: Days | null, ext: Span,
     ctx.fillRect(x, CTX.base, 1, 4);
     if (y % every === 0 && x > xl && x + 24 < xr) ctx.fillText("'" + String(y).slice(2), x + 2, CTX.base + 13);
   }
-  drawSel(ctx, (view[0] - T0) / sc, (view[1] - T0) / sc, 2, CTX.base + 2, w);
+  // The overview window: a lifted band inside, the rest shaded well down (Overview.svelte adds the tooltip).
+  const vx0 = (view[0] - T0) / sc, vx1 = (view[1] - T0) / sc;
+  if (vx0 > 0 || vx1 < w) { ctx.fillStyle = 'rgba(233,230,223,.06)'; ctx.fillRect(vx0, 2, vx1 - vx0, CTX.base); }
+  drawSel(ctx, vx0, vx1, 2, CTX.base + 2, w, false, 'rgba(8,9,11,.72)');
   if (sel) { ctx.fillStyle = C.photoHi; ctx.fillRect((sel[0] - T0) / sc - 1, CTX.base, Math.max(2, (sel[1] - sel[0]) / sc), 3); }
 }
 

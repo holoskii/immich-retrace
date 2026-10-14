@@ -1,7 +1,7 @@
 <script lang="ts">
   // Map (M-A: route colored by time, clustered pins) + M-B strip with the position marker and the
-  // nearest photo popping out next to it. Camera (stage 6): Follow (the "Smooth" follow camera,
-  // camera.ts + follow.ts), Whole selection, or Manual; a user pan/zoom switches to Manual.
+  // nearest photo popping out next to it. Camera (stage 6): a Follow toggle (the "Smooth" follow camera,
+  // camera.ts + follow.ts) and Fit (frame the whole selection); a user pan/zoom pauses either (camNext).
   import {onMount, untrack} from 'svelte';
   import * as maplibregl from 'maplibre-gl';
   import type {GeoJSONSource, LngLatBoundsLike, Map as MlMap, MapGeoJSONFeature} from 'maplibre-gl';
@@ -15,13 +15,13 @@
   import {lowerBound, sameSelection, selection, writeUrl, type Selection} from '../selection.svelte.ts';
   import {thumbHashDataUrl} from '../thumbhash.ts';
   import {thumbUrl} from '../lightbox/media.ts';
-  import {fDays, zoomName, zoomSpan} from '../nav.ts';
+  import {dayAround, fDays, selName, zoomName, zoomSpan} from '../nav.ts';
   import {countRows, DAY, fNum} from '../overview/data.ts';
   import {fDay, fDuration, fFullDay, fSpan, fWhen} from './format.ts';
   import {clusterVisits, gpsBounds, nearestRow, pinsGeoJSON, positionAt, routeGeoJSON, segmentRoute, typicalOffset, type PinProps, type Visit} from './route.ts';
   import {binFixes, boxOf, buildTrack, mercX, mercY, type Track} from './camera.ts';
   import type {TrackRequest} from './camera.worker.ts';
-  import {FOLLOW, Follower, type CamMode} from './follow.ts';
+  import {camNext, FOLLOW, Follower, type CamEvent, type CamState} from './follow.ts';
   import {Inset} from './inset.ts';
   import {isScrub} from './scrub.ts';
   import TimeStrip from './TimeStrip.svelte';
@@ -63,9 +63,9 @@
   const pos = $derived(active && route && cursor != null ? positionAt(active.ix, route, cursor) : null);
   const nearest = $derived(active && cursor != null ? nearestRow(active.ix, active.lo, active.hi, cursor) : -1);
 
-  // Follow camera state. `mode` is what the control shows; `autoMode` is what "Re-center" returns to.
-  let mode = $state<CamMode>('follow');
-  let autoMode: 'follow' | 'whole' = 'follow';
+  // Camera control state (follow.ts camNext): the mode the follower runs, and what a new selection starts in.
+  let cam = $state<CamState>({mode: 'follow', auto: 'follow'});
+  const mode = $derived(cam.mode);
   let follower: Follower | undefined;
   let inset: Inset | undefined;
   let insetCv = $state<HTMLCanvasElement>();
@@ -73,11 +73,6 @@
   const bins = $derived(active ? binFixes(active.ix, active.lo, active.hi) : null);
   const box = $derived(bins ? boxOf(bins) : null);
   let track = $state.raw<Track | null>(null);
-  const MODES: [CamMode, string, string][] = [
-    ['follow', 'Follow', 'Follow the time cursor'],
-    ['whole', 'Whole selection', 'Fit the whole selection'],
-    ['manual', 'Manual', 'Leave the map where you put it'],
-  ];
   const showInset = $derived(!!box && mode !== 'whole');
 
   onMount(() => {
@@ -214,10 +209,13 @@
       } catch { /* no leaves: just expand */ }
       void expand();
     });
+    // A pin: the cursor goes there; without a selection (library pins), its day is selected first.
     m.on('click', 'pin', e => {
       const p = e.features?.[0]?.properties as PinProps | undefined;
-      const a = active;
-      if (!p || p.g !== gen || !a || pinsOf !== a.ix || p.r < a.lo || p.r >= a.hi) return;
+      const a = active, ix = pinsOf;
+      if (!p || p.g !== gen || !ix) return;
+      if (!selection.sel) { if (ix === library.index && p.r < ix.n) pickDay(ix, p.r); return; }
+      if (!a || ix !== a.ix || p.r < a.lo || p.r >= a.hi) return;
       selection.cursor = a.ix.t[p.r];
     });
   }
@@ -234,8 +232,33 @@
   }
   function zoomTo(v: {t0: number; t1: number; n: number; place: string}) {
     menu = null;
-    selection.zoomInto(zoomSel(v.t0, v.t1), zoomName(selection.sel, v.t0, v.t1, v.place) || `${v.n} photos`, v.t0);
+    const z = zoomSel(v.t0, v.t1), label = zoomName(selection.sel, v.t0, v.t1, v.place) || `${v.n} photos`;
+    narrowed(z, label, fDays(z.t0, z.t1));
+    selection.zoomInto(z, label, v.t0);
     writeUrl('commit', v.t0);
+  }
+  /** Library pin without a selection: select the (UTC) day it was taken, cursor on it. Back returns to no selection. */
+  function pickDay(ix: LibraryIndex, r: number) {
+    const t = ix.t[r], [d0, d1] = dayAround(t), place = ix.city[r] || ix.country[r] || '';
+    const z: Selection = {kind: 'range', t0: d0, t1: d1}, label = zoomName(null, d0, d1 - 1, place) || fFullDay(t, ix.off[r]);
+    narrowed(z, label, `the day of this photo, ${fDays(d0, d1)}`);
+    selection.zoomInto(z, label, t);
+    writeUrl('commit', t);
+  }
+
+  // After a cluster or pin zoom: say what was narrowed and how to get back, until the selection changes or ~12 s pass.
+  let zoomed = $state.raw<{sel: Selection; label: string; what: string; parent: string} | null>(null);
+  let zoomedTimer: ReturnType<typeof setTimeout> | undefined;
+  function narrowed(sel: Selection, label: string, what: string) {
+    clearTimeout(zoomedTimer);
+    zoomed = {sel, label, what, parent: selName(selection.sel, selection.zoomLabel)};
+    zoomedTimer = setTimeout(() => (zoomed = null), 12_000);
+  }
+  $effect(() => { if (zoomed && selection.sel !== zoomed.sel) untrack(() => { zoomed = null; clearTimeout(zoomedTimer); }); });
+  $effect(() => () => clearTimeout(zoomedTimer));
+  function zoomBack() {
+    zoomed = null;
+    if (selection.back()) writeUrl('commit', selection.cursor);
   }
   /** "29 Apr 2023" or "29 Apr 2023 → 2 May" in the selection's local time. */
   function fVisit(v: Visit, off: number) {
@@ -348,7 +371,7 @@
     follower.box = bx;
     if (sel === selKey) { follower.kick(); return; }
     selKey = sel;
-    untrack(() => setMode(autoMode, false));
+    untrack(() => camTo('select', false));
     follower.mk = null;
     follower.snap();
     snapOnTrack = true;
@@ -388,18 +411,19 @@
     }
   });
 
-  function setMode(k: CamMode, user = true) {
-    mode = k;
-    if (k !== 'manual') autoMode = k;
+  function camTo(ev: CamEvent, user = true) {
+    cam = camNext(untrack(() => cam), ev);
     if (!follower) return;
-    follower.mode = k;
+    follower.mode = cam.mode;
     follower.release();
     if (user) follower.kick();
   }
 
   function toManual() {
-    if (mode !== 'manual' && active) setMode('manual');
+    if (mode !== 'manual' && active) camTo('pan');
   }
+  /** Follow is off because the map was moved by hand (it comes back with the next selection, or a click). */
+  const paused = $derived(cam.mode === 'manual' && cam.auto === 'follow');
 
   // Inset: route pre-rendered per selection; view, target and position drawn per frame.
   $effect(() => {
@@ -546,6 +570,12 @@
         Couldn't refresh the library: {failure.title}.
         <button onclick={retryLibrary}>{failure.retry === 'reload' ? 'Reload' : 'Retry'}</button>
       </div>
+    {:else if zoomed && zoomed.sel === selection.sel}
+      <div class="notice zoomed" role="status">
+        <span>Narrowed to <b>{zoomed.label}</b>: {zoomed.what}.</span>
+        <button onclick={zoomBack} title="Back (Backspace)">← Back to {zoomed.parent}</button>
+        <button class="x" onclick={() => (zoomed = null)} aria-label="Dismiss">✕</button>
+      </div>
     {:else if !selection.sel}
       <div class="notice">
         {#if selection.timeline && library.index && libRows}
@@ -582,21 +612,21 @@
         <div class="ramp" style:background="linear-gradient(90deg, {RAMP.map(([k, c]) => `${c} ${k * 100}%`).join(', ')})"></div>
         <div class="ends"><span>{legend.from}</span><span>{legend.to}</span></div>
         <div class="key"><span class="dash"></span>no GPS in between</div>
-        <div class="key muted">{gpsCount} of {active!.hi - active!.lo} with GPS</div>
+        <div class="key counts"><i class="sw gps"></i>{fNum(gpsCount)} with location <i class="sw nogps"></i>{fNum(active!.hi - active!.lo - gpsCount)} without</div>
       </div>
     {/if}
 
-    {#if ready && box}
-      <div class="modes" role="radiogroup" aria-label="Camera">
-        {#each MODES as [k, label, title] (k)}
-          <button role="radio" aria-checked={mode === k} class:on={mode === k} {title} onclick={() => setMode(k)}>{label}</button>
-        {/each}
+    {#if ready && (box || !selection.sel)}
+      <div class="modes" role="group" aria-label="Camera">
+        {#if box}
+          <button class="follow" class:on={mode === 'follow'} class:paused aria-pressed={mode === 'follow'}
+            title={mode === 'follow' ? 'Following the time cursor · click to stop' : paused ? 'Paused because the map was moved · click to follow the time cursor again' : 'Follow the time cursor'}
+            onclick={() => camTo(mode === 'follow' ? 'unfollow' : 'follow')}>{paused ? 'Follow ⏸' : 'Follow'}</button>
+          <button onclick={() => camTo('fit')} class:on={mode === 'whole'} title="Frame the whole selection">Fit</button>
+        {:else}
+          <button onclick={() => fit(true)} title="Fit the map to the photos of the visible timeline">Fit</button>
+        {/if}
       </div>
-      {#if mode === 'manual'}
-        <button class="recenter" onclick={() => setMode(autoMode)}>Re-center</button>
-      {/if}
-    {:else if ready && !selection.sel}
-      <button class="fit" onclick={() => fit(true)} title="Fit the map to the photos of the visible timeline">Fit</button>
     {/if}
 
     {#if showInset}
@@ -615,10 +645,11 @@
           <strong>{tip.count} items</strong>
           <span>{fWhen(tip.first, ix.off[tip.row])}</span>
           {#if tip.last - tip.first > 60e3}<span>→ {fWhen(tip.last, ix.off[tip.row])}</span>{/if}
-          <span class="hint">click: zoom into this time span</span>
+          <span class="hint">click: narrow to these dates</span>
         {:else}
           <strong>{fWhen(tip.first, ix.off[tip.row])}</strong>
           <span>{ix.video[tip.row] ? `video ${fDuration(ix.dur[tip.row])} · ` : ''}{where(ix, tip.row)}</span>
+          <span class="hint">{selection.sel ? 'click: move the time cursor here' : 'click: select this day'}</span>
         {/if}
       </div>
     {/if}
@@ -650,6 +681,7 @@
         {#if cursor != null && Math.abs(ix.t[r] - cursor) > 30 * 60e3}
           <span class="note muted">photo {fSpan(ix.t[r] - cursor)} {ix.t[r] > cursor ? 'after' : 'before'} cursor</span>
         {/if}
+        <span class="open">{ix.video[r] ? 'Play video' : 'Open photo'} <span aria-hidden="true">⤢</span></span>
       </div>
     {/if}
   </div></div>
@@ -688,23 +720,20 @@
   }
 
   .legend {
-    position: absolute; left: 12px; top: 12px; z-index: 2; width: 200px; padding: 8px 10px 7px;
+    position: absolute; left: 12px; top: 12px; z-index: 2; width: max-content; min-width: 200px; padding: 8px 10px 7px;
     background: rgba(11, 12, 14, .86); border: 1px solid var(--line); border-radius: 5px;
     font: 400 10px/1.4 var(--f-mono); color: var(--ink2); pointer-events: none;
   }
   .ramp { height: 4px; border-radius: 2px; }
   .ends { display: flex; justify-content: space-between; margin: 4px 0 5px; }
   .key { display: flex; align-items: center; gap: 6px; }
-  .key.muted { color: var(--muted); margin-top: 2px; }
+  .key.counts { margin-top: 3px; gap: 0; white-space: nowrap; }
+  .sw { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; }
+  .sw.gps { background: var(--gps); }
+  .sw.nogps { background: var(--nogps); margin-left: 10px; }
   .dash { width: 22px; height: 0; border-top: 1.5px dashed rgba(181, 185, 192, .6); }
 
-  .fit {
-    position: absolute; right: 50px; top: 10px; z-index: 2;
-    background: rgba(11, 12, 14, .86); color: var(--ink2); border: 1px solid var(--line); border-radius: 4px;
-    font: 500 12px var(--f-body); padding: 5px 10px; cursor: pointer;
-  }
-  .fit:hover { color: var(--ink); border-color: var(--muted); }
-  .fit:focus-visible, .modes button:focus-visible, .recenter:focus-visible { outline: 2px solid var(--photo-hi); outline-offset: 2px; }
+  .modes button:focus-visible { outline: 2px solid var(--photo-hi); outline-offset: 2px; }
 
   .modes {
     position: absolute; right: 50px; top: 10px; z-index: 2; display: flex;
@@ -716,13 +745,13 @@
   .modes button + button { border-left: 1px solid var(--line); }
   .modes button:hover { color: var(--ink); }
   .modes button.on { color: var(--ink); background: rgba(232, 166, 78, .16); box-shadow: inset 0 -2px 0 var(--photo); }
+  /* Follow paused by a pan: the way back stays in plain sight. */
+  .modes button.paused { color: var(--photo-hi); box-shadow: inset 0 -2px 0 rgba(232, 166, 78, .45); }
 
-  .recenter {
-    position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 2;
-    background: rgba(11, 12, 14, .9); color: var(--ink); border: 1px solid var(--photo); border-radius: 999px;
-    font: 500 12px var(--f-body); padding: 6px 14px; cursor: pointer; box-shadow: 0 4px 14px rgba(0, 0, 0, .4);
-  }
-  .recenter:hover { background: rgba(232, 166, 78, .18); }
+  .notice.zoomed { pointer-events: auto; display: flex; gap: 10px; align-items: center; color: var(--ink2); }
+  .notice.zoomed b { color: var(--photo-hi); font-weight: 500; }
+  .notice.zoomed .x { border: 0; background: none; padding: 0 2px; color: var(--muted); }
+  .notice.zoomed .x:hover { color: var(--ink); background: none; }
 
   .menu button:focus-visible { outline: 2px solid var(--photo-hi); outline-offset: 2px; }
   .menu {
@@ -783,6 +812,8 @@
   .card .note { color: var(--ink2); }
   .card .note.muted { color: var(--muted); }
   .card .note.warn { color: #e07a6a; }
+  .card .open { margin-top: 3px; color: var(--photo-hi); font-family: var(--f-body); font-size: 11px; }
+  .card:hover .open { text-decoration: underline; }
   .vid {
     position: absolute; left: 0; right: 0; bottom: 0; height: 16px; padding: 0 5px;
     background: linear-gradient(transparent, rgba(0, 0, 0, .6)); color: #fff; font-size: 10px; text-align: right;

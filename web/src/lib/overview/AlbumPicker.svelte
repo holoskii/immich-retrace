@@ -92,7 +92,7 @@
         {#each items as a, i (a.id)}
           <li id="alb-{a.id}" role="option" aria-selected={i === hi} class:hi={i === hi} class:cur={a.id === current}
             onpointerenter={() => (hi = i)} onclick={() => pick(a)} onkeydown={() => {}} title={why(a)}>
-            <span class="name">{albumLabel(a.name)}{#if a.shared}<em> shared</em>{/if}</span>
+            <span class="name">{albumLabel(a.name)}{#if a.shared}{' '}<em>shared</em>{/if}</span>
             <span class="meta">{fDay(a.start)} · {days(a)} d · {fNum(a.count)}</span>
           </li>
         {:else}

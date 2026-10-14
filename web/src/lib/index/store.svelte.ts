@@ -21,6 +21,25 @@ export function phaseText(phase: Phase | null, attempt: number, progress: {done:
   }
 }
 
+/**
+ * The header's status, split in two. `shown` stays in the bar: the first build's load phases, waiting for
+ * Immich, errors, else the item count. `detail` goes in the ⋯ menu: background refresh chatter (cached,
+ * checking for changes, month counts). `busy`: a background refresh is running (a dot on the ⋯ button).
+ * `items`: the formatted item count ("1 688 items"), empty before there is an index.
+ */
+export function headerStatus(s: {status: Status; phase: Phase | null; attempt: number; progress: {done: number; total: number}; items: string; error: string | null}) {
+  const phase = phaseText(s.phase, s.attempt, s.progress), items = s.items;
+  switch (s.status) {
+    case 'building': return {shown: phase || 'building index', detail: phase || 'Building the index', busy: false};
+    case 'refreshing':
+      return {shown: s.phase === 'waiting' ? phase : items, detail: `Refreshing in the background · ${phase || 'loading'}`, busy: true};
+    case 'cached':
+      return {shown: s.phase === 'waiting' ? phase : items, detail: 'Showing the cached copy · checking for changes', busy: true};
+    case 'ready': return {shown: items || 'ready', detail: `Up to date${items ? ` · ${items}` : ''}`, busy: false};
+    case 'error': return {shown: `error: ${s.error ?? 'unknown'}`, detail: `Error: ${s.error ?? 'unknown'}`, busy: false};
+  }
+}
+
 export class LibraryStore {
   status = $state<Status>('building');
   // Raw: deep proxies over 30k-element columns would cost far more than they give.
