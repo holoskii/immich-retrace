@@ -1,6 +1,6 @@
 import {Hono} from 'hono';
 import type {Context} from 'hono';
-import {HttpError, ImmichClient} from './immich.ts';
+import {HttpError, ImmichClient, keyRejected} from './immich.ts';
 import {fetchAlbumMembers, fetchAlbums, fetchManifestMonths, fetchMonthColumns, UUID} from './adapter.ts';
 import {SCHEMA_VERSION} from '../shared/api.ts';
 import type {ApiError, IndexManifest, ViewerConfig} from '../shared/api.ts';
@@ -23,13 +23,13 @@ function singleRange(h: string | undefined) {
 }
 
 /** `cacheControl`: no-store unless the URL is versioned (a new thumbhash = a new URL). */
-function relay(res: Response, cacheControl = 'no-store') {
+async function relay(res: Response, cacheControl = 'no-store') {
   if (!res.ok) {
+    if (res.status === 401 || res.status === 403) throw await keyRejected(res);
     void res.body?.cancel();
     // Immich answers 400 for an unknown id (its access check) and 404 for e.g. video of a photo.
     if (res.status === 400 || res.status === 404) throw new HttpError(404, 'Not found in Immich.', 'not-found');
-    if (res.status === 401 || res.status === 403) throw new HttpError(502, 'Immich rejected the viewer\'s API key. Check its permissions: asset.read, asset.view, album.read.', 'auth');
-    throw new HttpError(502, `Immich returned ${res.status}.`);
+    throw new HttpError(502, `Immich returned ${res.status}.`, 'upstream');
   }
   const headers = new Headers();
   for (const h of PASS) { const v = res.headers.get(h); if (v) headers.set(h, v); }
@@ -43,7 +43,7 @@ export function createApp(immich: ImmichClient, config: ViewerConfig = configFro
   const app = new Hono();
 
   app.onError((err, c) => {
-    if (err instanceof HttpError) return c.json({error: err.message, code: err.code} satisfies ApiError, err.status);
+    if (err instanceof HttpError) return c.json({error: err.message, code: err.code, missingPermission: err.missingPermission} satisfies ApiError, err.status);
     if (c.req.raw.signal.aborted) return new Response(null, {status: 499}); // browser went away
     console.error(err);
     return c.json({error: 'Internal error.'} satisfies ApiError, 500);

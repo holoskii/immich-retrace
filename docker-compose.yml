@@ -1,3 +1,6 @@
+# Generic deployment: the viewer on http://127.0.0.1:8080 of this host. Settings come from .env
+# (copy .env.example). The API key in .env reads the whole library and the viewer has no login of
+# its own: publish it only behind a reverse proxy with authentication (README → Security).
 services:
   immich-viewer:
     build: .
@@ -5,12 +8,16 @@ services:
     container_name: immich-viewer
     env_file:
       - .env
-    # No host port: NPM reaches it as immich-viewer:8080 on self_hosting_network, behind Authelia.
-    # The API key in .env grants read access to the whole library, so nothing else may expose it.
-    networks:
-      - self_hosting_network
+    ports:
+      - 127.0.0.1:8080:8080
     restart: unless-stopped
+    # To reach Immich by its container name (IMMICH_URL=http://immich-server:2283), join Immich's
+    # network: uncomment below, with the name from `docker network ls` (usually immich_default).
+    # Or add this service to Immich's own docker-compose.yml instead (README → Quick start).
+#    networks:
+#      - immich
 
-networks:
-  self_hosting_network:
-    external: true
+# networks:
+#   immich:
+#     name: immich_default
+#     external: true

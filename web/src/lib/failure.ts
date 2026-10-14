@@ -9,9 +9,12 @@ export const PERMISSIONS = 'asset.read, asset.view and album.read';
 /** `retry`: what the Retry button does (a reload for an expired viewer session or an updated viewer). */
 export interface Explained { title: string; next: string; retry: 'load' | 'reload' }
 
-const INDEX: Record<string, Omit<Explained, 'retry'> & {retry?: Explained['retry']}> = {
+/** `detail`: the server's message goes first (it names the URL and the exact cause). */
+const INDEX: Record<string, Omit<Explained, 'retry'> & {retry?: Explained['retry']; detail?: boolean}> = {
   auth: {title: 'Immich rejected the API key', next: `Check IMMICH_API_KEY: it must be valid and have the permissions ${PERMISSIONS}. Reading the timeline needs asset.read.`},
   unavailable: {title: 'Immich isn’t reachable', next: 'It may still be starting: retry in a few seconds. If this persists, check IMMICH_URL and that Immich is running.'},
+  unreachable: {title: 'Can’t reach Immich', detail: true, next: 'Check IMMICH_URL (the address the viewer’s server uses, not the browser) and that Immich is running, then retry.'},
+  upstream: {title: 'Immich gave an unexpected answer', detail: true, next: 'Check that IMMICH_URL is Immich’s base URL and that its version is supported.'},
   'not-found': {title: 'Immich doesn’t know this endpoint', next: 'Check that IMMICH_URL points at Immich (without /api) and that its version is supported.'},
   invalid: {title: 'The viewer sent a request its backend refused', next: 'Reload the page; if this persists, the viewer and its backend may be out of sync.'},
   'signed-out': {title: 'Signed out', next: 'Your session with the viewer expired. Reload the page to sign in again.', retry: 'reload'},
@@ -23,7 +26,10 @@ const INDEX: Record<string, Omit<Explained, 'retry'> & {retry?: Explained['retry
 export function explainIndex(e: unknown): Explained {
   const code = e instanceof ApiFailure ? e.code : undefined;
   const row = code ? INDEX[code] : undefined;
-  if (row) return {retry: 'load', ...row};
+  if (row) {
+    const {detail, ...rest} = row;
+    return {retry: 'load', ...rest, ...(detail && e instanceof Error ? {next: `${e.message} ${row.next}`} : {})};
+  }
   return {title: 'Loading the library failed', next: `${e instanceof Error ? e.message : String(e)} Retry, or check the viewer’s logs.`, retry: 'load'};
 }
 
@@ -37,7 +43,7 @@ export function retryLibrary() {
 export function explainAlbums(e: unknown, what = 'Albums'): string {
   const code = e instanceof ApiFailure ? e.code : undefined;
   if (code === 'auth') return `${what} unavailable: add album.read to the API key`;
-  if (code === 'unavailable') return `${what} unavailable: Immich isn’t reachable right now`;
+  if (code === 'unavailable' || code === 'unreachable') return `${what} unavailable: Immich isn’t reachable right now`;
   if (code === 'not-found') return 'This album is no longer in Immich';
   if (code === 'signed-out') return 'Signed out: reload the page';
   if (code === 'network') return `${what} unavailable: can’t reach the viewer’s server`;
@@ -59,7 +65,7 @@ export function classifyMedia(status: number, code?: string, opaque = false): Me
   if (status >= 200 && status < 300) return 'decode';
   if (code === 'auth') return 'permission';
   if (status === 404 || code === 'not-found') return 'not-found';
-  if (status === 503 || code === 'unavailable') return 'unavailable';
+  if (status === 503 || code === 'unavailable' || code === 'unreachable') return 'unavailable';
   // The backend never answers 401/403 itself; those come from an auth proxy in front of it.
   if (status === 401 || status === 403) return 'signed-out';
   return 'other';

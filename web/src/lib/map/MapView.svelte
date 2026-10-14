@@ -8,7 +8,7 @@
   import 'maplibre-gl/dist/maplibre-gl.css';
   import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
   import type {FeatureCollection, Point} from 'geojson';
-  import type {ViewerConfig} from '../../../../shared/api.ts';
+  import {DEFAULT_MAP_STYLE_URL as DEFAULT_STYLE, type ViewerConfig} from '../../../../shared/api.ts';
   import type {LibraryIndex} from '../index/model.ts';
   import {library, phaseText} from '../index/store.svelte.ts';
   import {explainIndex, explainMedia, probeMedia, retryLibrary, type MediaFailure} from '../failure.ts';
@@ -28,7 +28,6 @@
 
   maplibregl.setWorkerUrl(workerUrl);
 
-  const DEFAULT_STYLE = 'https://tiles.immich.cloud/v1/style/dark.json';
   /** Route color by time: dim amber at the start of the selection → pale gold at the end. */
   const RAMP: [number, string][] = [[0, '#6E4519'], [0.5, '#C98128'], [1, '#F6D49A']];
   const EMPTY: FeatureCollection = {type: 'FeatureCollection', features: []};

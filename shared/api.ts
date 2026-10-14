@@ -4,10 +4,24 @@
 /** Bump when any shape below changes; the browser drops caches with another version. */
 export const SCHEMA_VERSION = 2;
 
-/** Error body for every non-2xx /api answer. `code: 'auth'` = Immich rejected the API key. */
+/**
+ * Error body for every non-2xx /api answer. `error` is a sentence fit to show as is. Codes:
+ * - `auth` (502): Immich rejected the API key: invalid/revoked, or missing a permission
+ *   (then `missingPermission` names it, e.g. `album.read`).
+ * - `unavailable` (503): Immich is starting behind a wake gate and wasn't up in time, the gate
+ *   refused to start it, or Immich didn't answer within the request timeout. Worth retrying.
+ * - `unreachable` (502): IMMICH_URL can't be reached at all (DNS, connection refused, TLS). A
+ *   configuration or network problem; retrying right away won't help.
+ * - `upstream` (502): Immich answered something unexpected (error status, redirect, non-JSON, or
+ *   not Immich at all, e.g. a wrong IMMICH_URL path).
+ * - `not-found` (404), `invalid` (400): about the request itself.
+ * A missing code means an internal error.
+ */
 export interface ApiError {
   error: string;
-  code?: 'auth' | 'unavailable' | 'not-found' | 'invalid';
+  code?: 'auth' | 'unavailable' | 'unreachable' | 'upstream' | 'not-found' | 'invalid';
+  /** With `auth`: the permission Immich said the key lacks, when it said so. */
+  missingPermission?: string;
 }
 
 /** GET /api/index — the month list; cheap, fetched first on every visit. */
@@ -68,6 +82,9 @@ export interface AlbumMembers {
   version: string;
   columns: AssetColumns;
 }
+
+/** Map style when MAP_STYLE_URL is unset: OpenFreeMap's free public instance (no key; attribution comes with the style). */
+export const DEFAULT_MAP_STYLE_URL = 'https://tiles.openfreemap.org/styles/dark';
 
 /** GET /api/config — deployment settings the browser needs. */
 export interface ViewerConfig {

@@ -130,10 +130,11 @@ describe('failures', () => {
     expect((await app.request(`/api/assets/${ID}/thumbnail`)).status).toBe(502);
   });
 
-  it('answers 503 and forgets readiness when the gate drops while Immich was up', async () => {
-    const {app, immich} = fakeImmich({respond: () => { throw new TypeError('fetch failed'); }});
+  it('answers 502 unreachable and forgets readiness when the connection drops while Immich was up', async () => {
+    const {app, immich} = fakeImmich({respond: () => { throw new TypeError('fetch failed', {cause: {code: 'ECONNRESET'}}); }});
     const res = await app.request(`/api/assets/${ID}/thumbnail`);
-    expect(res.status).toBe(503);
+    expect(res.status).toBe(502);
+    expect(await res.json()).toEqual({error: 'Cannot reach Immich at IMMICH_URL=http://gate:2284: connection reset.', code: 'unreachable'});
     expect(immich.state).toBe('unknown');
   });
 
@@ -156,7 +157,9 @@ describe('failures', () => {
         return Promise.resolve(String(u).endsWith('/ping') ? json({res: 'pong'}) : image());
       }) as typeof fetch});
     const app = createApp(immich);
-    expect((await app.request(`/api/assets/${ID}/thumbnail`)).status).toBe(503);
+    const res = await app.request(`/api/assets/${ID}/thumbnail`);
+    expect(res.status).toBe(503);
+    expect(((await res.json()) as {code: string}).code).toBe('unavailable');
     expect(immich.state).toBe('down');
     hang = false;
     expect((await app.request(`/api/assets/${ID}/thumbnail`)).status).toBe(200);

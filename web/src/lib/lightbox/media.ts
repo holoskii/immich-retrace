@@ -1,5 +1,5 @@
 // Media URLs for the viewer's own relay (server/app.ts) and the deployment config.
-import type {ViewerConfig} from '../../../../shared/api.ts';
+import {DEFAULT_MAP_STYLE_URL, type ViewerConfig} from '../../../../shared/api.ts';
 
 /**
  * Thumbnail/preview URL. With a thumbhash the URL is versioned (`c`, like Immich's own web UI) and the
@@ -19,13 +19,12 @@ export function immichLink(base: string | null | undefined, id: string) {
   return base ? `${base.replace(/\/+$/, '')}/photos/${id}` : null;
 }
 
-export const DEFAULT_STYLE = 'https://tiles.immich.cloud/v1/style/dark.json';
 let config: Promise<ViewerConfig> | undefined;
 
 /** GET /api/config, once per page; falls back to the default style and no Immich link. */
 export function getConfig(): Promise<ViewerConfig> {
   config ??= fetch('/api/config')
     .then(r => (r.ok ? (r.json() as Promise<ViewerConfig>) : Promise.reject(new Error(`config ${r.status}`))))
-    .catch(e => { console.warn('config:', e); config = undefined; return {mapStyleUrl: DEFAULT_STYLE, immichPublicUrl: null}; });
+    .catch(e => { console.warn('config:', e); config = undefined; return {mapStyleUrl: DEFAULT_MAP_STYLE_URL, immichPublicUrl: null}; });
   return config;
 }

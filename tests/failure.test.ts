@@ -17,6 +17,15 @@ describe('library failures', () => {
     expect(explainIndex(new ApiFailure(0, 'x', 'signed-out')).retry).toBe('reload');
     expect(explainIndex(new ApiFailure(0, 'x', 'outdated')).retry).toBe('reload');
   });
+  it('cannot-reach and unexpected answers lead with the server\'s own message', () => {
+    const msg = 'Cannot reach Immich at IMMICH_URL=http://immich:2283: connection refused.';
+    const e = explainIndex(new ApiFailure(502, msg, 'unreachable'));
+    expect(e.title).toBe('Can’t reach Immich');
+    expect(e.next.startsWith(msg + ' Check IMMICH_URL')).toBe(true);
+    expect(explainIndex(new ApiFailure(502, 'IMMICH_URL=… does not look like Immich.', 'upstream')).title).toBe('Immich gave an unexpected answer');
+    expect(explainAlbums(new ApiFailure(502, msg, 'unreachable'))).toBe('Albums unavailable: Immich isn’t reachable right now');
+    expect(classifyMedia(502, 'unreachable')).toBe('unavailable');
+  });
   it('falls back to the server\'s message for an unknown code or a plain error', () => {
     const e = explainIndex(new ApiFailure(502, 'Immich returned 500.', 'brand-new' as never));
     expect([e.title, e.next.startsWith('Immich returned 500.'), e.retry]).toEqual(['Loading the library failed', true, 'load']);

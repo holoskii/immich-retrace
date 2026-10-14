@@ -15,7 +15,7 @@ function fakeImmich() {
 }
 
 describe('configFromEnv', () => {
-  it('defaults to Immich\'s dark style and no public URL', () => {
+  it('defaults to OpenFreeMap\'s dark style and no public URL', () => {
     expect(configFromEnv({})).toEqual({mapStyleUrl: DEFAULT_MAP_STYLE_URL, immichPublicUrl: null});
     expect(configFromEnv({MAP_STYLE_URL: '  ', IMMICH_PUBLIC_URL: ''})).toEqual({mapStyleUrl: DEFAULT_MAP_STYLE_URL, immichPublicUrl: null});
   });
