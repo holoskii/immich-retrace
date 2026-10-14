@@ -12,5 +12,5 @@
     "skipLibCheck": true,
     "types": ["node", "svelte"]
   },
-  "include": ["server", "tests", "shared"]
+  "include": ["server", "tests", "shared", "demo"]
 }
