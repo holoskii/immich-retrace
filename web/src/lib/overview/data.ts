@@ -178,8 +178,8 @@ export const overviewHint = (bars: boolean) =>
 export const noSelectionHint = (bars: boolean, picker: string) =>
   `No selection: drag on the timeline${bars ? ', click an album bar,' : ''} or pick from ${picker}`;
 
-/** Display name: drops a leading `YYYY_` / `YYYY-MM_` folder prefix. */
-export const albumLabel = (name: string) => name.replace(/^\d{4}(-\d\d)?_/, '') || name;
+/** Display name: drops a leading `YYYY_` / `YYYY_MM_` (or legacy `YYYY-MM_`) folder prefix. */
+export const albumLabel = (name: string) => name.replace(/^\d{4}([-_]\d\d)?_/, '') || name;
 
 /**
  * Greedy lane packing over items sorted by x0; `x1` should already include the label width.

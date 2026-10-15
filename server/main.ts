@@ -12,7 +12,7 @@ function startup<T>(f: () => T): T {
     return f();
   } catch (err) {
     if (!(err instanceof ConfigError)) throw err;
-    console.error(`immich-viewer: ${err.message}. Usage: IMMICH_URL=http://immich-server:2283 IMMICH_API_KEY=… node server/main.ts (see README.md, Configuration).`);
+    console.error(`immich-retrace: ${err.message}. Usage: IMMICH_URL=http://immich-server:2283 IMMICH_API_KEY=… node server/main.ts (see README.md, Configuration).`);
     process.exit(1);
   }
 }
@@ -25,7 +25,7 @@ const app = createApp(immich, demo ? demo.viewer(settings.viewer) : settings.vie
 app.use('/*', staticFiles(settings.webDir));
 
 serve({fetch: app.fetch, port: settings.port}, () => {
-  console.log(`immich-viewer listening on :${settings.port}, Immich at IMMICH_URL=${settings.immichUrl}${demo ? ' (demo mode)' : ''}`);
+  console.log(`immich-retrace listening on :${settings.port}, Immich at IMMICH_URL=${settings.immichUrl}${demo ? ' (demo mode)' : ''}`);
   // Not awaited: a sleeping or unreachable Immich must not hold up serving the app.
   void logSelfCheck(immich);
 });

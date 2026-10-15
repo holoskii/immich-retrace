@@ -129,7 +129,7 @@ async function pool<T>(ac: AbortController, items: T[], n: number, fn: (x: T) =>
 /** Holds the library's Web Lock while fn runs, so two tabs never build/swap the same library at once. */
 function locked<T>(ctx: Ctx, lib: string, signal: AbortSignal, fn: () => Promise<T>): Promise<T> {
   const locks = ctx.locks ?? globalThis.navigator?.locks;
-  return locks ? locks.request(`immich-viewer:${lib}`, {signal}, fn) : fn();
+  return locks ? locks.request(`immich-retrace:${lib}`, {signal}, fn) : fn();
 }
 
 export interface RefreshHooks {

@@ -2,10 +2,10 @@
 # (copy .env.example). The API key in .env reads the whole library and the viewer has no login of
 # its own: publish it only behind a reverse proxy with authentication (README → Security).
 services:
-  immich-viewer:
+  immich-retrace:
     build: .
-    image: immich-viewer:latest
-    container_name: immich-viewer
+    image: immich-retrace:latest
+    container_name: immich-retrace
     env_file:
       - .env
     ports:

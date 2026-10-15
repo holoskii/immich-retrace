@@ -34,7 +34,7 @@ export function placeBubble(t: Box | null, b: {w: number; h: number}, vw: number
   return {x, y: Math.max(m, Math.min(vh - m - b.h, t.y + t.h / 2 - b.h / 2)), side: 'over' as const, arrow: null};
 }
 
-export const TOUR_KEY = 'immich-viewer.demo.tour-seen';
+export const TOUR_KEY = 'immich-retrace.demo.tour-seen';
 
 type Store = Pick<Storage, 'getItem' | 'setItem'>;
 /** localStorage, or null where touching it throws (blocked storage, sandboxed frames). */

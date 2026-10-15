@@ -1,4 +1,4 @@
-# immich-viewer
+# Retrace for Immich
 
 A read-only companion web app for [Immich](https://immich.app) that shows where you were and when,
 reconstructed from your photos alone (no GPS tracker needed):
@@ -41,18 +41,18 @@ network and reaches it as `immich-server`. Clone this repository next to your Im
 add a service:
 
 ```yaml
-  immich-viewer:
-    container_name: immich-viewer
-    build: ../immich-viewer          # where you cloned this repository
+  immich-retrace:
+    container_name: immich-retrace
+    build: ../immich-retrace          # where you cloned this repository
     environment:
       IMMICH_URL: http://immich-server:2283
-      IMMICH_API_KEY: ${IMMICH_VIEWER_API_KEY}   # put IMMICH_VIEWER_API_KEY=… in Immich's .env
+      IMMICH_API_KEY: ${IMMICH_RETRACE_API_KEY}   # put IMMICH_RETRACE_API_KEY=… in Immich's .env
     ports:
       - 127.0.0.1:8080:8080
     restart: unless-stopped
 ```
 
-Then `docker compose up -d --build immich-viewer`.
+Then `docker compose up -d --build immich-retrace`.
 
 ### Option B: on its own
 
@@ -147,7 +147,7 @@ redirects (which would carry the API key along).
 The server checks Immich once at startup and logs the outcome, e.g.:
 
 ```
-immich-viewer listening on :8080, Immich at IMMICH_URL=http://immich-server:2283
+immich-retrace listening on :8080, Immich at IMMICH_URL=http://immich-server:2283
 self-check: Immich 3.1.0 at IMMICH_URL=http://immich-server:2283, API key OK (asset.read, asset.view, album.read)
 ```
 

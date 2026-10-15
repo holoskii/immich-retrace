@@ -12,7 +12,7 @@ export interface KV {
 
 // One DB per schema at a fixed IDB version: tabs on another schema (upgrade or rollback) never
 // block on versionchange or wipe each other; they just ignore each other's DB.
-export const DB_NAME = `immich-viewer-v${SCHEMA_VERSION}`;
+export const DB_NAME = `immich-retrace-v${SCHEMA_VERSION}`;
 
 const done = <T>(r: IDBRequest<T>) => new Promise<T>((ok, fail) => { r.onsuccess = () => ok(r.result); r.onerror = () => fail(r.error); });
 const under = (p: string) => IDBKeyRange.bound(p, p + '\uffff');
@@ -54,11 +54,11 @@ function idbKV(db: IDBDatabase): KV {
   };
 }
 
-/** Best effort: deletes other schemas' DBs. Resolves after `ms` at the latest (a delete stays blocked while a tab holds that DB open). */
+/** Best effort: deletes other schemas' DBs (and the pre-rename immich-viewer-v* ones). Resolves after `ms` at the latest (a delete stays blocked while a tab holds that DB open). */
 export function dropOtherSchemas(idb: IDBFactory, keep = DB_NAME, ms = 2000): Promise<void> {
   const drop = (async () => {
     const dbs = await idb.databases?.() ?? [];
-    await Promise.all(dbs.filter(d => d.name && d.name !== keep && /^immich-viewer-v\d+$/.test(d.name))
+    await Promise.all(dbs.filter(d => d.name && d.name !== keep && /^immich-(?:retrace|viewer)-v\d+$/.test(d.name))
       .map(d => done(idb.deleteDatabase(d.name!)).catch(() => {})));
   })().catch(() => {});
   return Promise.race([drop, new Promise<void>(r => setTimeout(r, ms))]);

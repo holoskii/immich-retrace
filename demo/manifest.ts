@@ -76,6 +76,7 @@ export interface DemoManifest {
 
 /** RFC 4122-shaped UUID (version 5 bits) from a SHA-1 of the name, so ids survive rebuilds. */
 export function nameUuid(name: string): string {
+  // The pre-rename seed, kept so demo ids (and links to them) stay stable.
   const h = createHash('sha1').update('immich-viewer-demo\n' + name).digest();
   h[6] = (h[6] & 0x0f) | 0x50;
   h[8] = (h[8] & 0x3f) | 0x80;

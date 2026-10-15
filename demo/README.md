@@ -69,8 +69,8 @@ docker compose -f docker-compose.demo.yml down
 ```
 
 `DEMO_PORT` changes the host port, `DEMO_MEDIA_DIR` points at media elsewhere. The images are tagged
-`immich-viewer-demo` and `immich-viewer-demo-stub`, so building the demo never retags a real
-deployment's `immich-viewer:latest`. The app image's build context leaves `demo/` out
+`immich-retrace-demo` and `immich-retrace-demo-stub`, so building the demo never retags a real
+deployment's `immich-retrace:latest`. The app image's build context leaves `demo/` out
 (`.dockerignore`); the stub's has its own ignore file (`demo/Dockerfile.dockerignore`). For a public
 host, put a reverse proxy with TLS in front (the demo needs no login: sample data only).
 
@@ -82,7 +82,7 @@ Settings, read by `server/demo.ts` (a normal deployment never reads them):
 |---|---|---|
 | `DEMO` | off | `1` turns demo mode on. Anything but 1/0/true/false/yes/no/on/off stops the server. |
 | `DEMO_TRIP` | `San Sebastián to Huesca` | The trip a visit without a link opens: an album id, or part of its name (case and accents ignored). No match: the album with the most items. |
-| `REPO_URL` | `REPO_URL` in `shared/demo.ts` (a placeholder, `https://github.com/OWNER/immich-viewer`) | Where "Get it for your Immich" and the About panel link to. Set the constant once the repository is public. |
+| `REPO_URL` | `REPO_URL` in `shared/demo.ts` (a placeholder, `https://github.com/OWNER/immich-retrace`) | Where "Get it for your Immich" and the About panel link to. Set the constant once the repository is public. |
 | `DEMO_MANIFEST` | `demo/manifest.json` | The dataset manifest, for the credits. Read at startup; a missing file stops the server. |
 
 What changes (everything else is the normal app):
@@ -93,7 +93,7 @@ What changes (everything else is the normal app):
 - Banner: "Demo · sample data", the pitch line, the dataset credit with "About & credits", and
   "Get it for your Immich →".
 - Coach mark: three steps (timeline → time strip → photo card), once per visitor
-  (`localStorage` key `immich-viewer.demo.tour-seen`; blocked storage just shows it again). Esc,
+  (`localStorage` key `immich-retrace.demo.tour-seen`; blocked storage just shows it again). Esc,
   "Skip tour" or "Done" end it; the `?` overlay has "Show the 3-step tour again" and "About this demo".
 - About & credits panel: what the app is, MIT licence, the dataset credit and licences, what the
   demo changed, no endorsement, as-is; links to `/credits`, a page generated from the manifest with

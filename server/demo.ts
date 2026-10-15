@@ -88,7 +88,7 @@ export function demoCredits(assets: ManifestAsset[]): DemoCredits {
     + `<td>${esc(a.author)}</td><td><a href="${href(a.licenseUrl)}">${esc(a.license)}</a></td><td>${esc(a.takenAt.slice(0, 16).replace('T', ' '))}</td><td>${esc(a.modifications)}</td></tr>`).join('\n');
   const html = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="dark">
-<title>Demo credits · Immich Viewer</title>
+<title>Demo credits · Retrace for Immich</title>
 <style>
 body { margin: 0; padding: 24px 28px 40px; background: #101215; color: #B5B9C0; font: 14px/1.55 system-ui, sans-serif; }
 h1 { color: #E9E6DF; font: 500 22px system-ui, sans-serif; margin: 0 0 12px; }

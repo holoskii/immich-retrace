@@ -234,7 +234,7 @@ describe('refreshIndex', () => {
     const request = vi.fn((_name: string, _opts: LockOptions, fn: () => Promise<unknown>) => fn());
     await refreshIndex(ctx(await freshKV(), fakeApi(), {locks: {request} as unknown as LockManager}));
     expect(request).toHaveBeenCalledOnce();
-    expect(request.mock.calls[0][0]).toBe('immich-viewer:lib-a');
+    expect(request.mock.calls[0][0]).toBe('immich-retrace:lib-a');
   });
 
   it('a second tab waiting on the lock takes the snapshot the first one wrote', async () => {
@@ -304,8 +304,8 @@ describe('refreshIndex', () => {
 describe('cache storage', () => {
   it('uses a DB per schema and deletes other schemas\' DBs', async () => {
     const idb = new IDBFactory();
-    expect(DB_NAME).toBe(`immich-viewer-v${SCHEMA_VERSION}`);
-    for (const name of ['immich-viewer-v1', 'immich-viewer-v99', 'someone-else']) await libraryCache(await openKV(idb, name)).setLast('x');
+    expect(DB_NAME).toBe(`immich-retrace-v${SCHEMA_VERSION}`);
+    for (const name of ['immich-retrace-v1', 'immich-retrace-v99', 'immich-viewer-v4', 'someone-else']) await libraryCache(await openKV(idb, name)).setLast('x');
     await libraryCache(await openKV(idb)).setLast('lib-a');
     await dropOtherSchemas(idb);
     expect((await idb.databases()).map(d => d.name).sort()).toEqual([DB_NAME, 'someone-else']);

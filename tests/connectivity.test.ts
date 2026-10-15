@@ -61,7 +61,7 @@ describe('IMMICH_URL', () => {
     expect(r.status).toBe(1);
     expect(r.stdout).toBe('');
     expect(r.stderr.trim().split('\n')).toHaveLength(1);
-    expect(r.stderr).toMatch(/^immich-viewer: IMMICH_URL must start with http.*Usage: .*README/);
+    expect(r.stderr).toMatch(/^immich-retrace: IMMICH_URL must start with http.*Usage: .*README/);
   });
 });
 

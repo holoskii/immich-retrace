@@ -192,6 +192,7 @@ describe('album rail', () => {
     expect(railAlbums(albums).map(a => a.id)).toEqual(['long', 'a', 'trip']);
   });
   it('labels drop folder prefixes', () => {
+    expect(albumLabel('2025_09_Kyrgyzstan')).toBe('Kyrgyzstan');
     expect(albumLabel('2025-09_Kyrgyzstan')).toBe('Kyrgyzstan');
     expect(albumLabel('2023_Camera')).toBe('Camera');
     expect(albumLabel('Paris')).toBe('Paris');

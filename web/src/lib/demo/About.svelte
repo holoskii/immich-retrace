@@ -22,7 +22,7 @@
       <button class="x" onclick={() => dlg?.close()} aria-label="Close">Esc</button>
     </header>
 
-    <p><b>Immich Viewer</b> is a companion app for <a href="https://immich.app" target="_blank" rel="noopener noreferrer">Immich</a>,
+    <p><b>Retrace for Immich</b> is a companion app for <a href="https://immich.app" target="_blank" rel="noopener noreferrer">Immich</a>,
       the self-hosted photo library. It retraces where you went from the locations stored in your photos: a timeline of
       all your years, the route on a map that follows the time you scrub to, and the photos along it. Nothing but Immich
       is needed (no GPS tracker), and it only ever reads from Immich. Not affiliated with the Immich project.</p>

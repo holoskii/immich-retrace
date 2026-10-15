@@ -5,7 +5,7 @@ import {createHash} from 'node:crypto';
 import {existsSync, mkdirSync, readFileSync, renameSync, writeFileSync} from 'node:fs';
 import {dirname, join} from 'node:path';
 
-export const USER_AGENT = 'immich-viewer-demo-builder/1.0 (https://github.com/REPLACE-ME/immich-viewer; demo dataset, contact via repo issues)';
+export const USER_AGENT = 'immich-retrace-demo-builder/1.0 (https://github.com/REPLACE-ME/immich-retrace; demo dataset, contact via repo issues)';
 const API = 'https://commons.wikimedia.org/w/api.php';
 const API_INTERVAL_MS = 1000;
 const MEDIA_INTERVAL_MS = 250;
