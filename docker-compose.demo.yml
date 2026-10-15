@@ -14,6 +14,8 @@ x-hardening: &hardening
   cap_drop: [ALL]
   security_opt: ["no-new-privileges:true"]
   pids_limit: 64
+  ulimits:
+    nofile: 4096
   mem_limit: 256m
   cpus: 1.0
   logging:
