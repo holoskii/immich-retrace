@@ -3,11 +3,11 @@
 A read-only companion web app for [Immich](https://immich.app) that shows where you were and when,
 reconstructed from your photos alone (no GPS tracker needed):
 
-- an all-years **density overview** of the library: pick a period by dragging, or pick an album;
-- a **map** of the selected period: the route through the photo locations, coloured by time, with
+- an all-years density overview of the library: pick a period by dragging, or pick an album;
+- a map of the selected period: the route through the photo locations, coloured by time, with
   clustered photo pins and a time scrubber that a follow camera tracks smoothly (or press Play to step
   through the photos);
-- a **lightbox** with photos and videos, stepping through the selection in time order.
+- a lightbox with photos and videos, stepping through the selection in time order.
 
 It reads Immich through its API with one API key and never writes to it. Desktop browsers only for now.
 
@@ -16,10 +16,10 @@ works with.
 
 ## Requirements
 
-- **Immich v3.x** (developed and tested against v3.1.0). The viewer uses Immich's timeline endpoints,
+- Immich v3.x (developed and tested against v3.1.0). The viewer uses Immich's timeline endpoints,
   which Immich marks as internal, so a new Immich major version can break it. The server logs a
   warning at startup when it finds a major version other than 3.
-- An Immich **API key** with exactly these permissions (Immich → Account Settings → API Keys → New API Key):
+- An Immich API key with exactly these permissions (Immich → Account Settings → API Keys → New API Key):
 
   | Permission | Used for |
   |---|---|
@@ -34,7 +34,9 @@ works with.
 
 The viewer's server has to reach Immich; the browser only talks to the viewer.
 
-**Option A: next to Immich, in Immich's own `docker-compose.yml`.** The viewer then shares Immich's
+### Option A: next to Immich
+
+Add the viewer to Immich's own `docker-compose.yml`. It then shares Immich's
 network and reaches it as `immich-server`. Clone this repository next to your Immich directory and
 add a service:
 
@@ -52,7 +54,9 @@ add a service:
 
 Then `docker compose up -d --build immich-viewer`.
 
-**Option B: on its own**, with this repository's [docker-compose.yml](docker-compose.yml):
+### Option B: on its own
+
+Use this repository's [docker-compose.yml](docker-compose.yml):
 
 ```bash
 cp .env.example .env    # set IMMICH_URL and IMMICH_API_KEY
@@ -63,11 +67,13 @@ With no shared network, `IMMICH_URL` is an address the container can reach, e.g.
 (`http://192.168.1.10:2283`); or uncomment the `networks` block in the compose file to join Immich's
 network and keep `http://immich-server:2283`.
 
-Either way the viewer listens on **http://127.0.0.1:8080** of the Docker host only. Before opening it
+Either way the viewer listens on http://127.0.0.1:8080 of the Docker host only. Before opening it
 up to anything else, read [Security](#security). The first log lines tell you whether it can reach
 Immich (see [Troubleshooting](#troubleshooting)).
 
-**Without Docker** (Node.js 24 runs the server's TypeScript directly):
+### Without Docker
+
+Node.js 24 runs the server's TypeScript directly:
 
 ```bash
 npm ci && npm run build

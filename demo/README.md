@@ -36,7 +36,7 @@ check the licences again when you do. Both modes send a descriptive User-Agent; 
 URL in `commons.ts` (`USER_AGENT`) before running it from a public repo.
 
 What the builder does:
-- It keeps uploads since 2023 that have an EXIF `DateTimeOriginal` and a **CC BY 4.0 or CC BY-SA 4.0** licence (checked per file). Captures before 2023 are dropped.
+- It keeps uploads since 2023 that have an EXIF `DateTimeOriginal` and a CC BY 4.0 or CC BY-SA 4.0 licence (checked per file). Captures before 2023 are dropped.
 - Offset = EXIF local time − GPS UTC time (`GPSDateStamp` + `GPSTimeStamp`), rounded to 15 minutes. If a file has no usable GPS stamp, the offset comes from the nearest photo in time (within 36 h), else from the CET/CEST rule. Each file records which source was used (`offsetSource`).
 - City and country come from the nearest entry in a small place table in `config.ts`. Nothing is sent to a geocoder.
 - The thumbhash is computed locally from the 250 px copy (ffmpeg decode + the `thumbhash` package).
@@ -86,35 +86,35 @@ Settings, read by `server/demo.ts` (a normal deployment never reads them):
 | `DEMO_MANIFEST` | `demo/manifest.json` | The dataset manifest, for the credits. Read at startup; a missing file stops the server. |
 
 What changes (everything else is the normal app):
-- **Landing.** A visit without a query opens `DEMO_TRIP` like a click on its album bar, with the
+- Landing: a visit without a query opens `DEMO_TRIP` like a click on its album bar, with the
   cursor on a landscape photo with GPS near the middle of the trip, Follow on, route, strip and photo
   card visible (`web/src/lib/demo/landing.ts`). Nothing plays until Play is pressed. A link with a
   query opens what it says.
-- **Banner**: "Demo · sample data", the pitch line, the dataset credit with "About & credits", and
+- Banner: "Demo · sample data", the pitch line, the dataset credit with "About & credits", and
   "Get it for your Immich →".
-- **Coach mark**: three steps (timeline → time strip → photo card), once per visitor
+- Coach mark: three steps (timeline → time strip → photo card), once per visitor
   (`localStorage` key `immich-viewer.demo.tour-seen`; blocked storage just shows it again). Esc,
   "Skip tour" or "Done" end it; the `?` overlay has "Show the 3-step tour again" and "About this demo".
-- **About & credits** panel: what the app is, MIT licence, the dataset credit and licences, what the
+- About & credits panel: what the app is, MIT licence, the dataset credit and licences, what the
   demo changed, no endorsement, as-is; links to `/credits`, a page generated from the manifest with
   every file, its licence, Commons page and modifications.
-- **Lightbox**: per-photo credit (author, licence link, Commons file page, the asset's
+- Lightbox: per-photo credit (author, licence link, Commons file page, the asset's
   `modifications`) from `GET /api/demo/credits/:id`.
-- **Hidden**: the ⋯ menu (clear cache, refresh state), month counters while loading, "Open in
+- Hidden: the ⋯ menu (clear cache, refresh state), month counters while loading, "Open in
   Immich" (`immichPublicUrl` is forced to null).
 - The album picker reads "Try another trip ▾". Play is a normal feature of the time strip (also
   `Space`); the demo only makes its button prominent.
 
-Code layout, so the demo can move out later: demo-only UI is in `web/src/lib/demo/` and loads as its
+Code layout (kept separate so the demo can move out): demo-only UI is in `web/src/lib/demo/` and loads as its
 own chunk only when `/api/config` says `demo` (`App.svelte`); it plugs into the app through
 `web/src/lib/hooks.svelte.ts` (the `?` overlay's extra buttons, a lightbox panel slot, the album
 picker's label) and `selection.albumRequest` (open an album as a bar click would). The server side is
 `server/demo.ts`, wired by one call in `server/main.ts`; its types are in `shared/demo.ts`.
 
-First load, measured against the stub (headless Chromium, cold profile, 1440×900): the overview is
-painted in 0.24 s unthrottled and 1.09 s at 5 Mbit/s (40 ms latency); the landing's photo card is up
-in 1.35 s and 4.5 s (MapLibre's chunk and worker plus OpenFreeMap's style and tiles). The index is
-33 month requests, ~250 kB of JSON in all, so the "compact demo index" from the plan wasn't needed.
+First load against the stub (headless Chromium, cold profile, 1440×900): the overview paints in
+0.24 s unthrottled and 1.09 s at 5 Mbit/s (40 ms latency); the landing's photo card is up in 1.35 s
+and 4.5 s (MapLibre's chunk and worker plus OpenFreeMap's style and tiles). The index is 33 month
+requests, about 250 kB of JSON.
 
 The stub accepts any non-empty API key. It implements only what `server/immich.ts` and
 `server/adapter.ts` call, with Immich v3.1.0 shapes:
@@ -137,7 +137,9 @@ Albums (curated trips): Pamplona & Basque Country (Aug 2024); San Sebastián to 
 with clips); Sète, Lyon & Dole (May 2025, the Lyon days have no GPS); Alsace & Freiburg (May 2025);
 Lisbon & Queluz (Jan 2026).
 
-**Shared album.** The stub has two users: the key's user (`Demo`) and `Alex (demo friend)`. The 39
+### Shared album
+
+The stub has two users: the key's user (`Demo`) and `Alex (demo friend)`. The 39
 Núria & Queralbs photos (26–27 Jul 2024, `owner: "friend"` in the manifest) belong to Alex. They are
 left out of the key user's `timeline/buckets`/`bucket`, and they appear only in Alex's album
 "Pyrenees, 14–27 Jul 2024". That album is listed under `shared=true` (`shared: true`,
@@ -149,7 +151,7 @@ ownership is a demo fiction: every file is by the same Commons author.
 ## Licence
 
 **The demo data is not under the viewer's code licence.** It is licensed per file, by
-**Kent Wang via Wikimedia Commons**, under either
+Kent Wang via Wikimedia Commons, under either
 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) or
 [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). `manifest.json` and `CREDITS.md`
 give the licence of each file. Every item in the dataset is modified: photos are resized copies,
@@ -163,16 +165,16 @@ files and is offered under the same per-file terms.
 
 ### Attribution requirements for the hosted demo
 
-These follow CC BY 4.0 / CC BY-SA 4.0 §3; demo mode (above) does all of them (docs/oss-plan.md item E11):
+These follow CC BY 4.0 / CC BY-SA 4.0 §3. Demo mode (above) covers all of them.
 
-- **Per asset, wherever it is shown large** (lightbox info panel): "Photo: Kent Wang, CC BY 4.0
+- Per asset, wherever it is shown large (lightbox info panel): "Photo: Kent Wang, CC BY 4.0
   (or CC BY-SA 4.0, linked to the licence), via Wikimedia Commons" with a link to the file page
   (`commonsUrl`), plus the asset's modification note (for example "GPS removed" or "Video derived
   from photo").
-- **A credits/about page** linking `CREDITS.md`, or a rendering of it, with the author, both
+- A credits or about page linking `CREDITS.md`, or a rendering of it, with the author, both
   licences, the Commons links, and the no-warranty disclaimer.
-- **A demo banner** saying the data is public CC content and that some metadata was changed for
+- A demo banner saying the data is public CC content and that some metadata was changed for
   the demo.
-- **Do not imply endorsement** by Kent Wang or the Wikimedia Foundation.
-- **Share-alike:** if derivatives of CC BY-SA files are redistributed (for example in a
+- No implied endorsement by Kent Wang or the Wikimedia Foundation.
+- Share-alike: if derivatives of CC BY-SA files are redistributed (for example in a
   downloadable demo bundle), they must stay under CC BY-SA 4.0.
