@@ -4,7 +4,18 @@ Everything that is still open. Decisions and architecture are in [AGENTS.md](../
 
 ## Next
 
-1. Hand-test main on the live site (deployed 2026-10-13), then the demo (`docker-compose.demo.yml`).
+1. Hand-test main on the live site and the demo (both deployed 2026-10-14), in particular what the
+   last fix round changed:
+   - same-second photos (bursts): a pin click on the second of two overlapping pins, then ←/→ and
+     closing the lightbox keep that photo; Play and ←/→ visit each one
+   - a cluster with a pin drawn over it: hover and click act on the pin
+   - a real album whose last day has photos (especially after local midnight): bar and range
+     include them
+   - a trip far from UTC: brush, hover label, readout and URL agree on the day
+   - double click clears on both timelines, a single click never does (Firefox, Safari too)
+   - old `?from=…&to=…` links (now read as local days) still land on the right photos
+   - at low zoom with two world copies, pan across the date line: the card sits by the marker
+   Then the final pedantic UI review.
 2. Delete the NPM backups once the live site is fine: `/data/database.sqlite.bak-viewer-20261013`,
    `/data/39.conf.bak-20261013` (inside the NPM container).
 3. Verify shared albums end to end (see below).
@@ -12,7 +23,12 @@ Everything that is still open. Decisions and architecture are in [AGENTS.md](../
    - Set the repo URL: `REPO_URL` in `shared/demo.ts`, `USER_AGENT` in `demo/commons.ts`, the
      clone line in the README.
    - Decide where the demo lives in the repo (see below). It is hosted as `immich-viewer-demo`
-     (AGENTS.md → Deployment); the NPM proxy host is the owner's to add.
+     (AGENTS.md → Deployment), still behind Authelia until the hardening below is done.
+   - Launch video: a draft is in `brag-output/` (gitignored; `brag.mp4`, `share-copy.txt`,
+     `brag-plan.md`). After the UI review, re-film and render with `brag-output/work/make.sh`
+     (needs the demo viewer, `BASE` in `capture.py`). Fill the link slot (`outro.url` in
+     `work/config.json`, `[LINK]` in `share-copy.txt`) and listen to the audio. Known weak spots:
+     the trip-pick shot is dark after the click, the hook has no basemap.
 5. Authelia: require one factor on the LAN. Guests on the home network get in through the global
    `*.example.com` LAN bypass. Add a `viewer.example.com` rule with `one_factor` for
    `<LAN subnet>` before the bypass (rules are first-match).
