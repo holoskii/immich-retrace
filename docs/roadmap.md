@@ -16,26 +16,9 @@ Everything that is still open. Decisions and architecture are in [AGENTS.md](../
    - old `?from=…&to=…` links (now read as local days) still land on the right photos
    - at low zoom with two world copies, pan across the date line: the card sits by the marker
    Then the final pedantic UI review.
-2. Finish the rename to Retrace for Immich (`immich-retrace`; code and docs renamed 2026-10-14, the
-   live containers still run as `immich-viewer` and `immich-viewer-demo`). Do it in one go, since
-   Caddy forwards to container names:
-   - `git mv projects/immich-viewer projects/immich-retrace`, fix the path in the root AGENTS.md,
-     recreate `.venv-shots` (a venv hardcodes its path) and check `brag-output/work/` for old paths.
-   - `docker rm -f immich-viewer immich-viewer-demo immich-viewer-demo-stub-1`, then redeploy both
-     (AGENTS.md → Deployment). The compose project names change with the directory, so the old
-     containers would otherwise linger.
-   - `apps/caddy/Caddyfile`: change the `viewer` and `immich-viewer-demo` upstreams to `immich-retrace:8080`
-     and `immich-retrace-demo:8080`, then `docker exec caddy caddy reload --config /etc/caddy/Caddyfile` and
-     `apps/caddy/verify.sh`.
-   - Optional: new hostnames (e.g. `retrace.example.com`, `retrace-demo.example.com`) with Pi-hole
-     records, the Authelia rule, and the old names redirecting; update AGENTS.md and
-     demo-hardening.md.
-   - Remove the old images `immich-viewer:latest`, `immich-viewer-demo:latest`,
-     `immich-viewer-demo-stub:latest`.
-   - Browsers drop the old `immich-viewer-v*` IndexedDB cache on first load and rebuild the index.
-3. ~~Delete the NPM backups~~: moot, NPM is retired and its volumes go at decommission (`docs/TODO.md` → Caddy migration).
-4. Verify shared albums end to end (see below).
-5. Release:
+2. ~~Delete the NPM backups~~: moot, NPM is retired and its volumes go at decommission (`docs/TODO.md` → Caddy migration).
+3. Verify shared albums end to end (see below).
+4. Release:
    - Set the repo URL: `REPO_URL` in `shared/demo.ts`, `USER_AGENT` in `demo/commons.ts`, the
      clone line in the README.
    - Decide where the demo lives in the repo (see below). It is hosted as `immich-retrace-demo`
@@ -46,9 +29,6 @@ Everything that is still open. Decisions and architecture are in [AGENTS.md](../
      `work/config.json`, `[LINK]` in `share-copy.txt`) and listen to the audio. Known weak spots:
      the trip-pick shot is dark after the click, the hook has no basemap.
    - Where to announce it, in what order: [outreach.md](outreach.md).
-6. Authelia: require one factor on the LAN. Guests on the home network get in through the global
-   `*.example.com` LAN bypass. Add a `viewer.example.com` rule with `one_factor` for
-   `<LAN subnet>` before the bypass (rules are first-match).
 
 ## Demo: proper public deployment
 
