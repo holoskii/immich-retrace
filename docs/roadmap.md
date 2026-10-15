@@ -32,19 +32,9 @@ Everything that is still open. Decisions and architecture are in [AGENTS.md](../
 
 ## Demo: proper public deployment
 
-The demo is live behind Caddy with Authelia (NPM was replaced 2026-10-14). Going public is spec'd in
-`apps/caddy/AGENTS.md` → Going public, which translates the limits below into Caddy. Drop Authelia only after the
-minimum bar in [demo-hardening.md](demo-hardening.md). Items:
-
-- Rate limiting per IP (Caddy `rate_limit`, see `apps/caddy/AGENTS.md` → Going public),
-  especially on `/api/*` thumbnails, previews and video, which stream from the stub's 950 MB of media.
-- Hardening: security headers (CSP, `X-Content-Type-Options`, `Referrer-Policy`), read-only root
-  filesystem and dropped capabilities for both containers, memory/CPU limits, stub reachable only
-  from the viewer (already true).
-- Monitoring: visit counts and top paths (Caddy's JSON access log or a tiny analytics endpoint), uptime
-  check with an alert, disk/bandwidth watch.
-- Abuse: cap concurrent video streams; fail2ban or similar on Caddy's access log for scrapers.
-- CDN or cache in front of media if traffic grows.
+Hardening is done and tested; the demo is still behind Authelia until the switch-over in
+[demo-hardening.md](demo-hardening.md). Left: a visits/top-paths view (Caddy's JSON log), and a CDN
+if traffic outgrows the 50 Mbit ceiling.
 
 ## Open decision: where the demo lives
 
