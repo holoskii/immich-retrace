@@ -1,0 +1,553 @@
+<title>Concept B · Filmstrip (v2)</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+.mk-concept-b{
+  --b-page:#efece6; --b-bg:#f4f2ed; --b-deck:#fbfaf7; --b-ink:#1d1f23; --b-ink2:#50555d; --b-muted:#7d828a;
+  --b-line:#dcd8cf; --b-amber:#c47a1c; --b-amberHi:#e39a3a; --b-amberLo:#f3d7ae; --b-gps:#1f9e73; --b-nogps:#a3a8b0;
+  --b-land:#ece8de; --b-land2:#e0dacb; --b-water:#b6d1e2; --b-road:#ffffff; --b-road2:#f0c27e; --b-relief:#d6cfbd;
+  --b-pill:rgba(255,255,255,.9); --b-bezel:#1d1f23; --b-chip:#ebe7df; --b-video:#2f86c0; --b-dim:rgba(29,31,35,.07);
+  --b-route0:#f0b968; --b-route1:#b5640f; --b-text-on-amber:#1b1408; --b-shadow:0 6px 24px rgba(0,0,0,.14);
+  --b-card:#ffffff; --b-coach:#1d1f23; --b-coachInk:#f6f3ee;
+  color-scheme:light;
+  background:var(--b-page); color:var(--b-ink);
+  font:14px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  padding:24px 16px 40px; box-sizing:border-box;
+}
+@media (prefers-color-scheme:dark){
+  .mk-concept-b{
+    --b-page:#0b0c0e; --b-bg:#101215; --b-deck:#16191d; --b-ink:#E9E6DF; --b-ink2:#BCC0C7; --b-muted:#959BA4;
+    --b-line:#2A2F37; --b-amber:#E8A64E; --b-amberHi:#f3c07a; --b-amberLo:#4a3a22; --b-gps:#4ADBA8; --b-nogps:#6B7079;
+    --b-land:#1a1d21; --b-land2:#22262b; --b-water:#0e1822; --b-road:#30353d; --b-road2:#5a4527; --b-relief:#262a30;
+    --b-pill:rgba(22,25,29,.9); --b-bezel:#000; --b-chip:#23272d; --b-video:#3A9BD6; --b-dim:rgba(255,255,255,.07);
+    --b-route0:#f6cf8e; --b-route1:#c98128; --b-shadow:0 6px 24px rgba(0,0,0,.5);
+    --b-card:#1c2025; --b-coach:#f2efe9; --b-coachInk:#16191d;
+    color-scheme:dark;
+  }
+}
+.mk-concept-b *{box-sizing:border-box}
+.mk-concept-b code{font:12px ui-monospace,Menlo,Consolas,monospace}
+.mk-concept-b .b-head{max-width:1700px;margin:0 auto 20px}
+.mk-concept-b .b-head h1{font-size:22px;margin:0 0 6px;letter-spacing:-.01em}
+.mk-concept-b .b-head p{margin:0;color:var(--b-ink2);max-width:900px}
+.mk-concept-b .b-row{display:flex;flex-wrap:wrap;gap:36px 20px;justify-content:center;max-width:1760px;margin:0 auto}
+.mk-concept-b .b-col{width:412px;max-width:100%}
+.mk-concept-b .b-cap{font-weight:600;margin:0 0 10px;font-size:15px}
+.mk-concept-b .b-cap span{color:var(--b-muted);font-weight:400}
+.mk-concept-b .b-scroll{overflow-x:auto}
+.mk-concept-b .b-phone{position:relative;width:390px;height:844px;border-radius:52px;overflow:hidden;background:var(--b-bg);
+  box-shadow:0 0 0 10px var(--b-bezel),0 0 0 11px var(--b-line),var(--b-shadow);margin:11px}
+.mk-concept-b .b-map{position:absolute;left:0;top:0;width:390px;height:540px;display:block}
+/* status bar */
+.mk-concept-b .b-status{position:absolute;left:0;right:0;top:0;height:47px;display:flex;justify-content:space-between;align-items:center;padding:6px 30px 0 34px;font-weight:600;font-size:15px;z-index:3}
+.mk-concept-b .b-status i{display:inline-block;width:25px;height:12px;border:1.5px solid currentColor;border-radius:4px;position:relative;opacity:.9}
+.mk-concept-b .b-status i::after{content:"";position:absolute;inset:1.5px 5px 1.5px 1.5px;background:currentColor;border-radius:1.5px}
+.mk-concept-b .b-island{position:absolute;left:50%;top:11px;width:122px;height:35px;margin-left:-61px;border-radius:20px;background:#000;z-index:4}
+.mk-concept-b .b-home{position:absolute;left:50%;bottom:8px;width:136px;height:5px;margin-left:-68px;border-radius:3px;background:var(--b-ink);opacity:.85;z-index:5}
+/* header pill */
+.mk-concept-b .b-hdr{position:absolute;left:12px;right:12px;top:52px;height:56px;border-radius:18px;background:var(--b-pill);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);display:flex;align-items:center;gap:6px;padding:0 6px;box-shadow:0 2px 10px rgba(0,0,0,.12);z-index:3}
+.mk-concept-b .b-hdr .b-t{flex:1;min-width:0;padding-left:2px}
+.mk-concept-b .b-hdr .b-t b{display:block;font-size:15px;line-height:1.25}
+.mk-concept-b .b-hdr .b-t small{display:block;font-size:12.5px;color:var(--b-ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+.mk-concept-b .b-ib{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;color:var(--b-ink);background:var(--b-dim);font-size:18px;flex:none}
+.mk-concept-b .b-ib svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+/* map pills */
+.mk-concept-b .b-mpill{position:absolute;right:12px;top:458px;display:flex;border-radius:14px;overflow:hidden;background:var(--b-pill);box-shadow:0 2px 10px rgba(0,0,0,.14);font-size:13px;font-weight:600;z-index:2}
+.mk-concept-b .b-mpill span{padding:0 14px;line-height:44px}
+.mk-concept-b .b-mpill .b-on{background:var(--b-amber);color:var(--b-text-on-amber)}
+/* deck */
+.mk-concept-b .b-deck{position:absolute;left:0;right:0;bottom:0;height:326px;background:var(--b-deck);border-radius:22px 22px 0 0;box-shadow:0 -4px 18px rgba(0,0,0,.12);z-index:2}
+.mk-concept-b .b-grab{position:absolute;left:50%;top:6px;width:40px;height:4px;margin-left:-20px;border-radius:2px;background:var(--b-line)}
+/* docked card (from D) */
+.mk-concept-b .b-card{position:absolute;left:12px;right:12px;top:16px;height:64px;display:flex;align-items:center;gap:10px;padding:4px 4px 4px 4px;border-radius:16px;background:var(--b-card);box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.mk-concept-b .b-card .b-thumb{width:56px;height:56px;border-radius:12px;flex:none}
+.mk-concept-b .b-card .b-ct{flex:1;min-width:0}
+.mk-concept-b .b-card .b-ct b{display:block;font:700 16px/1.15 ui-monospace,Menlo,Consolas,monospace;letter-spacing:-.01em}
+.mk-concept-b .b-card .b-ct span{display:block;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mk-concept-b .b-card .b-ct small{display:block;font-size:12px;color:var(--b-ink2);white-space:nowrap;font-variant-numeric:tabular-nums}
+.mk-concept-b .b-card .b-go{height:44px;padding:0 12px;border-radius:12px;background:var(--b-chip);display:flex;align-items:center;font-weight:600;font-size:13px;flex:none}
+/* strip */
+.mk-concept-b .b-strip{position:absolute;left:0;right:0;top:88px;height:132px;overflow:hidden}
+.mk-concept-b .b-dens{position:absolute;left:16px;right:16px;top:0;height:12px}
+.mk-concept-b .b-dens svg{width:100%;height:100%;display:block}
+.mk-concept-b .b-day{position:absolute;left:0;top:16px;z-index:5;padding:0 8px 0 14px;height:18px;font:700 11px/18px system-ui,sans-serif;letter-spacing:.06em;color:var(--b-ink);background:linear-gradient(90deg,var(--b-deck) 75%,transparent);text-transform:uppercase}
+.mk-concept-b .b-day.b-r{left:auto;right:0;padding:0 14px 0 14px;background:linear-gradient(270deg,var(--b-deck) 75%,transparent);color:var(--b-muted)}
+.mk-concept-b .b-ph{position:absolute;left:194px;top:34px;bottom:0;width:2px;background:var(--b-amber);z-index:4;border-radius:1px}
+.mk-concept-b .b-ph::before{content:"";position:absolute;left:-6px;top:-2px;border:7px solid transparent;border-top:8px solid var(--b-amber);border-bottom:0}
+.mk-concept-b .b-phl{position:absolute;left:195px;top:15px;transform:translateX(-50%);background:var(--b-amber);color:var(--b-text-on-amber);font:700 12px/18px ui-monospace,Menlo,Consolas,monospace;padding:0 8px;border-radius:9px;z-index:5;white-space:nowrap}
+.mk-concept-b .b-fr{position:absolute;top:38px;width:72px;height:92px;border-radius:9px;overflow:hidden}
+.mk-concept-b .b-fr.b-cur{box-shadow:0 0 0 2px var(--b-deck),0 0 0 4px var(--b-amber)}
+.mk-concept-b .b-fr .b-ng,.mk-concept-b .b-tile .b-ng{position:absolute;right:4px;top:4px;width:13px;height:13px;border-radius:3px;background:var(--b-nogps);box-shadow:0 0 0 1.5px rgba(0,0,0,.3)}
+.mk-concept-b .b-fr .b-vd,.mk-concept-b .b-tile .b-vd{position:absolute;left:4px;bottom:4px;font:600 11px/15px system-ui,sans-serif;color:#fff;background:rgba(0,0,0,.6);padding:0 4px;border-radius:4px}
+.mk-concept-b .b-cut{position:absolute;top:38px;height:92px;border-radius:9px;border:1.5px dashed var(--b-line);display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;font:600 11.5px/1.3 ui-monospace,Menlo,Consolas,monospace;color:var(--b-ink2)}
+.mk-concept-b .b-cut em{font-style:normal;color:var(--b-ink2);font-weight:500}
+.mk-concept-b .b-clip{position:absolute;top:38px;height:92px;border-radius:10px;overflow:hidden;display:grid;gap:2px;background:var(--b-line)}
+.mk-concept-b .b-clip>div{min-width:0}
+.mk-concept-b .b-clip .b-cl{position:absolute;left:0;right:0;bottom:0;padding:16px 7px 5px;background:linear-gradient(transparent,rgba(0,0,0,.75));color:#fff;font-size:12px;line-height:1.2}
+.mk-concept-b .b-clip .b-cl b{display:block;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mk-concept-b .b-clip.b-cur{outline:3px solid var(--b-amber);outline-offset:2px}
+.mk-concept-b .b-clip .b-num{position:absolute;left:6px;top:6px;width:22px;height:22px;border-radius:50%;background:var(--b-amber);color:var(--b-text-on-amber);font:700 12px/22px system-ui,sans-serif;text-align:center}
+/* transport */
+.mk-concept-b .b-tr{position:absolute;left:12px;right:12px;top:230px;height:56px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.mk-concept-b .b-lvl{height:44px;border-radius:14px;background:var(--b-chip);display:flex;align-items:center;padding:0 4px;gap:2px;font-size:13px;font-weight:600}
+.mk-concept-b .b-lvl span{padding:0 9px;line-height:36px;border-radius:10px;color:var(--b-ink2)}
+.mk-concept-b .b-lvl .b-on{background:var(--b-deck);color:var(--b-ink);box-shadow:0 1px 4px rgba(0,0,0,.15)}
+.mk-concept-b .b-tp{display:flex;align-items:center;gap:6px}
+.mk-concept-b .b-tb{width:44px;height:44px;border-radius:14px;background:var(--b-chip);display:grid;place-items:center;color:var(--b-ink);flex:none}
+.mk-concept-b .b-tb svg{width:18px;height:18px;fill:currentColor}
+.mk-concept-b .b-tb.b-g svg{fill:none;stroke:currentColor;stroke-width:2}
+.mk-concept-b .b-play{width:56px;height:56px;border-radius:50%;background:var(--b-amber);color:var(--b-text-on-amber)}
+.mk-concept-b .b-play svg{width:22px;height:22px}
+.mk-concept-b .b-pulse{box-shadow:0 0 0 6px color-mix(in srgb,var(--b-amber) 28%,transparent),0 0 0 12px color-mix(in srgb,var(--b-amber) 12%,transparent)}
+/* coach */
+.mk-concept-b .b-coach{position:absolute;z-index:7;background:var(--b-coach);color:var(--b-coachInk);font-size:13px;font-weight:600;padding:8px 12px;border-radius:12px;box-shadow:0 6px 18px rgba(0,0,0,.25);white-space:nowrap}
+.mk-concept-b .b-coach small{display:block;font-weight:400;font-size:12px;opacity:.8}
+.mk-concept-b .b-coach::after{content:"";position:absolute;left:50%;bottom:-7px;margin-left:-7px;border:7px solid transparent;border-top-color:var(--b-coach);border-bottom:0}
+/* callouts */
+.mk-concept-b .b-co{position:absolute;width:24px;height:24px;margin:-12px 0 0 -12px;border-radius:50%;background:#e2552d;color:#fff;font:700 12.5px/24px system-ui,sans-serif;text-align:center;box-shadow:0 0 0 2.5px #fff,0 2px 8px rgba(0,0,0,.35);z-index:9}
+.mk-concept-b .b-leg{list-style:none;margin:18px 4px 0;padding:0;display:grid;gap:7px;font-size:13px;color:var(--b-ink2)}
+.mk-concept-b .b-leg li{display:grid;grid-template-columns:24px 1fr;gap:8px;align-items:start}
+.mk-concept-b .b-leg li::before{content:attr(data-n);width:20px;height:20px;border-radius:50%;background:#e2552d;color:#fff;font:700 11px/20px system-ui,sans-serif;text-align:center;margin-top:1px}
+.mk-concept-b .b-leg b{color:var(--b-ink);font-weight:600}
+.mk-concept-b .b-finger{position:absolute;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;background:rgba(226,85,45,.18);border:2px solid rgba(226,85,45,.7);z-index:8}
+/* map svg classes */
+.mk-concept-b .m-sea{fill:var(--b-water)}
+.mk-concept-b .m-land{fill:var(--b-land)}
+.mk-concept-b .m-relief{fill:var(--b-relief)}
+.mk-concept-b .m-border{fill:none;stroke:var(--b-muted);stroke-width:1;stroke-dasharray:4 3;opacity:.6}
+.mk-concept-b .m-road{fill:none;stroke:var(--b-road);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.mk-concept-b .m-road2{fill:none;stroke:var(--b-road2);stroke-width:4;stroke-linecap:round;stroke-linejoin:round}
+.mk-concept-b .m-river{fill:none;stroke:var(--b-water);stroke-width:3;stroke-linecap:round}
+.mk-concept-b .m-lab{fill:var(--b-ink2);font:500 11px system-ui,sans-serif;letter-spacing:.04em}
+.mk-concept-b .m-lab2{fill:var(--b-ink);font:600 12px system-ui,sans-serif}
+.mk-concept-b .m-halo{paint-order:stroke;stroke:var(--b-land);stroke-width:3px;stroke-linejoin:round}
+.mk-concept-b .m-route{fill:none;stroke-width:4;stroke-linecap:round;stroke-linejoin:round}
+.mk-concept-b .m-gap{fill:none;stroke:var(--b-amber);stroke-width:2;stroke-dasharray:5 5;opacity:.85}
+.mk-concept-b .m-pin{fill:var(--b-amber);stroke:var(--b-deck);stroke-width:1.5}
+.mk-concept-b .m-pinv{fill:var(--b-video);stroke:var(--b-deck);stroke-width:1.5}
+.mk-concept-b .m-stop{fill:var(--b-deck);stroke:var(--b-amber);stroke-width:2.5}
+.mk-concept-b .m-stopon{fill:var(--b-amber);stroke:var(--b-deck);stroke-width:2.5}
+.mk-concept-b .m-stopt{fill:var(--b-ink);font:700 12px system-ui,sans-serif;text-anchor:middle}
+.mk-concept-b .m-stopton{fill:var(--b-text-on-amber);font:700 12px system-ui,sans-serif;text-anchor:middle}
+.mk-concept-b .m-clu{fill:var(--b-amberLo);stroke:var(--b-amber);stroke-width:1.5}
+.mk-concept-b .m-mark{fill:#fff;stroke:var(--b-amber);stroke-width:3}
+.mk-concept-b .m-pulse{fill:var(--b-amber);opacity:.22}
+.mk-concept-b .m-bld{fill:var(--b-muted);opacity:.55}
+/* density */
+.mk-concept-b .d-gps{fill:var(--b-gps)}
+.mk-concept-b .d-ng{fill:var(--b-nogps)}
+.mk-concept-b .d-win{fill:var(--b-amber);fill-opacity:.14;stroke:var(--b-amber);stroke-width:1.5}
+.mk-concept-b .d-base{stroke:var(--b-line);stroke-width:1}
+/* photo fills (no images) */
+.mk-concept-b .p-mtn{background:linear-gradient(155deg,transparent 58%,#4a5f42 58%),linear-gradient(24deg,transparent 52%,#6f8660 52%),linear-gradient(#86b2d4,#dbe7ee 62%)}
+.mk-concept-b .p-mtn2{background:linear-gradient(200deg,transparent 50%,#58704c 50%),linear-gradient(35deg,transparent 60%,#8b9a6b 60%),linear-gradient(#a8c6dd,#eef0e6)}
+.mk-concept-b .p-res{background:linear-gradient(transparent 52%,#3c7d9c 52% 70%,#5b7c4f 70%),linear-gradient(170deg,transparent 40%,#6f8a5d 40%),linear-gradient(#9dc0db,#e2ecf0)}
+.mk-concept-b .p-stone{background:repeating-linear-gradient(90deg,transparent 0 13px,rgba(60,35,20,.35) 13px 16px),linear-gradient(#a9c8e0 0 26%,#c9965f 26% 78%,#7a573a 78%)}
+.mk-concept-b .p-mon{background:radial-gradient(ellipse 30% 22% at 50% 54%,#3a2a1e 60%,transparent 62%),linear-gradient(#bfa278 0 0) 50% 60%/60% 34% no-repeat,linear-gradient(170deg,#7d8b5f 0 30%,transparent 30%),linear-gradient(#93b7d3,#e3dccb)}
+.mk-concept-b .p-eve{background:linear-gradient(160deg,transparent 62%,#2f2b3a 62%),linear-gradient(#f0a457,#a85f68 55%,#463a55)}
+.mk-concept-b .p-int{background:radial-gradient(circle at 50% 38%,#f1dcae,#9a6a3d 55%,#3d2a1b)}
+.mk-concept-b .p-for{background:radial-gradient(circle at 30% 70%,#2f5a35 30%,transparent 31%),radial-gradient(circle at 70% 62%,#3d6e3f 28%,transparent 29%),linear-gradient(#cfe2c3,#5d8a52)}
+.mk-concept-b .p-sea{background:linear-gradient(transparent 55%,#e6d3a7 55%),linear-gradient(#7fb0d6 0 40%,#2f7aa3 40%)}
+.mk-concept-b .p-cath{background:linear-gradient(#000 0 0) 50% 18%/14% 48% no-repeat,linear-gradient(#d9b98a 0 0) 50% 100%/70% 58% no-repeat,linear-gradient(#8fbbe0,#e9eef0)}
+.mk-concept-b .p-city{background:repeating-linear-gradient(90deg,#c9b79a 0 10px,#b19c7d 10px 12px) 0 100%/100% 55% no-repeat,linear-gradient(#9ec3df,#f1e6d2)}
+.mk-concept-b .p-vine{background:repeating-linear-gradient(170deg,#6f8a3f 0 5px,#c9b47a 5px 11px) 0 100%/100% 56% no-repeat,linear-gradient(#a6c8e2,#f2e7cf)}
+/* screen 1: library */
+.mk-concept-b .l-top{position:absolute;left:12px;right:12px;top:52px;height:48px;display:flex;align-items:center;gap:10px}
+.mk-concept-b .l-top b{font-size:20px;letter-spacing:-.01em}
+.mk-concept-b .l-search{position:absolute;left:16px;right:16px;top:106px;height:44px;border-radius:12px;background:var(--b-chip);display:flex;align-items:center;gap:8px;padding:0 12px;color:var(--b-muted);font-size:14px}
+.mk-concept-b .l-search svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round}
+.mk-concept-b .l-h{position:absolute;left:16px;right:16px;font:700 12px/16px system-ui,sans-serif;letter-spacing:.07em;text-transform:uppercase;color:var(--b-ink2);display:flex;justify-content:space-between}
+.mk-concept-b .l-h span{text-transform:none;letter-spacing:0;font-weight:500;color:var(--b-muted)}
+.mk-concept-b .l-card{position:absolute;left:12px;right:12px;height:68px;border-radius:16px;background:var(--b-card);display:flex;align-items:center;gap:12px;padding:6px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.mk-concept-b .l-card.b-cur{box-shadow:0 0 0 2px var(--b-amber)}
+.mk-concept-b .l-mos{width:56px;height:56px;border-radius:12px;overflow:hidden;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:2px;flex:none;background:var(--b-line)}
+.mk-concept-b .l-card .l-t{flex:1;min-width:0}
+.mk-concept-b .l-card .l-t b{display:block;font-size:15px;line-height:1.25}
+.mk-concept-b .l-card .l-t span{display:block;font-size:12.5px;color:var(--b-ink2);font-variant-numeric:tabular-nums}
+.mk-concept-b .l-card .l-t small{display:block;font-size:12px;color:var(--b-muted)}
+.mk-concept-b .l-badge{font-size:11.5px;font-weight:700;color:var(--b-text-on-amber);background:var(--b-amber);border-radius:8px;padding:2px 7px;margin-right:6px;flex:none}
+.mk-concept-b .l-yr{position:absolute;left:16px;right:16px;display:grid;grid-template-columns:repeat(6,1fr);gap:4px}
+.mk-concept-b .l-m{position:relative;height:44px;border-radius:10px;background:var(--b-card);overflow:hidden;font:600 11.5px/1 system-ui,sans-serif;color:var(--b-ink2);padding:6px 0 0 7px}
+.mk-concept-b .l-m i{position:absolute;left:0;right:0;bottom:0;background:var(--b-gps);opacity:.35}
+.mk-concept-b .l-m u{position:absolute;left:5px;right:5px;bottom:4px;height:4px;border-radius:2px;background:var(--b-route1);text-decoration:none}
+.mk-concept-b .l-m.b-sel{box-shadow:inset 0 0 0 2px var(--b-amber);color:var(--b-ink)}
+.mk-concept-b .l-m.b-rng{background:var(--b-amberLo)}
+.mk-concept-b .l-ylab{position:absolute;left:16px;font:700 14px system-ui,sans-serif}
+.mk-concept-b .l-ylab span{font-weight:500;font-size:12.5px;color:var(--b-muted);margin-left:6px}
+.mk-concept-b .l-row{position:absolute;left:12px;right:12px;height:52px;border-radius:14px;background:var(--b-card);display:flex;align-items:center;gap:8px;padding:0 6px 0 14px;font-size:14px}
+.mk-concept-b .l-row b{flex:1;font-weight:600}
+.mk-concept-b .l-row .l-in{height:40px;border-radius:10px;background:var(--b-chip);padding:0 10px;display:flex;align-items:center;font-size:13px;font-variant-numeric:tabular-nums}
+/* screen 4: grid */
+.mk-concept-b .g-top{position:absolute;left:0;right:0;top:47px;height:62px;display:flex;align-items:center;gap:8px;padding:0 12px;background:var(--b-bg);z-index:3}
+.mk-concept-b .g-top .b-t{flex:1;min-width:0}
+.mk-concept-b .g-top .b-t b{display:block;font-size:15px}
+.mk-concept-b .g-top .b-t small{display:block;font-size:12.5px;color:var(--b-ink2)}
+.mk-concept-b .g-day{position:absolute;left:0;right:0;height:46px;padding:5px 16px 0;background:var(--b-bg);z-index:2;border-bottom:1px solid var(--b-line)}
+.mk-concept-b .g-day b{display:block;font-size:12px;letter-spacing:.07em;text-transform:uppercase}
+.mk-concept-b .g-day span{display:block;font-size:12.5px;color:var(--b-ink2)}
+.mk-concept-b .g-stop{position:absolute;left:16px;right:60px;height:30px;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--b-ink2)}
+.mk-concept-b .g-stop b{color:var(--b-ink)}
+.mk-concept-b .g-stop .b-n{width:20px;height:20px;border-radius:50%;background:var(--b-amber);color:var(--b-text-on-amber);font:700 11.5px/20px system-ui,sans-serif;text-align:center;flex:none}
+.mk-concept-b .g-cut{position:absolute;left:16px;right:60px;height:28px;display:flex;align-items:center;gap:8px;font:600 12px ui-monospace,Menlo,Consolas,monospace;color:var(--b-ink2)}
+.mk-concept-b .g-cut::before,.mk-concept-b .g-cut::after{content:"";flex:1;border-top:1.5px dashed var(--b-line)}
+.mk-concept-b .g-grid{position:absolute;left:16px;width:314px;display:grid;grid-template-columns:repeat(4,1fr);gap:3px}
+.mk-concept-b .b-tile{position:relative;aspect-ratio:1;border-radius:4px;overflow:hidden}
+.mk-concept-b .b-tile.b-cur{box-shadow:inset 0 0 0 3px var(--b-amber)}
+.mk-concept-b .g-rail{position:absolute;right:16px;top:150px;width:28px;height:560px;border-radius:14px;background:var(--b-dim)}
+.mk-concept-b .g-thumb{position:absolute;right:16px;top:330px;height:32px;padding:0 10px;border-radius:16px;background:var(--b-amber);color:var(--b-text-on-amber);font:700 12px/32px system-ui,sans-serif;white-space:nowrap;z-index:4}
+.mk-concept-b .g-back{position:absolute;left:50%;bottom:36px;transform:translateX(-50%);height:48px;padding:0 6px 0 6px;border-radius:24px;background:var(--b-coach);color:var(--b-coachInk);display:flex;align-items:center;gap:10px;font-size:13.5px;font-weight:600;box-shadow:0 6px 20px rgba(0,0,0,.3);z-index:5;white-space:nowrap}
+.mk-concept-b .g-back i{width:36px;height:36px;border-radius:50%;flex:none}
+.mk-concept-b .g-back span{padding-right:12px}
+.mk-concept-b .b-foot{max-width:1200px;margin:28px auto 0;color:var(--b-ink2);font-size:13px;display:grid;gap:8px}
+.mk-concept-b .b-foot b{color:var(--b-ink)}
+.mk-concept-b .b-foot p{margin:0}
+</style>
+
+<div class="mk-concept-b">
+  <div class="b-head">
+    <h1>Concept B v2 · Horizontal filmstrip</h1>
+    <p>One main screen: the map above, a deck in the thumb zone with the docked photo card and a fixed-playhead filmstrip with two levels (Stops, Photos). Picking a trip or a period is a separate Library screen; finding one photo is a grid one swipe up. Revised after the UX and engineering critiques: no ruler, no Years level, no In/Out marks, no tap-to-centre, no peek. Demo data: San Sebastián to Huesca, 6–10 Sep 2024, 194 items.</p>
+  </div>
+
+  <div class="b-row">
+
+  <!-- ============ SCREEN 1: LIBRARY ============ -->
+  <div class="b-col">
+    <p class="b-cap">1 · Library <span>pick a trip or a period</span></p>
+    <div class="b-scroll"><div class="b-phone">
+      <div class="b-island"></div>
+      <div class="b-status"><span>9:41</span><i></i></div>
+      <div class="l-top">
+        <div class="b-ib">‹</div>
+        <b>Library</b>
+      </div>
+      <div class="l-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>Trips, places, years</div>
+
+      <div class="l-h" style="top:164px">Trips <span>newest first · 6</span></div>
+      <div class="l-card" style="top:186px">
+        <div class="l-mos"><div class="p-vine"></div><div class="p-city"></div><div class="p-sea"></div><div class="p-cath"></div></div>
+        <div class="l-t"><b>Sète, Lyon &amp; Dole</b><span>3–9 May 2025 · 142 · 5 stops</span><small>Trip: 280 km from home</small></div>
+      </div>
+      <div class="l-card b-cur" style="top:260px">
+        <div class="l-mos"><div class="p-sea"></div><div class="p-res"></div><div class="p-stone"></div><div class="p-mon"></div></div>
+        <div class="l-t"><b>San Sebastián to Huesca</b><span>6–10 Sep 2024 · 194 · 4 stops</span><small>Trip: 98% with location</small></div>
+        <span class="l-badge">Open</span>
+      </div>
+      <div class="l-card" style="top:334px">
+        <div class="l-mos"><div class="p-city"></div><div class="p-eve"></div><div class="p-int"></div><div class="p-for"></div></div>
+        <div class="l-t"><b>Pamplona &amp; Basque Country</b><span>2–12 Aug 2024 · 211 · 7 stops</span><small>Trip: 11 days away</small></div>
+      </div>
+      <div class="l-card" style="top:408px">
+        <div class="l-mos"><div class="p-mtn"></div><div class="p-mtn2"></div><div class="p-res"></div><div class="p-for"></div></div>
+        <div class="l-t"><b>Pyrenees</b><span>14–27 Jul 2024 · 318 · 9 stops</span><small>Trip: 31% without location</small></div>
+      </div>
+
+      <div class="l-h" style="top:494px">Months <span>tap = month · hold + drag = range</span></div>
+      <div class="l-ylab" style="top:518px">2024<span>1,064 items</span></div>
+      <div class="l-yr" style="top:542px">
+        <div class="l-m">Jan<i style="height:46%"></i><u></u></div>
+        <div class="l-m">Feb<i style="height:8%"></i></div>
+        <div class="l-m">Mar<i style="height:14%"></i></div>
+        <div class="l-m">Apr<i style="height:6%"></i></div>
+        <div class="l-m">May<i style="height:12%"></i></div>
+        <div class="l-m">Jun<i style="height:18%"></i></div>
+        <div class="l-m b-rng">Jul<i style="height:62%"></i><u></u></div>
+        <div class="l-m b-rng">Aug<i style="height:70%"></i><u></u></div>
+        <div class="l-m b-sel">Sep<i style="height:54%"></i><u></u></div>
+        <div class="l-m">Oct<i style="height:10%"></i></div>
+        <div class="l-m">Nov<i style="height:4%"></i></div>
+        <div class="l-m">Dec<i style="height:16%"></i></div>
+      </div>
+      <div class="l-row" style="top:650px"><b>2023</b><span style="color:var(--b-muted);font-size:13px">612 items · 2 trips</span><span style="font-size:18px;padding:0 10px">›</span></div>
+      <div class="l-row" style="top:710px"><b>Custom dates</b><span class="l-in">6 Sep 2024</span><span style="color:var(--b-muted)">→</span><span class="l-in">10 Sep</span></div>
+      <div class="b-finger" style="left:96px;top:620px"></div>
+      <div class="b-finger" style="left:226px;top:620px;opacity:.5"></div>
+      <div class="b-home"></div>
+      <span class="b-co" style="left:40px;top:76px">1</span>
+      <span class="b-co" style="left:362px;top:128px">2</span>
+      <span class="b-co" style="left:372px;top:262px">3</span>
+      <span class="b-co" style="left:362px;top:428px">4</span>
+      <span class="b-co" style="left:248px;top:530px">5</span>
+      <span class="b-co" style="left:362px;top:672px">6</span>
+      <span class="b-co" style="left:150px;top:736px">7</span>
+    </div></div>
+    <ol class="b-leg">
+      <li data-n="1"><span><b>A pushed screen, not a strip level.</b> Opened by tapping the header pill on the map; ‹ or the edge-swipe Back returns with nothing changed.</span></li>
+      <li data-n="2"><span><b>Search</b> over album names and years (album list) and places (<code>city</code>/<code>country</code> from the index), ranked by photo count. A place result opens the selection containing its first match.</span></li>
+      <li data-n="3"><span><b>Trip cards</b> (from <code>trips.ts</code>): name, dates, count, stops, and the trip verdict as visible text (it was hover-only on desktop). The list opens scrolled to the current trip. Cards render from <code>/api/albums</code> first; verdict and stop count fill in when the index lands.</span></li>
+      <li data-n="4"><span><b>Tap a card</b> → map screen at <b>Stops</b> level, Play pulsing once. Pushes one history entry (<code>?album=…</code>).</span></li>
+      <li data-n="5"><span><b>Month cells</b> (from C): 6 × 2 per year, 44 px tall, density fill and a bar under months with a trip. Tap = that month (<code>?from=&amp;to=</code>). Hold and drag across cells = a month range (highlighted while dragging).</span></li>
+      <li data-n="6"><span><b>Older years</b> collapse to one row each; tap to expand. 20 years scroll vertically, so nothing has to pack into lanes.</span></li>
+      <li data-n="7"><span><b>Custom dates</b>: two native date fields for day precision. This replaces the In/Out marks and the brush.</span></li>
+    </ol>
+  </div>
+
+  <!-- ============ SCREEN 2: STOPS LEVEL ============ -->
+  <div class="b-col">
+    <p class="b-cap">2 · Map, Stops level <span>a trip just opened</span></p>
+    <div class="b-scroll"><div class="b-phone">
+      <div class="b-island"></div>
+      <div class="b-status"><span>9:41</span><i></i></div>
+      <svg class="b-map" viewBox="0 0 390 540" aria-hidden="true">
+        <defs><linearGradient id="mkb-rt2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--b-route0)"/><stop offset="1" stop-color="var(--b-route1)"/></linearGradient></defs>
+        <rect class="m-land" width="390" height="540"/>
+        <path class="m-sea" d="M0 0 L150 0 L140 70 L132 109 L95 132 L55 144 L20 138 L0 142 Z"/>
+        <path class="m-relief" d="M150 80 L190 50 L215 90 L240 45 L270 86 L300 50 L330 90 L360 58 L390 80 L390 210 L340 240 L300 225 L250 245 L200 220 L170 190 Z" opacity=".7"/>
+        <path class="m-relief" d="M230 130 L250 105 L268 132 Z M300 140 L322 112 L340 142 Z M190 140 L206 118 L222 144 Z" opacity=".9"/>
+        <path class="m-border" d="M132 109 L170 130 L210 140 L260 148 L320 152 L390 160"/>
+        <path class="m-road2" d="M55 151 L80 200 L100 250 L116 286"/>
+        <path class="m-road2" d="M116 286 L160 320 L197 333 L250 342 L312 346"/>
+        <path class="m-road2" d="M312 346 L322 390 L330 410 L337 438"/>
+        <path class="m-road" d="M116 286 L120 350 L140 440"/>
+        <path class="m-river" d="M110 380 L170 350 L230 355 L300 365 L390 360"/>
+        <path class="m-sea" d="M172 342 Q195 332 220 340 Q200 350 172 342 Z"/>
+        <text class="m-lab m-halo" x="122" y="282">Pamplona</text>
+        <text class="m-lab m-halo" x="318" y="340">Jaca</text>
+        <text class="m-lab" x="20" y="80" style="fill:var(--b-muted)">Bay of Biscay</text>
+        <text class="m-lab m-halo" x="250" y="180">PYRENEES</text>
+        <path class="m-gap" d="M60 156 Q120 240 192 330"/>
+        <path class="m-route" stroke="url(#mkb-rt2)" d="M55 151 L62 148 L58 140 L50 146"/>
+        <path class="m-route" stroke="var(--b-amber)" stroke-width="6" d="M190 335 L200 329 L214 336 L238 342 L262 350 L286 358"/>
+        <path class="m-route" stroke="var(--b-route1)" d="M286 358 L292 352 L296 364"/>
+        <path class="m-gap" d="M296 364 L314 395 L333 422"/>
+        <path class="m-route" stroke="var(--b-route1)" d="M333 422 L340 430 L346 424 L338 418"/>
+        <circle class="m-pulse" cx="200" cy="333" r="24"/>
+        <circle class="m-stop" cx="55" cy="151" r="13"/><text class="m-stopt" x="55" y="155">1</text>
+        <circle class="m-stopon" cx="200" cy="333" r="14"/><text class="m-stopton" x="200" y="337">2</text>
+        <circle class="m-stop" cx="292" cy="358" r="13"/><text class="m-stopt" x="292" y="362">3</text>
+        <circle class="m-stop" cx="338" cy="426" r="13"/><text class="m-stopt" x="338" y="430">4</text>
+        <text class="m-lab2 m-halo" x="74" y="155">San Sebastián</text>
+        <text class="m-lab2 m-halo" x="150" y="316">Yesa</text>
+        <text class="m-lab2 m-halo" x="150" y="390">Santa Cruz de la Serós</text>
+        <text class="m-lab2 m-halo" x="270" y="446">Huesca</text>
+      </svg>
+      <div class="b-hdr">
+        <div class="b-ib"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg></div>
+        <div class="b-t"><b>San Sebastián to Huesca</b><small>6–10 Sep 2024 · 194 · 4 stops</small></div>
+        <div class="b-ib"><svg viewBox="0 0 24 24"><path d="M12 3v12M7 8l5-5 5 5M5 14v6h14v-6"/></svg></div>
+      </div>
+      <div class="b-mpill"><span>Follow</span><span class="b-on">Fit</span></div>
+      <div class="b-deck">
+        <div class="b-grab"></div>
+        <div class="b-card">
+          <div class="b-thumb p-res"></div>
+          <div class="b-ct"><b>12:20 <small style="display:inline;font:600 12.5px system-ui,sans-serif">Mon 9 Sep</small></b><span>Yesa</span><small>Stop 2 / 4 · 43 photos · 4 no GPS</small></div>
+          <div class="b-go">Open</div>
+        </div>
+        <div class="b-strip">
+          <div class="b-dens"><svg viewBox="0 0 358 12" preserveAspectRatio="none">
+            <line class="d-base" x1="0" y1="11.5" x2="358" y2="11.5"/>
+            <rect class="d-gps" x="20" y="8" width="5" height="4"/><rect class="d-gps" x="28" y="6" width="5" height="6"/>
+            <rect class="d-gps" x="92" y="5" width="5" height="7"/><rect class="d-gps" x="100" y="4" width="5" height="8"/>
+            <rect class="d-gps" x="226" y="2" width="5" height="10"/><rect class="d-gps" x="233" y="1" width="5" height="11"/><rect class="d-ng" x="240" y="8" width="5" height="4"/>
+            <rect class="d-gps" x="250" y="2" width="5" height="10"/><rect class="d-gps" x="257" y="1" width="5" height="11"/>
+            <rect class="d-gps" x="300" y="2" width="5" height="10"/><rect class="d-gps" x="307" y="0" width="5" height="12"/><rect class="d-gps" x="314" y="2" width="5" height="10"/>
+            <rect class="d-win" x="160" y="0.5" width="120" height="11" rx="3"/>
+          </svg></div>
+          <div class="b-day">Mon 9 Sep</div>
+          <div class="b-phl">12:20</div>
+          <div class="b-clip" style="left:-48px;width:96px;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr">
+            <div class="p-sea"></div><div class="p-stone"></div><div class="p-cath"></div><div class="p-eve"></div>
+            <div class="b-cl"><b>San Sebastián</b>14</div>
+          </div>
+          <div class="b-cut" style="left:52px;width:64px">+1 d<br>22 h<em>98 km</em></div>
+          <div class="b-clip b-cur" style="left:120px;width:150px;grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr 1fr">
+            <div class="p-res"></div><div class="p-mtn"></div><div class="p-for"></div><div class="p-mtn2"></div><div class="p-stone"></div><div class="p-res"></div>
+            <span class="b-num">2</span>
+            <div class="b-cl"><b>Yesa</b>43 · 11:05–13:30</div>
+          </div>
+          <div class="b-cut" style="left:274px;width:64px">+1 h<br>20 m<em>24 km</em></div>
+          <div class="b-clip" style="left:342px;width:150px;grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr 1fr">
+            <div class="p-mon"></div><div class="p-mtn"></div><div class="p-stone"></div><div class="p-int"></div><div class="p-mtn2"></div><div class="p-for"></div>
+            <span class="b-num">3</span>
+            <div class="b-cl"><b>Santa Cruz de la Serós</b>45</div>
+          </div>
+          <div class="b-ph"></div>
+        </div>
+        <div class="b-tr">
+          <div class="b-lvl"><span class="b-on">Stops</span><span>Photos</span></div>
+          <div class="b-tp">
+            <div class="b-tb"><svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></div>
+            <div class="b-tb b-play b-pulse"><svg viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg></div>
+            <div class="b-tb"><svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg></div>
+          </div>
+          <div class="b-tb b-g"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/></svg></div>
+        </div>
+      </div>
+      <div class="b-home"></div>
+      <span class="b-co" style="left:300px;top:110px">1</span>
+      <span class="b-co" style="left:232px;top:316px">2</span>
+      <span class="b-co" style="left:250px;top:478px">3</span>
+      <span class="b-co" style="left:300px;top:567px">4</span>
+      <span class="b-co" style="left:116px;top:631px">5</span>
+      <span class="b-co" style="left:262px;top:660px">6</span>
+      <span class="b-co" style="left:84px;top:740px">7</span>
+      <span class="b-co" style="left:60px;top:818px">8</span>
+      <span class="b-co" style="left:196px;top:818px">9</span>
+      <span class="b-co" style="left:356px;top:818px">10</span>
+    </div></div>
+    <ol class="b-leg">
+      <li data-n="1"><span><b>Header pill</b>: trip name on its own line, never truncated by controls. Tap it = Library. ✕ moved to Library (pick "All photos"); Share on the right.</span></li>
+      <li data-n="2"><span><b>Numbered stop pins.</b> Tap a pin = the film animates to that stop. Tap a cluster = fixed-height visits sheet with "Zoom to these days" (<code>zoomInto</code>, from D).</span></li>
+      <li data-n="3"><span><b>Fit</b> frames the whole route (Stops default); <b>Follow</b> takes over at Photos. Camera insets = header pill on top, deck on the bottom (from C).</span></li>
+      <li data-n="4"><span><b>Docked card</b> (from D): the photo under the playhead in text and a 56 px thumb. Tap card or Open = lightbox.</span></li>
+      <li data-n="5"><span><b>Sticky day label</b> at the film's left edge (from A's day chapters); the density band above is the old ruler folded into 12 px, display only.</span></li>
+      <li data-n="6"><span><b>Clip = stop</b> (&gt;3 h or &gt;15 km apart). <b>Tap any clip</b> = Photos level at its first photo. Fling = next stop (detent at each cut).</span></li>
+      <li data-n="7"><span><b>Cuts</b>: time and distance between stops, dashed on the map.</span></li>
+      <li data-n="8"><span><b>Level toggle</b>, one 44 px control (pinch on the film does the same). Two levels only.</span></li>
+      <li data-n="9"><span><b>⏮ ▶ ⏭</b>: previous stop, Play, next stop. Play pulses once after opening a trip.</span></li>
+      <li data-n="10"><span><b>Grid</b> (or swipe up on the deck) opens screen 4. Swipe down on the deck collapses it to film + transport.</span></li>
+    </ol>
+  </div>
+
+  <!-- ============ SCREEN 3: PHOTOS LEVEL ============ -->
+  <div class="b-col">
+    <p class="b-cap">3 · Map, Photos level <span>demo landing, scrub</span></p>
+    <div class="b-scroll"><div class="b-phone">
+      <div class="b-island"></div>
+      <div class="b-status"><span>9:41</span><i></i></div>
+      <svg class="b-map" viewBox="0 0 390 540" aria-hidden="true">
+        <defs><linearGradient id="mkb-rt3" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="var(--b-route0)"/><stop offset="1" stop-color="var(--b-route1)"/></linearGradient></defs>
+        <rect class="m-land" width="390" height="540"/>
+        <path class="m-relief" d="M0 0 L390 0 L390 170 L330 140 L290 170 L250 130 L200 160 L150 120 L100 155 L40 130 L0 150 Z" opacity=".9"/>
+        <path class="m-relief" d="M210 170 C240 140 300 150 330 190 C350 220 340 260 300 270 C260 270 220 240 210 170 Z" opacity=".55"/>
+        <path class="m-relief" d="M0 470 L60 440 L120 460 L190 430 L260 470 L330 440 L390 460 L390 540 L0 540 Z" opacity=".7"/>
+        <path class="m-river" d="M0 430 C80 410 140 428 200 414 C260 402 320 420 390 406" style="stroke-width:5"/>
+        <path class="m-road2" d="M0 398 C70 382 140 394 210 380 C270 368 330 378 390 366"/>
+        <path class="m-road" d="M150 390 C160 350 150 330 170 310 C185 296 200 290 210 270 C218 252 240 240 262 234"/>
+        <g class="m-bld"><rect x="172" y="302" width="8" height="6"/><rect x="183" y="298" width="10" height="7"/><rect x="176" y="312" width="7" height="6"/><rect x="190" y="310" width="9" height="6"/><rect x="186" y="320" width="6" height="5"/><rect x="198" y="302" width="7" height="6"/><rect x="180" y="290" width="6" height="5"/></g>
+        <rect x="258" y="226" width="16" height="10" class="m-bld"/>
+        <text class="m-lab m-halo" x="214" y="322">Santa Cruz de la Serós</text>
+        <text class="m-lab m-halo" x="190" y="212">San Juan de la Peña</text>
+        <text class="m-lab m-halo" x="18" y="390">N-240</text>
+        <text class="m-lab" x="250" y="442" style="fill:var(--b-muted)">Río Aragón</text>
+        <path class="m-gap" d="M0 382 C60 376 110 382 150 388"/>
+        <path class="m-route" stroke="url(#mkb-rt3)" d="M150 388 C158 370 160 342 172 322 C180 312 186 308 192 304"/>
+        <path class="m-route" stroke="var(--b-muted)" style="opacity:.6;stroke-width:3" d="M192 304 C204 290 208 272 216 260 C232 244 248 238 264 234"/>
+        <circle class="m-pin" cx="158" cy="370" r="5"/><circle class="m-pin" cx="163" cy="350" r="5"/><circle class="m-pinv" cx="170" cy="330" r="5"/>
+        <circle class="m-pin" cx="181" cy="314" r="5"/>
+        <circle class="m-clu" cx="266" cy="234" r="16"/><text class="m-stopt" x="266" y="238">12</text>
+        <circle class="m-clu" cx="212" cy="266" r="13"/><text class="m-stopt" x="212" y="270">7</text>
+        <circle class="m-pulse" cx="190" cy="305" r="22"/>
+        <circle class="m-mark" cx="190" cy="305" r="8"/>
+      </svg>
+      <div class="b-hdr">
+        <div class="b-ib"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg></div>
+        <div class="b-t"><b>San Sebastián to Huesca</b><small>6–10 Sep 2024 · 194 · 4 stops</small></div>
+        <div class="b-ib"><svg viewBox="0 0 24 24"><path d="M12 3v12M7 8l5-5 5 5M5 14v6h14v-6"/></svg></div>
+      </div>
+      <div class="b-mpill"><span class="b-on">Following</span><span>Fit</span></div>
+      <div class="b-coach" style="left:110px;top:600px">← Drag the film →<small>Tap a photo to open it</small></div>
+      <div class="b-deck">
+        <div class="b-grab"></div>
+        <div class="b-card">
+          <div class="b-thumb p-stone"></div>
+          <div class="b-ct"><b>15:12 <small style="display:inline;font:600 12.5px system-ui,sans-serif">Mon 9 Sep</small></b><span>Santa Cruz de la Serós</span><small>Stop 3 / 4 · 98 / 194</small></div>
+          <div class="b-go">Open</div>
+        </div>
+        <div class="b-strip">
+          <div class="b-dens"><svg viewBox="0 0 358 12" preserveAspectRatio="none">
+            <line class="d-base" x1="0" y1="11.5" x2="358" y2="11.5"/>
+            <rect class="d-gps" x="20" y="8" width="5" height="4"/><rect class="d-gps" x="28" y="6" width="5" height="6"/>
+            <rect class="d-gps" x="92" y="5" width="5" height="7"/><rect class="d-gps" x="100" y="4" width="5" height="8"/>
+            <rect class="d-gps" x="226" y="2" width="5" height="10"/><rect class="d-gps" x="233" y="1" width="5" height="11"/><rect class="d-ng" x="240" y="8" width="5" height="4"/>
+            <rect class="d-gps" x="250" y="2" width="5" height="10"/><rect class="d-gps" x="257" y="1" width="5" height="11"/>
+            <rect class="d-gps" x="300" y="2" width="5" height="10"/><rect class="d-gps" x="307" y="0" width="5" height="12"/><rect class="d-gps" x="314" y="2" width="5" height="10"/>
+            <rect class="d-win" x="248" y="0.5" width="16" height="11" rx="3"/>
+          </svg></div>
+          <div class="b-day">Mon 9 Sep</div>
+          <div class="b-phl">15:12</div>
+          <div class="b-fr p-res" style="left:-49px"><span class="b-ng"></span></div>
+          <div class="b-cut" style="left:27px;width:52px">+1 h<br>20 m<em>24 km</em></div>
+          <div class="b-fr p-mtn" style="left:83px"></div>
+          <div class="b-fr p-stone b-cur" style="left:159px"></div>
+          <div class="b-fr p-for" style="left:235px"><span class="b-vd">▶ 0:14</span></div>
+          <div class="b-fr p-mon" style="left:311px"></div>
+          <div class="b-ph"></div>
+        </div>
+        <div class="b-tr">
+          <div class="b-lvl"><span>Stops</span><span class="b-on">Photos</span></div>
+          <div class="b-tp">
+            <div class="b-tb"><svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></div>
+            <div class="b-tb b-play b-pulse"><svg viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg></div>
+            <div class="b-tb"><svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg></div>
+          </div>
+          <div class="b-tb b-g"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/></svg></div>
+        </div>
+      </div>
+      <div class="b-finger" style="left:300px;top:680px"></div>
+      <div class="b-home"></div>
+      <span class="b-co" style="left:96px;top:612px">1</span>
+      <span class="b-co" style="left:120px;top:690px">2</span>
+      <span class="b-co" style="left:340px;top:690px">3</span>
+      <span class="b-co" style="left:340px;top:450px">4</span>
+      <span class="b-co" style="left:150px;top:290px">5</span>
+      <span class="b-co" style="left:24px;top:690px">6</span>
+      <span class="b-co" style="left:196px;top:818px">7</span>
+    </div></div>
+    <ol class="b-leg">
+      <li data-n="1"><span><b>Demo landing</b> (desktop rule: this photo, Follow on, not playing). The film nudges one frame and back once; the coach bubble stays until the first drag. Play pulses once.</span></li>
+      <li data-n="2"><span><b>Drag the film</b>: slow = live scrub, snaps per photo, camera follows. Fast fling = the film glides, but the cursor (and camera) only moves when it settles on a detent. Writes <code>at</code> with replaceState, never pushState.</span></li>
+      <li data-n="3"><span><b>Tap any frame</b> = open it in the lightbox (cursor moves to it first). Drag is the only way to seek, so a tap always does one thing.</span></li>
+      <li data-n="4"><span><b>Pan or pinch the map</b> pauses Follow; the pill turns to "Follow" until tapped. The map never moves time except a pin/cluster tap.</span></li>
+      <li data-n="5"><span><b>Marker only</b>: time and place moved to the docked card, so there is no floating card on the map.</span></li>
+      <li data-n="6"><span><b>No-GPS frames</b> have a grey corner (same key as the density band); videos a duration badge.</span></li>
+      <li data-n="7"><span><b>▶ Play</b>: deck collapses to film + transport, map grows to ~70%; any touch on the film stops it. Reduced motion: 2.5 s steps, camera jumps per stop.</span></li>
+    </ol>
+  </div>
+
+  <!-- ============ SCREEN 4: GRID ============ -->
+  <div class="b-col">
+    <p class="b-cap">4 · Grid <span>find one photo</span></p>
+    <div class="b-scroll"><div class="b-phone">
+      <div class="b-island"></div>
+      <div class="b-status"><span>9:41</span><i></i></div>
+      <div class="g-top">
+        <div class="b-ib">‹</div>
+        <div class="b-t"><b>San Sebastián to Huesca</b><small>194 items · 5 days · 4 stops</small></div>
+      </div>
+      <div class="g-day" style="top:110px"><b>Mon 9 Sep · day 4 of 5</b><span>Yesa → Santa Cruz de la Serós · 88</span></div>
+      <div class="g-stop" style="top:160px"><span class="b-n">2</span><b>Yesa</b>11:05–13:30 · 43</div>
+      <div class="g-grid" style="top:194px">
+        <div class="b-tile p-res"></div><div class="b-tile p-mtn"></div><div class="b-tile p-for"></div><div class="b-tile p-mtn2"></div>
+        <div class="b-tile p-stone"></div><div class="b-tile p-res"><span class="b-ng"></span></div><div class="b-tile p-mtn"></div><div class="b-tile p-eve"></div>
+      </div>
+      <div class="g-cut" style="top:352px">+1 h 20 m · 24 km</div>
+      <div class="g-stop" style="top:384px"><span class="b-n">3</span><b>Santa Cruz de la Serós</b>14:50–18:10 · 45</div>
+      <div class="g-grid" style="top:418px">
+        <div class="b-tile p-mtn"></div><div class="b-tile p-stone b-cur"></div><div class="b-tile p-for"><span class="b-vd">▶ 0:14</span></div><div class="b-tile p-mon"></div>
+        <div class="b-tile p-int"></div><div class="b-tile p-mtn2"></div><div class="b-tile p-mon"></div><div class="b-tile p-stone"></div>
+        <div class="b-tile p-for"></div><div class="b-tile p-int"><span class="b-ng"></span></div><div class="b-tile p-mtn"></div><div class="b-tile p-res"></div>
+        <div class="b-tile p-eve"></div><div class="b-tile p-int"></div><div class="b-tile p-eve"></div><div class="b-tile p-mon"></div>
+      </div>
+      <div class="g-day" style="top:742px;height:40px;border-bottom:0;border-top:1px solid var(--b-line)"><b>Tue 10 Sep · day 5 of 5</b></div>
+      <div class="g-rail"></div>
+      <div class="g-thumb">Mon 9</div>
+      <div class="g-back"><i class="p-stone"></i><span>Map · 15:12 · Santa Cruz</span></div>
+      <div class="b-finger" style="left:224px;top:458px"></div>
+      <div class="b-home"></div>
+      <span class="b-co" style="left:28px;top:78px">1</span>
+      <span class="b-co" style="left:300px;top:126px">2</span>
+      <span class="b-co" style="left:60px;top:366px">3</span>
+      <span class="b-co" style="left:180px;top:438px">4</span>
+      <span class="b-co" style="left:360px;top:190px">5</span>
+      <span class="b-co" style="left:96px;top:796px">6</span>
+    </div></div>
+    <ol class="b-leg">
+      <li data-n="1"><span><b>A pushed screen</b> (not a sheet snap, so no nested scroll): opened by Grid or a swipe up on the deck. ‹, Back or swipe down at the top returns to the map.</span></li>
+      <li data-n="2"><span><b>Sticky day chapters</b> with the day's stops (from A); stop sub-headers match the film's clips and numbers.</span></li>
+      <li data-n="3"><span><b>Cuts</b> between stops, same text as the film. No-GPS photos are full members of the grid.</span></li>
+      <li data-n="4"><span><b>Tap a tile</b> = cursor there + lightbox; closing returns to the map at that photo. Scrolling never moves the cursor (from D), so the map isn't flying behind a screen nobody sees.</span></li>
+      <li data-n="5"><span><b>Fast-scroll rail</b> with day labels, 16 px from the edge (clear of the OS forward swipe), 44 px hit width.</span></li>
+      <li data-n="6"><span><b>Back-to-map pill</b> shows the cursor's photo and time. The grid is a DOM list (<code>h2</code> day, <code>h3</code> stop, alt text from time + place): the accessible path through the trip.</span></li>
+    </ol>
+  </div>
+
+  </div>
+  <div class="b-foot">
+    <p><b>Gesture ownership:</b> map band = MapLibre (pan, pinch, no rotate). Deck = the film (horizontal: scrub; vertical: up = Grid, down = collapse, decided after 10 px). They never overlap. No double-tap and no long-press anywhere outside Library's month range drag; drags starting within 20 px of either edge belong to the OS.</p>
+    <p><b>Lightbox</b> (not drawn, changes from v1): A's day-segmented progress bar at the top replaces "98 / 194"; ‹ › chevrons gone (swipe only); mini film at the bottom uses the same rules as the deck film (drag = seek, tap = show that photo); info sheet with static SVG route; swipe down closes to the map at that photo.</p>
+    <p><b>Accessibility:</b> the film is a DOM list in one transformed container with <code>role="slider"</code>, <code>aria-valuetext</code> "Mon 9 Sep, 15:12, Santa Cruz de la Serós, photo 98 of 194", arrows = photo, Page Up/Down = stop; map <code>aria-hidden</code>, the docked card is its text equivalent. Landscape: map left 58%, deck becomes a right column (card, film, transport stacked; ~260 px tall).</p>
+  </div>
+</div>

@@ -1,0 +1,611 @@
+<title>Concept A: Vertical story scroll (v2)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+.mk-concept-a {
+  --bg: #efebe3; --ink: #1d1f22; --mute: #6c7078; --faint: #9a9da3; --card: #ffffff; --line: #e1dbcf;
+  --screen: #faf8f4; --frame: #17181b; --amber: #d27d14; --amber-soft: #f7dfb8; --green: #2f9e6e; --grey: #a9abb0;
+  --note: #d6336c; --note-ink: #ffffff; --chip: rgba(255,255,255,.9); --chip-ink: #1d1f22;
+  --water: #b9d6ea; --land: #efe9da; --mount: #e1d6bd; --ridge: #cbbd9c; --road: #ffffff; --road-edge: #d7cdb8;
+  --border: #a8977a; --town: #6c7078; --label: #4b4f56; --halo: #efe9da; --built: #ddd2bd;
+  --r1: #f2c46f; --r2: #e29632; --r3: #c25e12; --sheet: #ffffff; --shadow: 0 18px 50px rgba(30,25,15,.22);
+  font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color: var(--ink); background: var(--bg); padding: 32px 16px 48px; box-sizing: border-box;
+}
+@media (prefers-color-scheme: dark) {
+  .mk-concept-a {
+    --bg: #0d0f12; --ink: #e9e7e2; --mute: #9aa0a8; --faint: #6f757d; --card: #1b1e23; --line: #2a2e35;
+    --screen: #121418; --frame: #000000; --amber: #f0a640; --amber-soft: #4a3517; --green: #3ccf91; --grey: #5f646b;
+    --note: #ff5c93; --note-ink: #ffffff; --chip: rgba(24,27,32,.9); --chip-ink: #e9e7e2;
+    --water: #0f2433; --land: #1b1f25; --mount: #23282f; --ridge: #343a42; --road: #3a4049; --road-edge: #2a2f36;
+    --border: #6d6250; --town: #9aa0a8; --label: #b9bec5; --halo: #1b1f25; --built: #2b3038;
+    --r1: #f6d08a; --r2: #eda048; --r3: #d5641a; --sheet: #1b1e23; --shadow: 0 18px 50px rgba(0,0,0,.6);
+  }
+}
+.mk-concept-a *, .mk-concept-a *::before, .mk-concept-a *::after { box-sizing: border-box; }
+.mk-concept-a .intro { max-width: 1760px; margin: 0 auto 28px; }
+.mk-concept-a .intro h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: -.01em; }
+.mk-concept-a .intro p { margin: 0; color: var(--mute); max-width: 900px; }
+.mk-concept-a .shots { display: flex; flex-wrap: wrap; gap: 48px 36px; justify-content: center; }
+.mk-concept-a figure { margin: 0; width: 410px; max-width: 100%; }
+.mk-concept-a figcaption h2 { font-size: 15px; margin: 22px 0 6px; }
+.mk-concept-a figcaption ol { list-style: none; margin: 0; padding: 0; color: var(--mute); font-size: 13px; }
+.mk-concept-a figcaption li { display: flex; gap: 8px; margin: 0 0 6px; }
+.mk-concept-a figcaption li b { color: var(--ink); font-weight: 600; }
+.mk-concept-a .num { flex: none; width: 20px; height: 20px; border-radius: 50%; background: var(--note); color: var(--note-ink);
+  font: 700 11px/20px system-ui, sans-serif; text-align: center; margin-top: 1px; }
+.mk-concept-a .foot { max-width: 1760px; margin: 36px auto 0; color: var(--mute); font-size: 12.5px; }
+
+/* phone */
+.mk-concept-a .phone { position: relative; width: 390px; height: 844px; margin: 10px; border-radius: 50px; overflow: hidden;
+  background: var(--screen); box-shadow: 0 0 0 10px var(--frame), var(--shadow); }
+.mk-concept-a .status { position: absolute; inset: 0 0 auto 0; height: 44px; display: flex; align-items: center;
+  justify-content: space-between; padding: 6px 30px 0 34px; font-weight: 600; font-size: 15px; z-index: 30; }
+.mk-concept-a .status i { display: inline-block; height: 10px; margin-left: 5px; background: currentColor; border-radius: 2px; vertical-align: middle; }
+.mk-concept-a .status .sig { width: 17px; clip-path: polygon(0 100%, 100% 0, 100% 100%); }
+.mk-concept-a .status .bat { width: 23px; border-radius: 3px; opacity: .9; }
+.mk-concept-a .home-ind { position: absolute; bottom: 8px; left: 50%; width: 134px; height: 5px; margin-left: -67px;
+  border-radius: 3px; background: var(--ink); opacity: .85; z-index: 40; }
+.mk-concept-a .dot { position: absolute; z-index: 50; width: 22px; height: 22px; border-radius: 50%; background: var(--note);
+  color: var(--note-ink); font: 700 12px/22px system-ui, sans-serif; text-align: center;
+  box-shadow: 0 0 0 3px rgba(255,255,255,.75), 0 2px 6px rgba(0,0,0,.3); }
+
+/* photos as gradients */
+.mk-concept-a .ph { position: relative; border-radius: 6px; overflow: hidden; background-color: #8aa; }
+.mk-concept-a .ph::after { content: ""; position: absolute; inset: 0; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); border-radius: inherit; }
+.mk-concept-a .pa { background: radial-gradient(circle at 78% 22%, #fff6d8 0 6%, transparent 7%), linear-gradient(180deg, #a9cbe6 0 42%, #86a96f 42% 63%, #5a7c4b 63%); }
+.mk-concept-a .pb { background: linear-gradient(180deg, #c9dcec 0 30%, transparent 30%), linear-gradient(90deg, #a5804f 0 18%, #c39c6a 18% 24%, #d2ad7c 24% 62%, #b68c5c 62% 70%, #9c774a 70%); }
+.mk-concept-a .pc { background: linear-gradient(180deg, #f4d7a8 0 26%, #eaa86e 26% 40%, #3f7ea6 40% 78%, #dccaa3 78%); }
+.mk-concept-a .pd { background: linear-gradient(155deg, transparent 0 52%, #5b6d84 52%), linear-gradient(210deg, transparent 0 48%, #7d8ea5 48%), linear-gradient(#cfe0ee, #eef3f7); }
+.mk-concept-a .pe { background: linear-gradient(180deg, transparent 0 78%, #7e7a73 78%), linear-gradient(90deg, #d9ba90 0 20%, #6f849b 20% 25%, #e7d0a9 25% 58%, #b88a5c 58% 64%, #e2c59c 64%); }
+.mk-concept-a .pf { background: radial-gradient(ellipse at 50% 28%, #f3dcae 0 16%, transparent 17%), linear-gradient(90deg, #3a2c1f 0 12%, transparent 12% 88%, #3a2c1f 88%), linear-gradient(#6a523a, #2e2419); }
+.mk-concept-a .pg { background: linear-gradient(180deg, #d8e7d2 0 18%, #557f48 18% 64%, #3b5c34 64%); }
+.mk-concept-a .ph-h { background: radial-gradient(circle at 30% 34%, #fff1c7 0 7%, transparent 8%), linear-gradient(180deg, #f6c47e 0 36%, #e58d5c 36% 50%, #9b8b4c 50%); }
+.mk-concept-a .pi { background: linear-gradient(180deg, #bcd6ea 0 24%, transparent 24%), repeating-linear-gradient(90deg, #cfab7d 0 13px, #b48f63 13px 17px); }
+.mk-concept-a .pj { background: linear-gradient(170deg, #a9c4d9 0 30%, #8d9a7a 30% 46%, #6b6f55 46% 70%, #9c8b6a 70%); }
+.mk-concept-a .pk { background: radial-gradient(ellipse at 50% 100%, #c79a62 0 30%, transparent 31%), linear-gradient(180deg, #e9dfcf 0 55%, #b9a284 55%); }
+.mk-concept-a .vid::before { content: "0:14"; position: absolute; right: 5px; bottom: 4px; z-index: 2; font: 600 11px system-ui, sans-serif;
+  color: #fff; background: rgba(0,0,0,.5); padding: 1px 6px; border-radius: 8px; }
+.mk-concept-a .nogps::before { content: ""; position: absolute; left: 5px; top: 5px; z-index: 2; width: 10px; height: 10px; border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg); border: 2px solid #fff; background: transparent; box-shadow: 0 0 2px rgba(0,0,0,.6); }
+
+/* map (svg) */
+.mk-concept-a svg.map { display: block; width: 100%; height: 100%; }
+.mk-concept-a .m-land { fill: var(--land); }
+.mk-concept-a .m-water { fill: var(--water); }
+.mk-concept-a .m-mount { fill: var(--mount); }
+.mk-concept-a .m-built { fill: var(--built); }
+.mk-concept-a .m-ridge { fill: none; stroke: var(--ridge); stroke-width: 1.2; stroke-linecap: round; }
+.mk-concept-a .m-border { fill: none; stroke: var(--border); stroke-width: 1.2; stroke-dasharray: 5 3 1 3; }
+.mk-concept-a .m-road-e { fill: none; stroke: var(--road-edge); stroke-width: 4.5; stroke-linecap: round; stroke-linejoin: round; }
+.mk-concept-a .m-road { fill: none; stroke: var(--road); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.mk-concept-a .m-river { fill: none; stroke: var(--water); stroke-width: 2; }
+.mk-concept-a .m-town { fill: var(--town); }
+.mk-concept-a .m-label { fill: var(--label); font: 600 5px system-ui, sans-serif; paint-order: stroke; stroke: var(--halo); stroke-width: 2.4px; stroke-linejoin: round; }
+.mk-concept-a .m-cap { fill: var(--faint); font: 700 6px system-ui, sans-serif; letter-spacing: .25em; }
+.mk-concept-a .r { fill: none; stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; }
+.mk-concept-a .r1 { stroke: var(--r1); } .mk-concept-a .r2 { stroke: var(--r2); } .mk-concept-a .r3 { stroke: var(--r3); }
+.mk-concept-a .rg { fill: none; stroke: var(--r2); stroke-width: 2; stroke-dasharray: 4 4; stroke-linecap: round; }
+.mk-concept-a .rf { opacity: .32; }
+.mk-concept-a .mk { fill: #fff; stroke: var(--amber); stroke-width: 3; }
+.mk-concept-a .mk-halo { fill: var(--amber); opacity: .22; }
+.mk-concept-a .pt { fill: var(--r2); stroke: #fff; stroke-width: 1.2; }
+.mk-concept-a .pt.f { opacity: .35; }
+.mk-concept-a .dock .m-label { font-size: 11px; stroke-width: 3.5px; }
+.mk-concept-a .dock .m-label.sm { font-size: 10.5px; font-weight: 500; fill: var(--mute); }
+.mk-concept-a .dock .r { stroke-width: 3.5; }
+.mk-concept-a .explore .m-label { font-size: 8.5px; stroke-width: 3px; }
+.mk-concept-a .explore .m-cap { font-size: 9px; }
+.mk-concept-a .mini .m-label { font-size: 13px; stroke-width: 4px; }
+
+/* shared chrome */
+.mk-concept-a .pill { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 14px; border-radius: 17px;
+  background: var(--chip); color: var(--chip-ink); font-weight: 600; font-size: 13px; box-shadow: 0 2px 10px rgba(0,0,0,.18);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+.mk-concept-a .btn { display: inline-flex; align-items: center; justify-content: center; height: 40px; padding: 0 14px; border-radius: 12px;
+  font-weight: 600; font-size: 14px; background: var(--line); color: var(--ink); white-space: nowrap; }
+.mk-concept-a .btn.pri { background: var(--amber); color: #1d1405; }
+.mk-concept-a .handle { width: 38px; height: 5px; border-radius: 3px; background: var(--faint); opacity: .6; margin: 8px auto 8px; }
+
+/* transport bar (story + explore) */
+.mk-concept-a .tbar { position: absolute; left: 12px; right: 12px; bottom: 22px; height: 60px; z-index: 20; border-radius: 30px;
+  display: flex; align-items: center; gap: 6px; padding: 0 6px 0 8px; background: var(--chip); color: var(--chip-ink);
+  box-shadow: 0 4px 18px rgba(0,0,0,.2); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.mk-concept-a .tbar.flat { position: static; box-shadow: none; background: transparent; padding: 0; height: 52px; backdrop-filter: none; -webkit-backdrop-filter: none; }
+.mk-concept-a .daychip { display: flex; flex-direction: column; justify-content: center; height: 44px; padding: 0 14px; border-radius: 22px; background: var(--line); }
+.mk-concept-a .daychip b { font-size: 14px; line-height: 1.1; }
+.mk-concept-a .daychip span { font-size: 11px; color: var(--mute); line-height: 1.2; }
+.mk-concept-a .tbar .sp { flex: 1; }
+.mk-concept-a .tb { flex: none; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: var(--line); }
+.mk-concept-a .tb svg { width: 18px; height: 18px; fill: currentColor; }
+.mk-concept-a .tb.play { width: 52px; height: 52px; background: var(--amber); color: #1d1405; position: relative; }
+.mk-concept-a .tb.play svg { width: 20px; height: 20px; margin-left: 3px; }
+.mk-concept-a .tb.play.pulse::before { content: ""; position: absolute; inset: -7px; border-radius: 50%; border: 2px solid var(--amber); opacity: .45; }
+.mk-concept-a .tb.play.pulse::after { content: ""; position: absolute; inset: -14px; border-radius: 50%; border: 2px solid var(--amber); opacity: .18; }
+
+/* screen 1: home */
+.mk-concept-a .s-home .top { position: absolute; top: 44px; left: 0; right: 0; padding: 0 18px; }
+.mk-concept-a .demo { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--mute); height: 28px; }
+.mk-concept-a .demo b { font-size: 11px; letter-spacing: .06em; color: var(--amber); border: 1px solid var(--amber); border-radius: 9px; padding: 0 7px; }
+.mk-concept-a .demo u { margin-left: auto; color: var(--ink); text-decoration-color: var(--faint); }
+.mk-concept-a .brand { display: flex; align-items: baseline; justify-content: space-between; margin: 2px 0 8px; }
+.mk-concept-a .brand h3 { margin: 0; font-size: 30px; letter-spacing: -.02em; }
+.mk-concept-a .brand span { color: var(--mute); font-size: 13px; }
+.mk-concept-a .search { display: flex; align-items: center; gap: 8px; height: 44px; border-radius: 12px; background: var(--card);
+  border: 1px solid var(--line); padding: 0 12px; color: var(--faint); }
+.mk-concept-a .search::before { content: ""; width: 12px; height: 12px; border: 2px solid var(--faint); border-radius: 50%; }
+.mk-concept-a .seg { display: flex; gap: 6px; margin: 10px 0 0; }
+.mk-concept-a .seg span { padding: 5px 12px; border-radius: 14px; font-size: 13px; color: var(--mute); background: var(--line); }
+.mk-concept-a .seg .on { background: var(--ink); color: var(--screen); font-weight: 600; }
+.mk-concept-a .years { position: absolute; top: 222px; left: 0; right: 0; padding: 0 18px; }
+.mk-concept-a .yr { margin-bottom: 10px; position: relative; }
+.mk-concept-a .yr-h { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; }
+.mk-concept-a .yr-h b { font-size: 20px; letter-spacing: -.01em; }
+.mk-concept-a .yr-h span { color: var(--mute); font-size: 12px; }
+.mk-concept-a .months { display: grid; grid-template-columns: repeat(12, 1fr); gap: 0; height: 56px; margin-bottom: 6px; }
+.mk-concept-a .months > span { display: flex; flex-direction: column; justify-content: flex-end; align-items: stretch; padding: 4px 2px 0;
+  border-radius: 6px; font-size: 11px; color: var(--faint); text-align: center; line-height: 14px; }
+.mk-concept-a .months > span i { display: block; border-radius: 3px 3px 1px 1px; background: var(--green); opacity: .85; min-height: 2px; margin: 0 1px; }
+.mk-concept-a .months > span i + em { font-style: normal; display: block; height: 14px; }
+.mk-concept-a .months .z i { background: var(--line); opacity: 1; }
+.mk-concept-a .months .t i { background: var(--amber); opacity: 1; }
+.mk-concept-a .months .rng { background: var(--amber-soft); color: var(--ink); }
+.mk-concept-a .months .rng.a { border-radius: 6px 0 0 6px; } .mk-concept-a .months .rng.m { border-radius: 0; } .mk-concept-a .months .rng.b { border-radius: 0 6px 6px 0; box-shadow: inset -2px 0 0 var(--amber); }
+.mk-concept-a .months .rng.a { box-shadow: inset 2px 0 0 var(--amber); }
+.mk-concept-a .finger { position: absolute; width: 40px; height: 40px; border-radius: 50%; background: var(--ink); opacity: .16; z-index: 4; }
+.mk-concept-a .rbub { position: absolute; z-index: 5; padding: 6px 10px; border-radius: 10px; background: var(--ink); color: var(--screen);
+  font-size: 12px; font-weight: 600; white-space: nowrap; line-height: 1.25; }
+.mk-concept-a .rbub small { display: block; font-weight: 400; opacity: .75; font-size: 11px; }
+.mk-concept-a .rbub::after { content: ""; position: absolute; left: 50%; bottom: -5px; margin-left: -5px; border: 5px solid transparent; border-bottom: 0; border-top-color: var(--ink); }
+.mk-concept-a .trip { display: flex; gap: 10px; align-items: center; height: 62px; padding: 7px 8px; border-radius: 14px; background: var(--card);
+  border: 1px solid var(--line); margin-bottom: 7px; }
+.mk-concept-a .cover { flex: none; display: grid; grid-template-columns: 32px 18px; grid-template-rows: 1fr 1fr; gap: 2px; width: 52px; height: 46px; }
+.mk-concept-a .cover .ph { border-radius: 4px; }
+.mk-concept-a .cover .ph:first-child { grid-row: span 2; border-radius: 6px 3px 3px 6px; }
+.mk-concept-a .trip .tx { flex: 1; min-width: 0; }
+.mk-concept-a .trip .tx b { display: block; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mk-concept-a .trip .tx span { font-size: 12px; color: var(--mute); }
+.mk-concept-a .sketch { flex: none; width: 46px; height: 46px; border-radius: 10px; background: var(--land); }
+.mk-concept-a .sketch path { fill: none; stroke: var(--amber); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.mk-concept-a .sketch circle { fill: var(--amber); }
+.mk-concept-a .sketch.wait { background: repeating-linear-gradient(135deg, var(--line) 0 4px, transparent 4px 8px); }
+
+/* screen 2: story */
+.mk-concept-a .s-story .hdr { position: absolute; top: 44px; left: 0; right: 0; height: 52px; display: flex; align-items: center; gap: 10px;
+  padding: 0 12px; background: var(--screen); z-index: 10; }
+.mk-concept-a .ico { flex: none; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font-size: 20px; color: var(--ink); background: var(--line); }
+.mk-concept-a .hdr .tt { flex: 1; min-width: 0; }
+.mk-concept-a .hdr .tt b { display: block; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mk-concept-a .hdr .tt span { font-size: 12px; color: var(--mute); }
+.mk-concept-a .share-i { width: 14px; height: 14px; border: 2px solid currentColor; border-top: none; border-radius: 0 0 3px 3px; position: relative; margin-top: 4px; }
+.mk-concept-a .share-i::before { content: ""; position: absolute; left: 3px; top: -9px; width: 2px; height: 11px; background: currentColor; }
+.mk-concept-a .share-i::after { content: ""; position: absolute; left: 0px; top: -10px; width: 6px; height: 6px; border-left: 2px solid currentColor; border-top: 2px solid currentColor; transform: rotate(45deg); }
+.mk-concept-a .dock { position: absolute; top: 96px; left: 0; right: 0; height: 253px; overflow: hidden; }
+.mk-concept-a .dock .chip { position: absolute; left: 10px; bottom: 10px; }
+.mk-concept-a .dock .chip i { width: 8px; height: 8px; border-radius: 50%; background: var(--amber); }
+.mk-concept-a .dock .expand { position: absolute; right: 10px; bottom: 10px; width: 34px; padding: 0; justify-content: center; font-size: 15px; }
+.mk-concept-a .dock .ctx { position: absolute; right: 10px; top: 10px; width: 72px; height: 52px; border-radius: 8px; background: var(--chip); box-shadow: 0 2px 8px rgba(0,0,0,.15); }
+.mk-concept-a .dock .ctx .box { fill: none; stroke: var(--ink); stroke-width: 1; opacity: .55; }
+.mk-concept-a .story { position: absolute; top: 349px; left: 0; right: 0; bottom: 0; overflow: hidden; border-top: 1px solid var(--line); }
+.mk-concept-a .chap { position: absolute; top: 0; left: 0; right: 0; height: 62px; padding: 8px 14px 0 22px; background: var(--screen); z-index: 6;
+  border-bottom: 1px solid var(--line); box-shadow: 0 6px 12px -10px rgba(0,0,0,.4); display: flex; align-items: flex-start; gap: 8px; }
+.mk-concept-a .chap .l { flex: 1; min-width: 0; }
+.mk-concept-a .chap small { display: block; font-size: 11px; font-weight: 700; letter-spacing: .08em; color: var(--amber); }
+.mk-concept-a .chap b { display: block; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mk-concept-a .chap .l span { font-size: 12px; color: var(--mute); }
+.mk-concept-a .chap .t { flex: none; text-align: right; font-size: 22px; font-weight: 600; letter-spacing: -.01em; color: var(--amber); line-height: 1.1; padding-top: 6px; }
+.mk-concept-a .chap .t span { display: block; font-size: 11px; font-weight: 500; color: var(--mute); letter-spacing: 0; }
+.mk-concept-a .flow { position: absolute; top: 68px; left: 0; right: 0; padding: 0 12px 0 24px; }
+.mk-concept-a .row { display: flex; gap: 4px; margin-bottom: 4px; }
+.mk-concept-a .row .ph { height: 100px; }
+.mk-concept-a .hero { height: 150px; margin-bottom: 4px; }
+.mk-concept-a .transit { height: 64px; padding: 14px 0 0 4px; color: var(--mute); font-size: 12px; }
+.mk-concept-a .transit b { display: block; color: var(--ink); font-size: 13px; }
+.mk-concept-a .dayline { padding: 6px 0 6px 4px; border-top: 1px solid var(--line); }
+.mk-concept-a .dayline small { display: block; font-size: 11px; font-weight: 700; letter-spacing: .08em; color: var(--amber); }
+.mk-concept-a .dayline b { font-size: 15px; } .mk-concept-a .dayline span { color: var(--mute); font-size: 12px; }
+/* timeline spine in the left gutter */
+.mk-concept-a .spine { position: absolute; left: 10px; width: 2px; background: var(--line); z-index: 2; }
+.mk-concept-a .spine.dash { background: none; border-left: 2px dashed var(--faint); width: 0; opacity: .8; }
+.mk-concept-a .spine.on { width: 4px; left: 9px; background: var(--amber); border-radius: 2px; }
+.mk-concept-a .sdot { position: absolute; left: 4px; width: 14px; height: 14px; border-radius: 50%; background: var(--amber); z-index: 3;
+  box-shadow: 0 0 0 3px var(--screen); }
+.mk-concept-a .sdot.o { background: var(--screen); border: 2px solid var(--faint); box-shadow: 0 0 0 2px var(--screen); width: 10px; height: 10px; left: 6px; }
+
+/* screen 3: explore */
+.mk-concept-a .s-explore .mapfull { position: absolute; inset: 0; }
+.mk-concept-a .s-explore .legend { position: absolute; left: 14px; top: 54px; z-index: 10; height: 30px; font-size: 12px; font-weight: 500; }
+.mk-concept-a .ramp { width: 36px; height: 6px; border-radius: 3px; background: linear-gradient(90deg, var(--r1), var(--r3)); }
+.mk-concept-a .arc { position: absolute; right: 12px; top: 414px; z-index: 10; display: flex; flex-direction: column; border-radius: 14px; overflow: hidden;
+  background: var(--chip); box-shadow: 0 2px 10px rgba(0,0,0,.18); }
+.mk-concept-a .arc span { width: 64px; height: 44px; display: grid; place-items: center; font-size: 12px; font-weight: 600; border-bottom: 1px solid var(--line); }
+.mk-concept-a .arc span:last-child { border-bottom: 0; }
+.mk-concept-a .arc .on { color: var(--amber); }
+.mk-concept-a .clu { position: absolute; z-index: 8; width: 48px; height: 48px; margin: -24px 0 0 -24px; border-radius: 50%; border: 3px solid #fff;
+  box-shadow: 0 0 0 2px var(--amber), 0 3px 8px rgba(0,0,0,.3); }
+.mk-concept-a .clu .n { position: absolute; right: -10px; top: -8px; min-width: 22px; height: 20px; padding: 0 5px; border-radius: 10px; background: var(--amber);
+  color: #1d1405; font: 700 11px/20px system-ui, sans-serif; text-align: center; }
+.mk-concept-a .clu.sel { width: 60px; height: 60px; margin: -30px 0 0 -30px; box-shadow: 0 0 0 3px var(--amber), 0 0 0 9px rgba(210,125,20,.25), 0 3px 10px rgba(0,0,0,.35); }
+.mk-concept-a .deck { position: absolute; left: 0; right: 0; bottom: 0; height: 336px; z-index: 20; background: var(--sheet); border-radius: 22px 22px 0 0;
+  box-shadow: 0 -8px 24px rgba(0,0,0,.18); padding: 0 12px; }
+.mk-concept-a .ccard { border: 1px solid var(--line); border-radius: 16px; padding: 10px 12px; }
+.mk-concept-a .ccard .h { display: flex; align-items: baseline; gap: 8px; }
+.mk-concept-a .ccard h4 { margin: 0; font-size: 16px; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mk-concept-a .ccard .h span { color: var(--mute); font-size: 12px; }
+.mk-concept-a .ccard .h i { font-style: normal; width: 32px; height: 32px; margin: -6px -6px 0 0; border-radius: 50%; display: grid; place-items: center; background: var(--line); font-size: 13px; }
+.mk-concept-a .ccard .v { font-size: 13px; color: var(--mute); margin: 2px 0 8px; }
+.mk-concept-a .ccard .v b { color: var(--ink); }
+.mk-concept-a .thumbs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-bottom: 8px; }
+.mk-concept-a .thumbs .ph { height: 40px; border-radius: 5px; }
+.mk-concept-a .acts { display: flex; gap: 8px; }
+.mk-concept-a .acts .btn { flex: 1; }
+.mk-concept-a .ccard .acts .btn { height: 40px; font-size: 13px; padding: 0 8px; }
+.mk-concept-a .strip { position: relative; height: 46px; margin: 8px 2px 0; }
+.mk-concept-a .strip .bars { position: absolute; left: 0; right: 0; top: 0; height: 28px; display: flex; align-items: flex-end; gap: 2px; }
+.mk-concept-a .strip .bars i { flex: 1; background: var(--green); opacity: .8; border-radius: 1px; min-height: 2px; }
+.mk-concept-a .strip .bars i.z { background: var(--line); opacity: 1; }
+.mk-concept-a .strip .bars i.g { background: var(--grey); }
+.mk-concept-a .strip .cur { position: absolute; top: -4px; height: 36px; width: 2px; background: var(--amber); }
+.mk-concept-a .strip .cur::before { content: ""; position: absolute; left: -5px; top: -2px; border: 6px solid transparent; border-bottom: 0; border-top-color: var(--amber); }
+.mk-concept-a .strip .ax { position: absolute; left: 0; right: 0; top: 31px; display: flex; font-size: 11px; color: var(--mute); }
+.mk-concept-a .strip .ax span { flex: 1; }
+
+/* screen 4: lightbox (always dark) */
+.mk-concept-a .s-lb { background: #000; color: #f2f0eb; }
+.mk-concept-a .s-lb .status { color: #fff; }
+.mk-concept-a .s-lb .home-ind { background: #fff; }
+.mk-concept-a .prog { position: absolute; top: 50px; left: 14px; right: 14px; display: flex; gap: 3px; height: 3px; }
+.mk-concept-a .prog i { display: block; height: 3px; border-radius: 2px; background: rgba(255,255,255,.28); overflow: hidden; }
+.mk-concept-a .prog i.done { background: #fff; }
+.mk-concept-a .prog i.part { background: linear-gradient(90deg, #fff 0 9%, rgba(255,255,255,.28) 9%); }
+.mk-concept-a .lbh { position: absolute; top: 62px; left: 14px; right: 14px; display: flex; align-items: center; gap: 10px; }
+.mk-concept-a .lbh .tt { flex: 1; }
+.mk-concept-a .lbh .tt b { display: block; font-size: 14px; }
+.mk-concept-a .lbh .tt span { font-size: 12px; color: rgba(255,255,255,.7); }
+.mk-concept-a .lbh .x { width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,.14); display: grid; place-items: center; font-size: 18px; }
+.mk-concept-a .stage { position: absolute; top: 170px; left: 0; right: 0; height: 292px; border-radius: 0; }
+.mk-concept-a .stage.ph::after { box-shadow: none; }
+.mk-concept-a .peekL, .mk-concept-a .peekR { position: absolute; top: 200px; width: 18px; height: 232px; opacity: .55; }
+.mk-concept-a .peekL { left: -10px; border-radius: 0 6px 6px 0; } .mk-concept-a .peekR { right: -10px; border-radius: 6px 0 0 6px; }
+.mk-concept-a .film { position: absolute; top: 486px; left: 0; right: 0; height: 46px; display: flex; gap: 3px; justify-content: center; align-items: center; }
+.mk-concept-a .film .ph { width: 30px; height: 46px; border-radius: 4px; opacity: .65; flex: none; }
+.mk-concept-a .film .ph.c { width: 44px; opacity: 1; box-shadow: 0 0 0 2px #fff; }
+.mk-concept-a .film .cut { flex: none; width: 14px; height: 30px; display: grid; place-items: center; }
+.mk-concept-a .film .cut::before { content: ""; width: 2px; height: 30px; border-left: 2px dashed rgba(255,255,255,.45); }
+.mk-concept-a .info { position: absolute; left: 0; right: 0; bottom: 0; height: 278px; background: #17191d; border-radius: 22px 22px 0 0; padding: 0 18px; }
+.mk-concept-a .info .handle { background: #8a8f96; }
+.mk-concept-a .info .grid { display: flex; gap: 14px; }
+.mk-concept-a .info .clock { font-size: 40px; font-weight: 300; letter-spacing: -.02em; line-height: 1; }
+.mk-concept-a .info .meta { font-size: 13px; color: rgba(255,255,255,.7); margin-top: 6px; }
+.mk-concept-a .info .meta b { color: #f2f0eb; font-weight: 600; }
+.mk-concept-a .info .mini { flex: none; width: 128px; height: 104px; border-radius: 12px; overflow: hidden; }
+.mk-concept-a .info .pos { margin: 14px 0 12px; height: 26px; display: flex; align-items: end; gap: 2px; position: relative; }
+.mk-concept-a .info .pos i { flex: 1; background: #3ccf91; opacity: .7; border-radius: 1px; }
+.mk-concept-a .info .pos i.g { background: #5f646b; }
+.mk-concept-a .info .pos s { position: absolute; left: 41%; top: -3px; bottom: -3px; width: 2px; background: #fff; }
+.mk-concept-a .info .acts .btn { background: rgba(255,255,255,.12); color: #f2f0eb; }
+.mk-concept-a .info .acts .btn.pri { background: #f0a640; color: #1d1405; }
+.mk-concept-a .s-lb .mini { --land: #1b1f25; --water: #0f2433; --mount: #23282f; --ridge: #343a42; --road: #3a4049; --road-edge: #2a2f36;
+  --border: #6d6250; --town: #9aa0a8; --label: #b9bec5; --halo: #1b1f25; }
+</style>
+
+<div class="mk-concept-a">
+  <div class="intro">
+    <h1>Concept A: Vertical story scroll (v2)</h1>
+    <p>The trip is a page you read. The docked map shows the stop you are reading and only moves when you cross into the next one. One transport bar in the thumb zone (day · ⏮ ▶ ⏭) does every jump and Play. Tapping the map opens Explore, a full-screen map mode with everything at the bottom. Demo data: San Sebastián to Huesca, 6–10 Sep 2024, 194 items.</p>
+  </div>
+
+  <div class="shots">
+
+  <!-- ============ 1. HOME ============ -->
+  <figure>
+    <div class="phone s-home">
+      <div class="status"><span>9:41</span><span><i class="sig"></i><i class="bat"></i></span></div>
+      <div class="top">
+        <div class="demo"><b>DEMO</b> Sample data, CC BY / BY-SA <u>About</u></div>
+        <div class="brand"><h3>Retrace</h3><span>1 688 items · 6 trips</span></div>
+        <div class="search">Search trips, places, years</div>
+        <div class="seg"><span class="on">Trips</span><span>All albums</span></div>
+      </div>
+      <div class="years">
+        <div class="yr">
+          <div class="yr-h"><b>2026</b><span>288 items · 1 trip</span></div>
+          <div class="months">
+            <span><i style="height:71%"></i><em>J</em></span><span><i style="height:24%"></i><em>F</em></span><span><i style="height:25%"></i><em>M</em></span><span class="z"><i style="height:4%"></i><em>A</em></span>
+            <span><i style="height:16%"></i><em>M</em></span><span><i style="height:8%"></i><em>J</em></span><span><i style="height:47%"></i><em>J</em></span><span><i style="height:34%"></i><em>A</em></span>
+            <span class="z"><i style="height:4%"></i><em>S</em></span><span class="z"><i style="height:4%"></i><em>O</em></span><span class="z"><i style="height:4%"></i><em>N</em></span><span class="z"><i style="height:4%"></i><em>D</em></span>
+          </div>
+          <div class="trip">
+            <div class="cover"><div class="ph pe"></div><div class="ph pc"></div><div class="ph pk"></div></div>
+            <div class="tx"><b>Lisbon &amp; Queluz</b><span>4–31 Jan · 148 photos</span></div>
+            <svg class="sketch" viewBox="0 0 52 52"><path d="M14 18 C20 24 22 30 30 32 C36 34 38 28 40 36"/><circle cx="40" cy="36" r="3"/></svg>
+          </div>
+        </div>
+        <div class="yr">
+          <div class="yr-h"><b>2025</b><span>505 items · 2 trips</span></div>
+          <div class="months">
+            <span><i style="height:41%"></i><em>J</em></span><span><i style="height:34%"></i><em>F</em></span><span><i style="height:77%"></i><em>M</em></span><span><i style="height:19%"></i><em>A</em></span>
+            <span><i style="height:69%"></i><em>M</em></span><span><i style="height:32%"></i><em>J</em></span><span><i style="height:24%"></i><em>J</em></span><span><i style="height:16%"></i><em>A</em></span>
+            <span><i style="height:20%"></i><em>S</em></span><span><i style="height:35%"></i><em>O</em></span><span class="z"><i style="height:4%"></i><em>N</em></span><span class="z"><i style="height:4%"></i><em>D</em></span>
+          </div>
+          <div class="trip">
+            <div class="cover"><div class="ph pg"></div><div class="ph pi"></div><div class="ph pd"></div></div>
+            <div class="tx"><b>Alsace &amp; Freiburg</b><span>14–25 May · 62 photos</span></div>
+            <svg class="sketch" viewBox="0 0 52 52"><path d="M16 40 C18 32 22 26 20 18 C24 14 30 16 34 12"/><circle cx="34" cy="12" r="3"/></svg>
+          </div>
+          <div class="trip">
+            <div class="cover"><div class="ph pc"></div><div class="ph pb"></div><div class="ph pa"></div></div>
+            <div class="tx"><b>Sète, Lyon &amp; Dole</b><span>3–9 May · 70 photos</span></div>
+            <svg class="sketch wait" viewBox="0 0 52 52"></svg>
+          </div>
+        </div>
+        <div class="yr">
+          <div class="yr-h"><b>2024</b><span>835 items · 3 trips</span></div>
+          <div class="rbub" style="left:146px;top:-12px">Jul – Sep 2024<small>release to open · 3 months</small></div>
+          <div class="months">
+            <span><i style="height:8%"></i><em>J</em></span><span class="z"><i style="height:4%"></i><em>F</em></span><span><i style="height:12%"></i><em>M</em></span><span><i style="height:31%"></i><em>A</em></span>
+            <span><i style="height:45%"></i><em>M</em></span><span><i style="height:10%"></i><em>J</em></span><span class="rng a"><i style="height:55%"></i><em>J</em></span><span class="rng m"><i style="height:72%"></i><em>A</em></span>
+            <span class="rng b t"><i style="height:100%"></i><em>S</em></span><span><i style="height:53%"></i><em>O</em></span><span><i style="height:38%"></i><em>N</em></span><span><i style="height:50%"></i><em>D</em></span>
+          </div>
+          <div class="finger" style="left:240px;top:44px"></div>
+          <div class="trip">
+            <div class="cover"><div class="ph pb"></div><div class="ph pc"></div><div class="ph pd"></div></div>
+            <div class="tx"><b>San Sebastián to Huesca</b><span>6–10 Sep · 194 photos · 5 d</span></div>
+            <svg class="sketch" viewBox="0 0 52 52"><path d="M8 12 C14 20 18 28 22 30 C28 30 34 26 38 26" /><path d="M38 26 C40 32 42 38 44 42" stroke-dasharray="3 3"/><circle cx="44" cy="42" r="3"/></svg>
+          </div>
+        </div>
+      </div>
+      <div class="dot" style="left:350px;top:136px">1</div>
+      <div class="dot" style="left:300px;top:268px">2</div>
+      <div class="dot" style="left:344px;top:684px">3</div>
+      <div class="dot" style="left:356px;top:772px">4</div>
+      <div class="dot" style="left:300px;top:584px">5</div>
+      <div class="home-ind"></div>
+    </div>
+    <figcaption>
+      <h2>1 · Home: the all-years overview as an entry screen</h2>
+      <ol>
+        <li><span class="num">1</span><span><b>Search</b> trips, years <b>and places</b> (<code>city</code>/<code>country</code> from the index). A place result is a visit ("Huesca · Tue 10 Sep 2024 · 92"); tap → that trip's story at that stop (<code>album</code> + <code>at</code>, no new model).</span></li>
+        <li><span class="num">2</span><span><b>Tap a month</b> → month story, chaptered by day. The whole column (26 × 56 px, no gaps) is the target, not the bar.</span></li>
+        <li><span class="num">3</span><span><b>Long-press, then drag</b> across months → a month-range story (<code>from/to</code>). Bubble shows the range; drag down to cross into another year.</span></li>
+        <li><span class="num">4</span><span><b>Tap a trip card</b> → its story. Names, dates and counts paint from <code>/api/albums</code> at once.</span></li>
+        <li><span class="num">5</span><span><b>Progressive cards</b>: route sketch, GPS colours and trip verdicts fill in when the index lands (hatched = waiting). Never one request per card.</span></li>
+      </ol>
+    </figcaption>
+  </figure>
+
+  <!-- ============ 2. STORY ============ -->
+  <figure>
+    <div class="phone s-story">
+      <div class="status"><span>9:41</span><span><i class="sig"></i><i class="bat"></i></span></div>
+      <div class="hdr">
+        <span class="ico">‹</span>
+        <div class="tt"><b>San Sebastián to Huesca</b><span>6–10 Sep 2024 · 194 photos</span></div>
+        <span class="ico"><span class="share-i"></span></span>
+        <span class="ico" style="font-size:16px">⋯</span>
+      </div>
+      <div class="dock">
+        <!-- the current stop, framed: Santa Cruz de la Serós -->
+        <svg class="map" viewBox="0 0 390 253" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+          <rect class="m-land" x="0" y="0" width="390" height="253"/>
+          <path class="m-mount" d="M0 0 H390 V70 C340 84 300 62 250 70 C200 78 170 52 120 58 C80 62 40 50 0 60 Z"/>
+          <path class="m-ridge" d="M40 34 l12 -9 l12 9 M110 30 l12 -10 l12 10 M200 22 l12 -9 l12 9 M290 34 l12 -9 l12 9"/>
+          <path class="m-water" d="M0 222 C60 214 120 226 190 218 C260 210 320 222 390 214 V253 H0 Z"/>
+          <path class="m-river" d="M0 210 C70 200 130 214 200 206 C270 198 330 210 390 202"/>
+          <path class="m-road-e" d="M0 196 C80 186 150 196 220 190 C290 184 340 190 390 184 M170 193 C180 170 196 150 206 128 C214 110 230 100 236 84 C226 76 214 70 222 58 C232 46 250 40 262 24"/>
+          <path class="m-road" d="M0 196 C80 186 150 196 220 190 C290 184 340 190 390 184 M170 193 C180 170 196 150 206 128 C214 110 230 100 236 84 C226 76 214 70 222 58 C232 46 250 40 262 24"/>
+          <path class="m-built" d="M186 114 C196 104 220 104 228 114 C236 126 226 142 210 144 C194 146 180 132 186 114Z"/>
+          <text class="m-label" x="236" y="130">Santa Cruz de la Serós</text>
+          <text class="m-label sm" x="150" y="22">to San Juan de la Peña</text>
+          <text class="m-label sm" x="10" y="186">‹ Yesa</text>
+          <text class="m-label sm" x="330" y="176">Jaca ›</text>
+          <!-- route inside the stop: past solid, future faint -->
+          <path class="r r2" d="M172 192 C182 170 194 150 204 132 C208 124 214 118 220 120"/>
+          <path class="r r3 rf" d="M220 120 C228 124 224 134 214 132 C210 118 222 104 232 92 C234 86 236 84 230 78"/>
+          <circle class="pt" cx="190" cy="160" r="3.5"/><circle class="pt" cx="200" cy="140" r="3.5"/><circle class="pt" cx="206" cy="126" r="3.5"/>
+          <circle class="pt f" cx="224" cy="128" r="3.5"/><circle class="pt f" cx="214" cy="134" r="3.5"/><circle class="pt f" cx="230" cy="94" r="3.5"/>
+          <circle class="mk-halo" cx="214" cy="120" r="12"/>
+          <circle class="mk" cx="214" cy="120" r="6"/>
+        </svg>
+        <svg class="ctx" viewBox="0 0 72 52" aria-hidden="true">
+          <path d="M8 8 C14 18 20 28 28 32 C36 30 42 28 50 27" style="fill:none;stroke:var(--amber);stroke-width:2;stroke-linecap:round"/>
+          <path d="M50 27 C53 33 56 39 60 44" style="fill:none;stroke:var(--amber);stroke-width:2;stroke-dasharray:2 3;opacity:.45"/>
+          <rect class="box" x="42" y="20" width="14" height="12" rx="2"/>
+          <circle cx="49" cy="27" r="2.6" style="fill:#fff;stroke:var(--amber);stroke-width:2"/>
+        </svg>
+        <span class="pill chip"><i></i>Mon 9 Sep · 16:57 · Santa Cruz</span>
+        <span class="pill expand">⤢</span>
+      </div>
+      <div class="story">
+        <div class="chap">
+          <div class="l"><small>MON 9 SEP · DAY 4 OF 5</small><b>Santa Cruz de la Serós</b><span>16:57–18:59 · 47 photos · stop 4 of 5</span></div>
+          <div class="t">16:57<span>56 / 194</span></div>
+        </div>
+        <!-- spine: gutter timeline -->
+        <div class="spine" style="top:62px;height:8px"></div>
+        <div class="spine on" style="top:70px;height:150px"></div>
+        <div class="sdot" style="top:68px"></div>
+        <div class="spine" style="top:220px;height:108px"></div>
+        <div class="spine dash" style="top:328px;height:68px"></div>
+        <div class="sdot o" style="top:404px"></div>
+        <div class="spine" style="top:414px;height:100px"></div>
+        <div class="flow">
+          <div class="ph pf hero"></div>
+          <div class="row"><div class="ph pb" style="flex:1"></div><div class="ph pd vid" style="flex:1.33"></div><div class="ph pk" style="flex:.75"></div></div>
+          <div class="transit"><b>Overnight · about 70 km</b>Santa Cruz de la Serós → Huesca</div>
+          <div class="dayline"><small>TUE 10 SEP · DAY 5 OF 5</small><b>Huesca</b> <span>· 92 photos</span></div>
+          <div class="row"><div class="ph ph-h" style="flex:1.5"></div><div class="ph pi" style="flex:1"></div></div>
+        </div>
+        <div class="tbar">
+          <div class="daychip"><b>Day 4 of 5 ▾</b><span>Mon 9 Sep</span></div>
+          <div class="sp"></div>
+          <span class="tb"><svg viewBox="0 0 20 20"><rect x="3" y="4" width="2.6" height="12" rx="1"/><path d="M17 4 L7 10 L17 16Z"/></svg></span>
+          <span class="tb play pulse"><svg viewBox="0 0 20 20"><path d="M5 3 L17 10 L5 17Z"/></svg></span>
+          <span class="tb"><svg viewBox="0 0 20 20"><path d="M3 4 L13 10 L3 16Z"/><rect x="14.4" y="4" width="2.6" height="12" rx="1"/></svg></span>
+        </div>
+      </div>
+      <div class="dot" style="left:150px;top:150px">1</div>
+      <div class="dot" style="left:250px;top:372px">2</div>
+      <div class="dot" style="left:30px;top:424px">3</div>
+      <div class="dot" style="left:300px;top:686px">4</div>
+      <div class="dot" style="left:120px;top:806px">5</div>
+      <div class="dot" style="left:300px;top:742px">6</div>
+      <div class="home-ind"></div>
+    </div>
+    <figcaption>
+      <h2>2 · Story: read the trip, the map holds the stop</h2>
+      <ol>
+        <li><span class="num">1</span><span><b>Docked map</b> (<code>clamp(160px, 30svh, 280px)</code>, frozen) frames <b>the current stop</b>; only the marker moves while you read inside it. Whole-trip inset top-right; chip = the map's text. Passive: drags scroll the page. <b>Tap</b> → Explore.</span></li>
+        <li><span class="num">2</span><span><b>Sticky chapter header</b>: day, current stop, its span, and the cursor time + position. This is what <code>&amp;at=</code> and Share use.</span></li>
+        <li><span class="num">3</span><span><b>Timeline spine</b> in the gutter: amber dot and segment = <b>current row</b> (first row under the header). Dashed through transits. Replaces v1's reading line and tile ring.</span></li>
+        <li><span class="num">4</span><span><b>Transit break</b>. Crossing it slowly = one camera flight to the next stop's frame. A fling crossing several writes nothing until it settles, then one jump.</span></li>
+        <li><span class="num">5</span><span><b>Day chip</b> → day sheet (days, counts, stops); tap one to jump. Replaces the v1 right-edge scrubber: no edge gesture left.</span></li>
+        <li><span class="num">6</span><span><b>⏮ ▶ ⏭</b>: previous / next stop, Play (scrolls stop by stop and draws the route). Pulses once on the demo landing. Bar shrinks to ▶ while flinging down.</span></li>
+      </ol>
+    </figcaption>
+  </figure>
+
+  <!-- ============ 3. EXPLORE ============ -->
+  <figure>
+    <div class="phone s-explore">
+      <div class="status"><span>9:41</span><span><i class="sig"></i><i class="bat"></i></span></div>
+      <div class="mapfull explore">
+        <svg class="map" viewBox="55 -20 278 603" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+          <rect class="m-land" x="-50" y="-50" width="500" height="700"/>
+          <path class="m-water" d="M-50 -50 H150 C140 20 128 40 112 52 C100 60 92 66 80 68 C60 72 40 78 20 90 L-50 110 Z"/>
+          <path class="m-mount" d="M100 70 C150 55 210 62 260 74 C310 84 360 80 420 86 V122 C360 116 320 124 280 122 C240 120 200 110 160 106 C130 104 112 94 100 70Z"/>
+          <path class="m-ridge" vector-effect="non-scaling-stroke" d="M150 80 l10 -6 l8 6 M200 86 l9 -7 l9 7 M250 94 l8 -6 l10 7 M300 100 l9 -7 l9 6"/>
+          <path class="m-border" vector-effect="non-scaling-stroke" d="M96 70 C130 74 160 80 200 84 C240 88 280 96 320 98 C350 99 380 96 420 98"/>
+          <path class="m-river" vector-effect="non-scaling-stroke" d="M300 140 C280 146 262 156 240 160 C220 164 206 170 196 172 M160 330 C200 360 250 380 300 390 C330 396 360 410 400 430"/>
+          <path class="m-water" d="M166 177 C174 170 190 167 204 171 C199 178 184 182 166 177Z"/>
+          <path class="m-road-e" vector-effect="non-scaling-stroke" d="M88 74 C100 100 120 125 136 150 C150 160 165 170 178 178 C210 172 240 160 266 150 C280 180 292 215 300 250 C292 300 290 340 292 390 M136 150 C130 200 125 250 120 330"/>
+          <path class="m-road" vector-effect="non-scaling-stroke" d="M88 74 C100 100 120 125 136 150 C150 160 165 170 178 178 C210 172 240 160 266 150 C280 180 292 215 300 250 C292 300 290 340 292 390 M136 150 C130 200 125 250 120 330"/>
+          <circle class="m-town" cx="136" cy="150" r="2.2"/><text class="m-label" x="104" y="146">Pamplona</text>
+          <circle class="m-town" cx="292" cy="390" r="2.6"/><text class="m-label" x="262" y="406">Zaragoza</text>
+          <circle class="m-town" cx="268" cy="146" r="1.8"/><text class="m-label" x="272" y="141">Jaca</text>
+          <text class="m-cap" x="200" y="40">FRANCE</text>
+          <text class="m-label" x="66" y="104">San Sebastián</text>
+          <text class="m-label" x="150" y="204">Yesa</text>
+          <text class="m-label" x="205" y="192">Santa Cruz de la Serós</text>
+          <text class="m-label" x="276" y="286" text-anchor="end">Huesca</text>
+          <path class="r r1" vector-effect="non-scaling-stroke" d="M84 70 C88 66 94 70 90 76 C86 79 82 75 86 72"/>
+          <path class="rg" vector-effect="non-scaling-stroke" d="M88 74 C120 110 150 150 176 174"/>
+          <path class="r r1" vector-effect="non-scaling-stroke" d="M176 174 C182 168 190 172 186 178 C182 182 174 180 178 176"/>
+          <path class="r r2" vector-effect="non-scaling-stroke" d="M186 176 C214 170 236 162 254 157 C258 150 266 154 262 160"/>
+          <path class="rg" vector-effect="non-scaling-stroke" d="M260 160 C275 190 290 220 298 248"/>
+          <path class="r r3" vector-effect="non-scaling-stroke" d="M298 248 C306 244 310 254 302 258 C296 260 294 252 300 250"/>
+        </svg>
+      </div>
+      <span class="pill legend"><span class="ramp"></span>6 → 10 Sep · 190 located</span>
+      <div class="clu ph pc" style="left:46px;top:129px"><span class="n">14</span></div>
+      <div class="clu ph pj" style="left:175px;top:274px"><span class="n">41</span></div>
+      <div class="clu ph pf sel" style="left:281px;top:246px"><span class="n">47</span></div>
+      <div class="clu ph pi" style="left:332px;top:370px"><span class="n">92</span></div>
+      <div class="arc"><span class="on">◎ Follow</span><span>⤢ Fit</span></div>
+      <div class="deck">
+        <div class="handle"></div>
+        <div class="ccard">
+          <div class="h"><h4>Santa Cruz de la Serós</h4><span>1 visit</span><i>✕</i></div>
+          <div class="v"><b>Mon 9 Sep · 16:57–18:59</b> · 47 photos</div>
+          <div class="thumbs"><div class="ph pf"></div><div class="ph pb"></div><div class="ph pd"></div><div class="ph ph-h"></div></div>
+          <div class="acts"><span class="btn pri">Jump in story</span><span class="btn">Zoom to these days</span></div>
+        </div>
+        <div class="strip">
+          <div class="bars">
+            <i style="height:14%"></i><i style="height:10%"></i><i class="z"></i><i style="height:22%"></i><i style="height:30%"></i><i class="z"></i>
+            <i class="z"></i><i class="z"></i><i class="z"></i><i class="z"></i><i class="z"></i><i class="z"></i>
+            <i style="height:40%"></i><i style="height:62%"></i><i class="g" style="height:12%"></i><i style="height:48%"></i><i style="height:70%"></i><i style="height:55%"></i>
+            <i style="height:66%"></i><i style="height:92%"></i><i style="height:100%"></i><i style="height:80%"></i><i class="g" style="height:10%"></i><i style="height:44%"></i>
+          </div>
+          <div class="cur" style="left:64%"></div>
+          <div class="ax"><span>Fri 6</span><span>Sat 7</span><span>Sun 8</span><span style="color:var(--amber);font-weight:600">Mon 9</span><span>Tue 10</span></div>
+        </div>
+        <div class="tbar flat">
+          <span class="btn" style="height:44px;border-radius:22px">‹ Story</span>
+          <div class="sp"></div>
+          <span class="tb"><svg viewBox="0 0 20 20"><rect x="3" y="4" width="2.6" height="12" rx="1"/><path d="M17 4 L7 10 L17 16Z"/></svg></span>
+          <span class="tb play"><svg viewBox="0 0 20 20"><path d="M5 3 L17 10 L5 17Z"/></svg></span>
+          <span class="tb"><svg viewBox="0 0 20 20"><path d="M3 4 L13 10 L3 16Z"/><rect x="14.4" y="4" width="2.6" height="12" rx="1"/></svg></span>
+        </div>
+      </div>
+      <div class="dot" style="left:120px;top:400px">1</div>
+      <div class="dot" style="left:300px;top:196px">2</div>
+      <div class="dot" style="left:290px;top:452px">3</div>
+      <div class="dot" style="left:2px;top:560px">4</div>
+      <div class="dot" style="left:362px;top:690px">5</div>
+      <div class="dot" style="left:110px;top:778px">6</div>
+      <div class="home-ind"></div>
+    </div>
+    <figcaption>
+      <h2>3 · Explore: D's Map tab as a mode, all controls at the bottom</h2>
+      <ol>
+        <li><span class="num">1</span><span><b>Pan / pinch</b> freely; the story is off screen, so nothing competes. First pan pauses Follow. Camera bottom inset = deck height.</span></li>
+        <li><span class="num">2</span><span><b>Tap a cluster</b> (48 px thumbnail bubble) → the deck's card slot becomes the cluster card. Tap a pin → cursor there (seek).</span></li>
+        <li><span class="num">3</span><span><b>Follow / Fit</b> in the right thumb arc, just above the deck. Nothing lives in the top corners.</span></li>
+        <li><span class="num">4</span><span><b>Cluster card</b>: one row per visit. <b>Jump in story</b> sets the cursor and closes Explore. <b>Zoom to these days</b> = desktop's <code>zoomInto</code> (pushes history, Back returns). ✕ → the photo card (thumb, time, place, Open photo).</span></li>
+        <li><span class="num">5</span><span><b>Time strip</b>: drag scrubs (camera flies), tap jumps; history <code>replace</code> only. Own band, never shared with the deck drag.</span></li>
+        <li><span class="num">6</span><span><b>Same transport as Story</b>, with <b>‹ Story</b> where the day chip was. Swipe the deck down or Back also returns. <code>&amp;view=map</code> while open.</span></li>
+      </ol>
+    </figcaption>
+  </figure>
+
+  <!-- ============ 4. LIGHTBOX ============ -->
+  <figure>
+    <div class="phone s-lb">
+      <div class="status"><span>9:41</span><span><i class="sig"></i><i class="bat"></i></span></div>
+      <div class="prog"><i class="done" style="flex:4"></i><i class="done" style="flex:10"></i><i class="done" style="flex:2"></i><i class="part" style="flex:88"></i><i style="flex:92"></i></div>
+      <div class="lbh">
+        <div class="tt"><b>Mon 9 Sep · Santa Cruz de la Serós</b><span>56 / 194 · stop 4 of 5</span></div>
+        <span class="x">✕</span>
+      </div>
+      <div class="ph pj peekL"></div>
+      <div class="ph pf stage"></div>
+      <div class="ph pb peekR"></div>
+      <div class="film">
+        <div class="ph pa"></div><div class="ph pg"></div><div class="ph pj"></div><span class="cut"></span><div class="ph pf c"></div><div class="ph pb"></div><div class="ph pd"></div><div class="ph pk"></div>
+      </div>
+      <div class="info">
+        <div class="handle"></div>
+        <div class="grid">
+          <div style="flex:1;min-width:0">
+            <div class="clock">16:57</div>
+            <div class="meta">Mon 9 Sep 2024 · UTC+2 · photo</div>
+            <div class="meta"><b>Santa Cruz de la Serós</b>, Spain</div>
+            <div class="meta">42.523, −0.676</div>
+          </div>
+          <div class="mini">
+            <svg class="map" viewBox="140 120 170 138" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+              <rect class="m-land" x="0" y="0" width="400" height="400"/>
+              <path class="m-water" d="M166 177 C174 170 190 167 204 171 C199 178 184 182 166 177Z"/>
+              <path class="m-road" vector-effect="non-scaling-stroke" d="M136 150 C150 160 165 170 178 178 C210 172 240 160 266 150 C280 180 292 215 300 250"/>
+              <path class="r r1" vector-effect="non-scaling-stroke" d="M176 174 C182 168 190 172 186 178 C182 182 174 180 178 176"/>
+              <path class="r r2" vector-effect="non-scaling-stroke" d="M186 176 C214 170 236 162 254 157"/>
+              <path class="rg rf" vector-effect="non-scaling-stroke" d="M260 160 C275 190 290 220 298 248"/>
+              <circle class="mk" vector-effect="non-scaling-stroke" cx="254" cy="157" r="5"/>
+            </svg>
+          </div>
+        </div>
+        <div class="pos"><i style="height:20%"></i><i style="height:35%"></i><i class="g" style="height:6%"></i><i style="height:5%"></i><i style="height:70%"></i><i style="height:55%"></i><i class="g" style="height:15%"></i><i style="height:80%"></i><i style="height:45%"></i><i style="height:20%"></i><i style="height:60%"></i><i style="height:100%"></i><i style="height:75%"></i><i style="height:40%"></i><s></s></div>
+        <div class="acts"><span class="btn pri">Share this photo</span><span class="btn">Credits</span></div>
+      </div>
+      <div class="dot" style="left:10px;top:300px">1</div>
+      <div class="dot" style="left:356px;top:176px">2</div>
+      <div class="dot" style="left:300px;top:500px">3</div>
+      <div class="dot" style="left:240px;top:572px">4</div>
+      <div class="dot" style="left:14px;top:108px">5</div>
+      <div class="home-ind"></div>
+    </div>
+    <figcaption>
+      <h2>4 · Lightbox: a pager in time order</h2>
+      <ol>
+        <li><span class="num">1</span><span><b>Swipe ← / →</b> steps photo by photo across stops (<code>model.ts step</code>, history <code>replace</code>). <b>Pinch / double-tap</b> zooms; while zoomed, drag pans and paging is off.</span></li>
+        <li><span class="num">2</span><span><b>Swipe down</b> or ✕ closes <b>back to the story with this photo's row as the current row</b>, wherever you stepped to; the map follows. Back also closes.</span></li>
+        <li><span class="num">3</span><span><b>Filmstrip</b>, fixed centre, <b>split by stop</b> (dashed cut = transit). ±1 preview preloaded, ≤3 decoded.</span></li>
+        <li><span class="num">4</span><span><b>Info sheet</b> peeks; <b>pull up</b> for details. Mini-map is static SVG from <code>routeLines</code> (no second MapLibre). <b>Share</b> sends <code>?album=…&amp;at=…&amp;lb=&lt;id&gt;</code>.</span></li>
+        <li><span class="num">5</span><span><b>Progress</b> segmented by day (Sun 8 Sep: a sliver), filled to this photo.</span></li>
+      </ol>
+    </figcaption>
+  </figure>
+
+  </div>
+  <p class="foot">Not drawn: landscape (map left 50%, story right, each with its own header and transport bar), the day sheet, place search results. v1 keeps the dark basemap in both themes; the light map here is the later target. Red dots are annotations, not UI. Photos are gradient stand-ins; data is the public demo.</p>
+</div>

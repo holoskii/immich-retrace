@@ -1,0 +1,797 @@
+<title>Preview: photo viewing (mobile)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+.mk-preview {
+  --bg: #efebe3; --ink: #1d1f22; --mute: #5f646c; --faint: #8e9198; --card: #ffffff; --line: #e1dbcf;
+  --screen: #faf8f4; --frame: #17181b; --amber: #b8650a; --amber-hi: #e08a1e; --amber-soft: #f7dfb8;
+  --note: #d6336c; --note-ink: #ffffff; --bar: rgba(255,255,255,.94); --bar-line: rgba(0,0,0,.08);
+  --chip: #f1ece2; --scrim: rgba(20,18,14,.45); --sheet: #ffffff; --sheet-ink: #1d1f22; --sheet-mute: #5f646c;
+  --water: #0f2433; --land: #1b1f25; --ridge: #343a42; --road: #3a4049; --town: #b9bec5;
+  --route: #f0a640; --route-fut: #6b5534; --shadow: 0 18px 50px rgba(30,25,15,.22); --bad: #b4232a;
+  font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color: var(--ink); background: var(--bg); padding: 32px 16px 48px; box-sizing: border-box;
+}
+@media (prefers-color-scheme: dark) {
+  .mk-preview {
+    --bg: #0d0f12; --ink: #e9e7e2; --mute: #a3a9b1; --faint: #7a8088; --card: #1b1e23; --line: #2a2e35;
+    --screen: #121418; --frame: #000000; --amber: #f0a640; --amber-hi: #f0a640; --amber-soft: #4a3517;
+    --note: #ff5c93; --note-ink: #ffffff; --bar: rgba(30,33,39,.94); --bar-line: rgba(255,255,255,.08);
+    --chip: #23272e; --scrim: rgba(0,0,0,.6); --sheet: #1b1e23; --sheet-ink: #e9e7e2; --sheet-mute: #a3a9b1;
+    --water: #0f2433; --land: #1b1f25; --ridge: #343a42; --road: #3a4049; --town: #b9bec5;
+    --route: #f0a640; --route-fut: #6b5534; --shadow: 0 18px 50px rgba(0,0,0,.6); --bad: #ff7b82;
+  }
+}
+.mk-preview *, .mk-preview *::before, .mk-preview *::after { box-sizing: border-box; }
+.mk-preview .mk-preview-sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+.mk-preview svg.ic { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.mk-preview svg.ic.sm { width: 14px; height: 14px; }
+.mk-preview svg.ic.fill { fill: currentColor; stroke: none; }
+.mk-preview .intro { max-width: 1760px; margin: 0 auto 28px; }
+.mk-preview .intro h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: -.01em; }
+.mk-preview .intro p, .mk-preview .var > p { margin: 0; color: var(--mute); max-width: 980px; }
+.mk-preview .var { max-width: 1760px; margin: 0 auto 56px; }
+.mk-preview .var > h2 { font-size: 19px; margin: 0 0 4px; }
+.mk-preview .var > h2 small { font-size: 13px; font-weight: 600; color: var(--amber); margin-left: 8px; }
+.mk-preview .shots { display: flex; flex-wrap: wrap; gap: 44px 36px; margin-top: 22px; }
+.mk-preview figure { margin: 0; width: 410px; max-width: 100%; }
+.mk-preview figcaption h3 { font-size: 15px; margin: 22px 0 6px; }
+.mk-preview figcaption ol { list-style: none; margin: 0; padding: 0; color: var(--mute); font-size: 13px; }
+.mk-preview figcaption li { display: flex; gap: 8px; margin: 0 0 6px; }
+.mk-preview figcaption li b { color: var(--ink); font-weight: 600; }
+.mk-preview .num { flex: none; width: 20px; height: 20px; border-radius: 50%; background: var(--note); color: var(--note-ink);
+  font: 700 11px/20px system-ui, sans-serif; text-align: center; margin-top: 1px; }
+.mk-preview .tag-no { display: inline-block; font-size: 11px; font-weight: 700; color: #fff; background: var(--bad); border-radius: 4px; padding: 1px 6px; margin-left: 6px; vertical-align: 2px; }
+
+/* phone */
+.mk-preview .ph { position: relative; width: 390px; height: 844px; margin: 10px; border-radius: 50px; overflow: hidden;
+  background: var(--screen); box-shadow: 0 0 0 10px var(--frame), var(--shadow); }
+.mk-preview .ph.dark { background: #000; color: #f2f2f2; }
+.mk-preview .sb { height: 47px; display: flex; align-items: center; justify-content: space-between; padding: 8px 30px 0 34px;
+  font-weight: 600; font-size: 15px; position: relative; z-index: 30; }
+.mk-preview .sb i { display: inline-block; height: 10px; margin-left: 5px; background: currentColor; border-radius: 2px; vertical-align: middle; }
+.mk-preview .sb .sig { width: 17px; clip-path: polygon(0 100%, 100% 0, 100% 100%); }
+.mk-preview .sb .bat { width: 23px; border-radius: 3px; }
+.mk-preview .hi { position: absolute; bottom: 8px; left: 50%; width: 134px; height: 5px; margin-left: -67px; border-radius: 3px;
+  background: var(--ink); opacity: .85; z-index: 60; }
+.mk-preview .ph.dark .hi { background: #fff; }
+.mk-preview .dot { position: absolute; z-index: 70; width: 22px; height: 22px; border-radius: 50%; background: var(--note);
+  color: var(--note-ink); font: 700 12px/22px system-ui, sans-serif; text-align: center;
+  box-shadow: 0 0 0 3px rgba(255,255,255,.8), 0 2px 6px rgba(0,0,0,.35); }
+
+/* header + chapter */
+.mk-preview .hdr { height: 56px; display: flex; align-items: center; gap: 6px; padding: 0 8px; position: relative; z-index: 20; background: var(--screen); }
+.mk-preview .hdr .ttl { background: var(--chip); border-radius: 14px; padding: 5px 12px; }
+.mk-preview .hdr .ttl b svg { vertical-align: -2px; margin-left: 2px; color: var(--mute); }
+.mk-preview .btn { min-width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+  border-radius: 22px; color: inherit; font-weight: 600; font-size: 14px; }
+.mk-preview .hdr .back { color: var(--amber); padding: 0 6px 0 0; }
+.mk-preview .hdr .ttl { flex: 1; min-width: 0; text-align: center; line-height: 1.2; }
+.mk-preview .hdr .ttl b { display: block; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mk-preview .hdr .ttl span { font-size: 11.5px; color: var(--mute); }
+.mk-preview .hdr .ttl span em { font-style: normal; font-weight: 700; color: var(--amber); letter-spacing: .04em; }
+.mk-preview .seg { display: inline-flex; background: var(--chip); border-radius: 10px; padding: 2px; height: 32px; }
+.mk-preview .seg span { display: inline-flex; align-items: center; justify-content: center; width: 34px; border-radius: 8px; color: var(--mute); }
+.mk-preview .seg span.on { background: var(--card); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.15); }
+.mk-preview .chap { height: 56px; padding: 7px 16px 0; background: var(--screen); border-bottom: 1px solid var(--line); position: relative; z-index: 15; }
+.mk-preview .chap .d { font-size: 11px; font-weight: 700; letter-spacing: .06em; color: var(--amber); display: flex; justify-content: space-between; }
+.mk-preview .chap .d span { color: var(--mute); letter-spacing: 0; font-weight: 600; }
+.mk-preview .chap .s { font-size: 14px; font-weight: 600; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mk-preview .chap .s span { color: var(--mute); font-weight: 400; }
+.mk-preview .body { padding: 6px 16px 0; }
+
+/* tiles */
+.mk-preview .row { display: flex; gap: 3px; height: 108px; margin-bottom: 3px; }
+.mk-preview .t { position: relative; display: block; flex: 1 1 0; min-width: 0; overflow: hidden; border-radius: 2px; background: #888; }
+.mk-preview .t > b { position: absolute; inset: 0; display: block; }
+.mk-preview .th .t > b, .mk-preview .t.th > b { filter: blur(7px) saturate(.85); transform: scale(1.25); }
+.mk-preview .t.cur { box-shadow: 0 0 0 3px var(--amber-hi); z-index: 2; overflow: visible; }
+.mk-preview .t.cur::after { content: ""; position: absolute; inset: 0; box-shadow: inset 0 0 0 1px #fff; border-radius: 2px; }
+.mk-preview .t.cur > b { border-radius: 2px; }
+.mk-preview .vb { position: absolute; left: 4px; bottom: 4px; display: inline-flex; align-items: center; gap: 2px; padding: 1px 5px 1px 3px;
+  border-radius: 4px; background: rgba(0,0,0,.62); color: #fff; font: 600 11px/16px system-ui, sans-serif; text-decoration: none; }
+.mk-preview .vb svg { width: 11px; height: 11px; fill: #fff; }
+.mk-preview .ng { position: absolute; right: 4px; top: 4px; width: 22px; height: 22px; border-radius: 50%; background: rgba(0,0,0,.62);
+  color: #fff; display: flex; align-items: center; justify-content: center; text-decoration: none; }
+.mk-preview .ng svg { width: 14px; height: 14px; }
+.mk-preview .hero { height: 222px; margin-bottom: 3px; display: block; flex: none; }
+.mk-preview .hero .cap { position: absolute; left: 10px; bottom: 8px; color: #fff; font-size: 11.5px; font-weight: 600; text-shadow: 0 1px 3px rgba(0,0,0,.6); }
+.mk-preview .stop { display: flex; align-items: flex-end; justify-content: space-between; height: 46px; padding-bottom: 6px; }
+.mk-preview .stop b { font-size: 16px; }
+.mk-preview .stop div span { display: block; font-size: 12px; color: var(--mute); }
+.mk-preview .stop .k { font-size: 11px; color: var(--mute); font-weight: 600; }
+.mk-preview .transit { display: flex; align-items: center; gap: 8px; height: 40px; color: var(--mute); font-size: 12px; }
+.mk-preview .transit::before, .mk-preview .transit::after { content: ""; flex: 1; border-top: 2px dashed var(--line); }
+.mk-preview .transit span { white-space: nowrap; }
+
+/* photo looks */
+.mk-preview .g1 { background: linear-gradient(180deg,#a9cce8 0 42%,#4f8fbf 42% 64%,#e5cf9f 64% 80%,#c9a97a 80%); }
+.mk-preview .g2 { background: linear-gradient(158deg,transparent 0 60%,#5b7a46 60%), linear-gradient(26deg,transparent 0 50%,#8796ad 50%), linear-gradient(180deg,#bcd6ec,#e8eef2); }
+.mk-preview .g3 { background: linear-gradient(180deg,#9fc3e0 0 28%,transparent 28%), repeating-linear-gradient(90deg,#c99d6c 0 18px,#7a5636 18px 22px,#c99d6c 22px 40px); }
+.mk-preview .g4 { background: linear-gradient(180deg,#f6c177 0,#ee8a5b 46%,#6b4a6e 47%,#3b2f4a); }
+.mk-preview .g5 { background: radial-gradient(ellipse 34% 40% at 50% 100%,#b08f68 0 98%,transparent 100%), linear-gradient(180deg,#b9d4ea,#dfe9ef 58%,#7d8f5c 58%); }
+.mk-preview .g6 { background: linear-gradient(170deg,#a6c785 0 28%,#3e6b3a 28% 70%,#2b4a2a); }
+.mk-preview .g7 { background: linear-gradient(180deg,#c7dcea 0 34%,#8a9b7c 34% 44%,#3fa3a8 44% 80%,#2b7f86); }
+.mk-preview .g8 { background: radial-gradient(circle at 50% 55%,#f3e3c3 0 28%,#c4532b 29% 36%,#e8dcc8 37% 46%,#6d4a33 47%); }
+.mk-preview .g9 { background: linear-gradient(100deg,#b4673d 0 30%,#d79a5f 30% 45%,#6c8db5 45% 55%,#d08c55 55% 72%,#a25a33 72%); }
+.mk-preview .g10 { background: linear-gradient(180deg,#9ec8ea 0 45%,#e4c25a 45% 72%,#c79b33); }
+.mk-preview .g11 { background: radial-gradient(ellipse 30% 45% at 50% 38%,#f2e2c0 0 96%,transparent 100%), linear-gradient(180deg,#5a4a3c,#2f2620); }
+.mk-preview .g12 { background: radial-gradient(circle at 30% 40%,#ffd27a 0 5%,transparent 6%), radial-gradient(circle at 72% 34%,#ffd27a 0 4%,transparent 5%), linear-gradient(180deg,#1e2a48,#3c3f5c 62%,#2a2a33); }
+.mk-preview .g13 { background: linear-gradient(90deg,transparent 0 38%,#b0895c 38% 62%,transparent 62%), linear-gradient(180deg,#a8cbe6 0 48%,#c39a6a 48%); }
+.mk-preview .g14 { background: linear-gradient(200deg,#d6e4ee 0 30%,#9aa57f 30% 55%,#6f7e52 55%); }
+
+/* transport row (Photos view), status slot */
+.mk-preview .trow { position: absolute; left: 0; right: 0; bottom: 0; height: 90px; padding: 0 12px 34px; background: var(--bar);
+  border-top: 1px solid var(--bar-line); display: flex; align-items: center; gap: 8px; z-index: 40; }
+.mk-preview .trow .grow { flex: 1; }
+.mk-preview .vsw { display: inline-flex; height: 40px; padding: 3px; border-radius: 12px; background: var(--chip); }
+.mk-preview .vsw span { display: inline-flex; align-items: center; padding: 0 10px; border-radius: 9px; font-size: 13.5px; font-weight: 600; color: var(--mute); }
+.mk-preview .vsw span.on { background: var(--card); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.15); }
+.mk-preview .trow .chipb { height: 40px; padding: 0 10px; white-space: nowrap; }
+.mk-preview .trow .seg { height: 40px; }
+.mk-preview .chipb { height: 44px; padding: 0 14px; border-radius: 22px; background: var(--chip); display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 14px; }
+.mk-preview .pill { position: absolute; left: 50%; transform: translateX(-50%); bottom: 102px; height: 40px; padding: 0 16px; border-radius: 20px;
+  background: var(--amber-hi); color: #1d1408; font-weight: 700; font-size: 14px; display: inline-flex; align-items: center; gap: 6px; z-index: 41;
+  box-shadow: 0 4px 14px rgba(0,0,0,.25); }
+
+/* sheet + scrim */
+.mk-preview .scrim { position: absolute; inset: 0; background: var(--scrim); z-index: 45; }
+.mk-preview .sheet { position: absolute; left: 0; right: 0; bottom: 0; background: var(--sheet); color: var(--sheet-ink); border-radius: 18px 18px 0 0;
+  z-index: 50; padding: 16px 16px 34px; box-shadow: 0 -6px 24px rgba(0,0,0,.25); }
+.mk-preview .sheet h4 { margin: 0 0 8px; font-size: 16px; display: flex; justify-content: space-between; align-items: baseline; }
+.mk-preview .sheet h4 span { font-size: 12px; color: var(--sheet-mute); font-weight: 500; flex: 1; margin-left: 8px; }
+.mk-preview .sx { flex: none; width: 44px; height: 44px; margin: -10px -12px -10px 0; display: inline-flex; align-items: center; justify-content: center; color: var(--sheet-mute); }
+.mk-preview .ai { height: 52px; display: flex; align-items: center; gap: 12px; padding: 0 4px; font-size: 15px; font-weight: 600; border-top: 1px solid var(--line); }
+.mk-preview .ai svg { color: var(--sheet-mute); }
+.mk-preview .ai span { margin-left: auto; font-size: 12px; font-weight: 500; color: var(--sheet-mute); }
+.mk-preview .t.ring { box-shadow: 0 0 0 3px var(--amber-hi), 0 10px 26px rgba(0,0,0,.45); overflow: visible; z-index: 48; }
+.mk-preview .dayrow { display: grid; grid-template-columns: 6px 1fr auto; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); min-height: 64px; align-items: start; }
+.mk-preview .dayrow .mk { width: 6px; height: 100%; border-radius: 3px; }
+.mk-preview .dayrow.on .mk { background: var(--amber-hi); }
+.mk-preview .dayrow b { font-size: 14px; }
+.mk-preview .dayrow .meta { font-size: 12px; color: var(--sheet-mute); }
+.mk-preview .dayrow .n2 { font-size: 13px; font-weight: 700; color: var(--sheet-mute); padding-top: 2px; }
+.mk-preview .stops { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.mk-preview .stops span { height: 34px; padding: 0 12px; border-radius: 17px; background: var(--chip); display: inline-flex; align-items: center; font-size: 13px; font-weight: 600; }
+.mk-preview .stops span i { font-style: normal; font-weight: 500; color: var(--sheet-mute); margin-left: 6px; }
+.mk-preview .dayrow.off { opacity: 1; }
+.mk-preview .dayrow.off b, .mk-preview .dayrow.off .meta { color: var(--faint); }
+.mk-preview .dayrow.off .mk { background: repeating-linear-gradient(45deg,var(--faint) 0 2px,transparent 2px 4px); }
+.mk-preview .note { font-size: 12px; color: var(--sheet-mute); margin-top: 8px; }
+
+/* V2 grid */
+.mk-preview .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px; padding: 0 2px; }
+.mk-preview .grid .t { aspect-ratio: 1; border-radius: 0; }
+.mk-preview .dh { height: 40px; padding: 8px 14px 0; font-size: 11px; font-weight: 700; letter-spacing: .06em; color: var(--amber); display: flex; justify-content: space-between; background: var(--screen); }
+.mk-preview .dh span { color: var(--mute); letter-spacing: 0; }
+.mk-preview .sh { height: 32px; padding: 6px 14px 0; font-size: 13px; font-weight: 600; background: var(--screen); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mk-preview .sh span { color: var(--mute); font-weight: 400; }
+.mk-preview .sticky { position: relative; z-index: 15; border-bottom: 1px solid var(--line); background: var(--screen); }
+.mk-preview .tr2 { height: 28px; display: flex; align-items: center; gap: 8px; padding: 0 14px; color: var(--mute); font-size: 12px; }
+.mk-preview .tr2::before, .mk-preview .tr2::after { content: ""; flex: 1; border-top: 2px dashed var(--line); }
+.mk-preview .rail { position: absolute; right: 4px; top: 170px; bottom: 120px; width: 44px; z-index: 30; }
+.mk-preview .rail::before { content: ""; position: absolute; right: 18px; top: 0; bottom: 0; width: 3px; border-radius: 2px; background: var(--line); }
+.mk-preview .rail .thumb { position: absolute; right: 9px; width: 22px; height: 40px; border-radius: 11px; background: var(--amber-hi); box-shadow: 0 2px 6px rgba(0,0,0,.3); }
+.mk-preview .rail .tick { position: absolute; right: 14px; width: 11px; height: 2px; background: var(--mute); }
+.mk-preview .rail .tick.st { width: 6px; right: 17px; opacity: .6; }
+.mk-preview .rail .lab { position: absolute; right: 34px; font-size: 11px; font-weight: 700; color: var(--mute); background: var(--screen); padding: 0 3px; border-radius: 3px; }
+.mk-preview .bubble { position: absolute; right: 56px; z-index: 35; background: var(--card); color: var(--ink); border-radius: 12px; padding: 8px 12px;
+  box-shadow: 0 6px 20px rgba(0,0,0,.28); font-size: 15px; font-weight: 700; line-height: 1.25; }
+.mk-preview .bubble span { display: block; font-size: 12px; font-weight: 500; color: var(--mute); }
+.mk-preview .finger { position: absolute; width: 46px; height: 46px; border-radius: 50%; background: rgba(214,51,108,.22); border: 2px solid var(--note); z-index: 36; }
+
+/* lightbox */
+.mk-preview .lbtop { position: absolute; top: 47px; left: 0; right: 0; height: 48px; display: flex; align-items: center; padding: 0 6px; z-index: 20; color: #fff; }
+.mk-preview .lbtop .mid { flex: 1; text-align: center; line-height: 1.2; }
+.mk-preview .lbtop .mid b { font-size: 15px; }
+.mk-preview .lbtop .mid span { display: block; font-size: 11.5px; color: #c9cbd0; }
+.mk-preview .prog { position: absolute; top: 97px; left: 16px; right: 16px; height: 4px; display: flex; gap: 3px; z-index: 20; }
+.mk-preview .prog i { position: relative; height: 4px; border-radius: 2px; background: rgba(255,255,255,.28); overflow: hidden; display: block; flex: none; }
+.mk-preview .prog i.full { background: #f0a640; }
+.mk-preview .prog i.e { width: 2px; background: rgba(255,255,255,.55); height: 8px; margin-top: -2px; }
+.mk-preview .prog i em { position: absolute; left: 0; top: 0; bottom: 0; background: #f0a640; }
+.mk-preview .prog i u { position: absolute; top: 0; bottom: 0; width: 2px; background: #000; }
+.mk-preview .proglab { position: absolute; top: 105px; left: 16px; right: 16px; display: flex; font-size: 11px; color: #a9adb4; z-index: 20; }
+.mk-preview .cross { position: absolute; top: 126px; left: 50%; transform: translateX(-50%); z-index: 21; background: rgba(32,34,38,.92); color: #fff;
+  border-radius: 16px; min-height: 32px; width: max-content; max-width: 358px; padding: 6px 14px; display: block; text-align: center; font-size: 12.5px; line-height: 1.35; white-space: normal; border: 1px solid rgba(255,255,255,.15); }
+.mk-preview .cross b { color: #f0a640; }
+.mk-preview .stage { position: absolute; left: 0; right: 0; display: block; }
+.mk-preview .film { position: absolute; left: 0; right: 0; height: 64px; z-index: 20; display: flex; align-items: flex-end; gap: 3px; padding: 0 0 6px; overflow: hidden; }
+.mk-preview .film .f { flex: none; width: 36px; height: 36px; position: relative; overflow: hidden; border-radius: 3px; opacity: .8; }
+.mk-preview .film .f > b { position: absolute; inset: 0; }
+.mk-preview .film .f.on { width: 44px; height: 44px; opacity: 1; box-shadow: 0 0 0 2px #f0a640; overflow: visible; }
+.mk-preview .film .f.on > b { border-radius: 3px; }
+.mk-preview .film .gap { flex: none; width: 12px; height: 36px; position: relative; }
+.mk-preview .film .gap::before { content: ""; position: absolute; left: 5px; top: 0; bottom: 0; width: 2px; background: rgba(255,255,255,.5); }
+.mk-preview .film .lab { position: absolute; top: 2px; font-size: 11px; color: #c9cbd0; white-space: nowrap; }
+.mk-preview .film .lab b { color: #fff; }
+.mk-preview .peek { position: absolute; left: 0; right: 0; bottom: 0; height: 122px; background: var(--sheet); color: var(--sheet-ink); border-radius: 18px 18px 0 0;
+  padding: 8px 16px 0; z-index: 25; display: grid; grid-template-columns: 1fr 56px; column-gap: 12px; align-content: start; }
+.mk-preview .peek { padding-top: 22px; }
+.mk-preview .peek .chev { position: absolute; left: 50%; top: 0; width: 44px; height: 22px; margin-left: -22px; display: flex; align-items: center; justify-content: center; color: var(--sheet-mute); }
+.mk-preview .info .ix { position: absolute; right: 4px; top: 4px; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; color: var(--sheet-mute); }
+.mk-preview .peek .l1 { font-size: 14px; font-weight: 600; }
+.mk-preview .peek .l2 { font-size: 13px; color: var(--sheet-mute); margin-top: 2px; display: flex; align-items: center; gap: 4px; }
+.mk-preview .peek .l1, .mk-preview .peek .l2 { grid-column: 1; }
+.mk-preview .peek svg.mini { grid-row: 1 / span 2; grid-column: 2; width: 56px; height: 56px; border-radius: 8px; }
+.mk-preview .info { position: absolute; left: 0; right: 0; bottom: 0; top: 370px; background: var(--sheet); color: var(--sheet-ink); border-radius: 18px 18px 0 0; padding: 16px 16px 0; z-index: 25; }
+.mk-preview .info .l1 { font-size: 16px; font-weight: 700; }
+.mk-preview .info .l2 { font-size: 14px; margin-top: 4px; display: flex; align-items: center; gap: 6px; }
+.mk-preview .info .l3 { font-size: 12px; color: var(--sheet-mute); margin: 2px 0 10px 22px; }
+.mk-preview .kv { display: grid; grid-template-columns: 70px 1fr; gap: 4px 10px; font-size: 13px; margin-bottom: 10px; }
+.mk-preview .kv span { color: var(--sheet-mute); }
+.mk-preview .route { display: block; width: 358px; height: 150px; border-radius: 10px; }
+.mk-preview .acts { display: flex; gap: 8px; margin-top: 10px; }
+.mk-preview .acts span { flex: 1; height: 44px; border-radius: 12px; background: var(--chip); display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-weight: 600; font-size: 14px; }
+.mk-preview .credit { font-size: 11.5px; color: var(--sheet-mute); margin-top: 8px; }
+.mk-preview .vctl { position: absolute; left: 0; right: 0; height: 52px; display: flex; align-items: center; gap: 10px; padding: 0 12px; color: #fff; font-size: 12px; z-index: 22;
+  background: linear-gradient(0deg, rgba(0,0,0,.65), rgba(0,0,0,0)); }
+.mk-preview .vctl .bar2 { flex: 1; height: 4px; border-radius: 2px; background: rgba(255,255,255,.35); position: relative; }
+.mk-preview .vctl .bar2::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 36%; background: #fff; border-radius: 2px; }
+.mk-preview .vctl .bar2::after { content: ""; position: absolute; left: 36%; top: -5px; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%; background: #fff; }
+.mk-preview .zone { position: absolute; left: 0; right: 0; height: 64px; z-index: 23; border: 2px dashed #ff5c93; background: repeating-linear-gradient(45deg, rgba(255,92,147,.14) 0 6px, transparent 6px 12px); }
+.mk-preview .zone span { position: absolute; right: 6px; top: -20px; font-size: 11px; color: #ff8fb4; font-weight: 600; }
+.mk-preview .navbtn { position: absolute; z-index: 21; width: 44px; height: 44px; border-radius: 50%; background: rgba(40,42,46,.7); color: #fff; display: flex; align-items: center; justify-content: center; }
+
+/* landscape lightbox */
+.mk-preview figure.wide { width: 884px; }
+.mk-preview .ph.land { width: 844px; height: 390px; border-radius: 50px; }
+.mk-preview .ph.land .lbtop { top: 6px; left: 47px; right: auto; width: 414px; padding: 0; }
+.mk-preview .ph.land .prog { top: 54px; left: 59px; right: auto; width: 390px; }
+.mk-preview .ph.land .info { top: 0; left: 461px; right: 0; bottom: 0; border-radius: 0; padding: 14px 47px 0 16px; box-shadow: -6px 0 24px rgba(0,0,0,.35); }
+.mk-preview .ph.land .info .ix { right: 43px; top: 6px; }
+.mk-preview .ph.land .info .l1 { font-size: 15px; padding-right: 36px; }
+.mk-preview .ph.land .route { width: 320px; height: 118px; }
+.mk-preview .ph.land .kv { margin-bottom: 8px; }
+.mk-preview .ph.land .acts { margin-top: 8px; }
+.mk-preview .ph.land .acts span { height: 40px; font-size: 13px; }
+.mk-preview .capl { position: absolute; left: 59px; bottom: 14px; z-index: 22; display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px;
+  border-radius: 17px; background: rgba(32,34,38,.88); color: #fff; font-size: 12.5px; border: 1px dashed rgba(255,255,255,.5); }
+.mk-preview .capl i { font-style: normal; font-size: 11px; color: #ff8fb4; margin-left: 4px; }
+
+/* story pager (3c) */
+.mk-preview .pg { position: absolute; left: 12px; right: 12px; border-radius: 18px; overflow: hidden; background: #17191d; color: #f2f2f2; }
+.mk-preview .pg .ph2 { height: 330px; position: relative; display: block; }
+.mk-preview .pg .ph2 > b { position: absolute; inset: 0; }
+.mk-preview .pg .tx { padding: 12px 14px; }
+.mk-preview .pg .tx b { font-size: 18px; display: block; }
+.mk-preview .pg .tx span { font-size: 12.5px; color: #b7bbc2; }
+.mk-preview .pg .strip { display: flex; gap: 3px; padding: 0 14px 14px; }
+.mk-preview .pg .strip .t { height: 54px; flex: 1; }
+.mk-preview .pgk { position: absolute; left: 12px; top: 12px; font-size: 11px; font-weight: 700; letter-spacing: .06em; background: rgba(0,0,0,.55); color: #fff; padding: 3px 8px; border-radius: 6px; }
+</style>
+
+<div class="mk-preview">
+<svg class="mk-preview-sprite" aria-hidden="true">
+  <symbol id="mk-preview-i-back" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></symbol>
+  <symbol id="mk-preview-i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></symbol>
+  <symbol id="mk-preview-i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="mk-preview-i-share" viewBox="0 0 24 24"><path d="M12 3v12M7 8l5-5 5 5M5 13v7h14v-7"/></symbol>
+  <symbol id="mk-preview-i-play" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></symbol>
+  <symbol id="mk-preview-i-pin" viewBox="0 0 24 24"><path d="M12 21s-6-6.2-6-11a6 6 0 0 1 12 0c0 4.8-6 11-6 11z"/><circle cx="12" cy="10" r="2"/></symbol>
+  <symbol id="mk-preview-i-nopin" viewBox="0 0 24 24"><path d="M12 21s-6-6.2-6-11a6 6 0 0 1 12 0c0 4.8-6 11-6 11z"/><path d="M3 3l18 18"/></symbol>
+  <symbol id="mk-preview-i-map" viewBox="0 0 24 24"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z M9 4v14 M15 6v14"/></symbol>
+  <symbol id="mk-preview-i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/></symbol>
+  <symbol id="mk-preview-i-rows" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="8" rx="1"/><rect x="3" y="14" width="7" height="6" rx="1"/><rect x="12" y="14" width="9" height="6" rx="1"/></symbol>
+  <symbol id="mk-preview-i-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+  <symbol id="mk-preview-i-upc" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></symbol>
+  <symbol id="mk-preview-i-up" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></symbol>
+  <symbol id="mk-preview-i-open" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"/></symbol>
+  <symbol id="mk-preview-i-mute" viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z M16 9l5 6M21 9l-5 6"/></symbol>
+  <symbol id="mk-preview-i-full" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></symbol>
+  <symbol id="mk-preview-i-pause" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/></symbol>
+  <symbol id="mk-preview-i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></symbol>
+  <symbol id="mk-preview-i-prev" viewBox="0 0 24 24"><path d="M14 6l-6 6 6 6"/></symbol>
+  <symbol id="mk-preview-i-next" viewBox="0 0 24 24"><path d="M10 6l6 6-6 6"/></symbol>
+</svg>
+
+<header class="intro">
+  <h1>Preview: photo viewing on the phone</h1>
+  <p>Photos/Story layout, lightbox, prefetch. Demo trip "San Sebastián to Huesca", 6–10 Sep 2024, 194 photos (4 without location, 8 short videos in the month). Photos are drawn as gradients; the map is a static SVG sketch. Six stops (Huesca is 44 + 48). Photos is a view of the trip: title block on top, transport row with <code>Replay | Photos</code> at the bottom. Sheets have no grabbers. Pink dots are annotations, not UI. Revised after <code>06-review.md</code>. Doc: <code>05-categories/preview.md</code>.</p>
+</header>
+
+<!-- ================= VARIANT 1 ================= -->
+<section class="var mk-preview-v1">
+  <h2>Variant 1 · Story density <small>recommended layout (with V2's rail)</small></h2>
+  <p>A's justified rows (~108 px from <code>ratio</code>) with a full-width hero per stop. Same component as phase-2 Story; phase 1 shown (scroll never moves the cursor).</p>
+  <div class="shots">
+
+  <figure>
+    <div class="ph">
+      <div class="sb">9:41<span><i class="sig"></i><i class="bat"></i></span></div>
+      <div class="hdr">
+        <span class="btn" aria-hidden="true"></span>
+        <div class="ttl"><b>San Sebastián to Huesca<svg class="ic sm"><use href="#mk-preview-i-down"/></svg></b><span><em>DEMO</em> · 6–10 Sep 2024 · 194 photos</span></div>
+        <span class="btn"><svg class="ic"><use href="#mk-preview-i-more"/></svg></span>
+      </div>
+      <div class="chap"><div class="d">MON 9 SEP · DAY 4 OF 5<span>88 photos</span></div><div class="s">Santa Cruz de la Serós <span>· 16:59–19:01 · 47</span></div></div>
+      <div class="body">
+        <div class="row">
+          <i class="t" style="flex:1.33"><b class="g7"></b></i>
+          <i class="t" style="flex:.75"><b class="g14"></b><s class="ng" title="no location"><svg class="ic"><use href="#mk-preview-i-nopin"/></svg></s></i>
+          <i class="t" style="flex:1.33"><b class="g2"></b></i>
+        </div>
+        <div class="transit"><span>3 h 03 · ≈ 43 km · Yesa → Santa Cruz de la Serós</span></div>
+        <div class="stop"><div><b>Santa Cruz de la Serós</b><span>Mon 9 Sep · 16:59–19:01 · 47 photos</span></div><span class="k">stop 4 of 6</span></div>
+        <i class="t hero"><b class="g5"></b><span class="cap">16:59</span></i>
+        <div class="row">
+          <i class="t" style="flex:.75"><b class="g3"></b></i>
+          <i class="t" style="flex:1.33"><b class="g2"></b></i>
+          <i class="t" style="flex:1.33"><b class="g6"></b><s class="vb"><svg><use href="#mk-preview-i-play"/></svg>0:06</s></i>
+        </div>
+        <div class="row">
+          <i class="t" style="flex:1.5"><b class="g11"></b></i>
+          <i class="t cur" style="flex:1.33"><b class="g5"></b></i>
+          <i class="t" style="flex:.75"><b class="g14"></b></i>
+        </div>
+        <div class="row">
+          <i class="t" style="flex:1"><b class="g4"></b></i>
+          <i class="t" style="flex:1.33"><b class="g9"></b></i>
+        </div>
+      </div>
+      <div class="trow"><span class="vsw"><span>Replay</span><span class="on">Photos</span></span><span class="grow"></span><span class="chipb">Day 4 of 5 <svg class="ic sm"><use href="#mk-preview-i-down"/></svg></span></div>
+      <span class="dot" style="left:6px;top:64px">1</span>
+      <span class="dot" style="left:352px;top:122px">2</span>
+      <span class="dot" style="left:358px;top:286px">3</span>
+      <span class="dot" style="left:300px;top:422px">4</span>
+      <span class="dot" style="left:160px;top:172px">5</span>
+      <span class="dot" style="left:326px;top:644px">6</span>
+      <span class="dot" style="left:206px;top:722px">7</span>
+      <span class="dot" style="left:70px;top:728px">8</span>
+      <span class="dot" style="left:340px;top:728px">9</span>
+      <span class="hi"></span>
+    </div>
+    <figcaption><h3>V1·A · Photos, settled</h3><ol>
+      <li><span class="num">1</span><span><b>Title block</b>, the same as in Replay: name ⌄ opens Library, line 2 is static, ⋯ right. No <code>‹ Map</code> header: Photos is a view, not a screen. Drill-up (when zoomed) is the title's ‹.</span></li>
+      <li><span class="num">2</span><span><b>Sticky chapter</b>: day + current stop, updates while scrolling (phase 2: this line is the cursor row's stop).</span></li>
+      <li><span class="num">3</span><span><b>Transit break</b> from <code>stops.ts</code>: gap, straight-line km, from → to.</span></li>
+      <li><span class="num">4</span><span><b>Stop header + hero</b> (358 px wide), <code>stop 4 of 6</code>: thumbnail first, <code>preview</code> after 300 ms at rest, ≤ 2 hero previews at once.</span></li>
+      <li><span class="num">5</span><span><b>No location</b>: crossed-pin badge, inline in time order; label says "no location".</span></li>
+      <li><span class="num">6</span><span><b>Video</b>: play glyph + duration, 11 px on a scrim.</span></li>
+      <li><span class="num">7</span><span><b>Cursor photo</b>: amber ring + white hairline. Tap any tile = cursor there + lightbox. Long-press = the shared action sheet (V2·C).</span></li>
+      <li><span class="num">8</span><span><b>Transport row</b>, view switch <code>Replay | Photos</code>: replace, <code>view=photos</code> in the URL. Back leaves the trip. Phase 1 has no ▶ and no ⏮ ⏭.</span></li>
+      <li><span class="num">9</span><span><b>Day ▾</b> opens the day sheet (V1·B). When the cursor row is off screen, the status slot above this row holds <code>↑ 16:59</code> (V2·A).</span></li>
+    </ol></figcaption>
+  </figure>
+
+  <figure>
+    <div class="ph">
+      <div class="sb">9:41<span><i class="sig"></i><i class="bat"></i></span></div>
+      <div class="hdr">
+        <span class="btn" aria-hidden="true"></span>
+        <div class="ttl"><b>San Sebastián to Huesca<svg class="ic sm"><use href="#mk-preview-i-down"/></svg></b><span><em>DEMO</em> · 6–10 Sep 2024 · 194 photos</span></div>
+        <span class="btn"><svg class="ic"><use href="#mk-preview-i-more"/></svg></span>
+      </div>
+      <div class="chap"><div class="d">MON 9 SEP · DAY 4 OF 5<span>88 photos</span></div><div class="s">Yesa <span>· 13:02–13:58 · 41</span></div></div>
+      <div class="body th">
+        <div class="row"><i class="t" style="flex:1.33"><b class="g7"></b></i><i class="t" style="flex:1.33"><b class="g2"></b></i><i class="t" style="flex:.75"><b class="g6"></b></i></div>
+        <div class="row"><i class="t" style="flex:1"><b class="g10"></b></i><i class="t" style="flex:1.5"><b class="g7"></b></i></div>
+      </div>
+      <div class="scrim"></div>
+      <div class="sheet" style="height:560px">
+        <h4>Jump to <span>5 days · 194 photos</span><i class="sx"><svg class="ic"><use href="#mk-preview-i-x"/></svg></i></h4>
+        <div class="dayrow"><i class="mk"></i><div><b>Fri 6 Sep</b> <span class="meta">· Day 1</span><div class="stops"><span>San Sebastián<i>4</i></span></div></div><span class="n2">4</span></div>
+        <div class="dayrow"><i class="mk"></i><div><b>Sat 7 Sep</b> <span class="meta">· Day 2</span><div class="stops"><span>San Sebastián<i>10</i></span></div></div><span class="n2">10</span></div>
+        <div class="dayrow off" style="min-height:44px"><i class="mk"></i><div><b>Sun 8 Sep</b> <span class="meta">· Day 3 · no photos</span></div><span class="n2">0</span></div>
+        <div class="dayrow on"><i class="mk"></i><div><b>Mon 9 Sep</b> <span class="meta">· Day 4 · you are here</span><div class="stops"><span>Yesa<i>41</i></span><span>Santa Cruz de la Serós<i>47</i></span></div></div><span class="n2">88</span></div>
+        <div class="dayrow"><i class="mk"></i><div><b>Tue 10 Sep</b> <span class="meta">· Day 5</span><div class="stops"><span>Huesca<i>44</i></span><span>Huesca<i>48</i></span></div></div><span class="n2">92</span></div>
+        <div class="note">Tap a day or a stop to scroll there. The cursor stays at 16:59 until you tap a photo.</div>
+      </div>
+      <span class="dot" style="left:300px;top:270px">1</span>
+      <span class="dot" style="left:252px;top:640px">2</span>
+      <span class="dot" style="left:250px;top:560px">3</span>
+      <span class="dot" style="left:2px;top:620px">4</span>
+      <span class="hi"></span>
+    </div>
+    <figcaption><h3>V1·B · Day sheet (find one photo)</h3><ol>
+      <li><span class="num">1</span><span><b>Fixed-height sheet</b>, no grabber, no drag: ✕, a scrim tap or Back closes it. Rows ≥ 44 px.</span></li>
+      <li><span class="num">2</span><span><b>Stop chips</b> jump straight to a stop header: trip → photo in 4–6 gestures for 600 photos. Huesca is two stops (44 + 48).</span></li>
+      <li><span class="num">3</span><span><b>Empty day</b> listed (hatched marker + text), not tappable.</span></li>
+      <li><span class="num">4</span><span><b>Current day</b> marked with a bar and "you are here", not colour alone. Behind: tiles mid-fling show thumbhash only.</span></li>
+    </ol></figcaption>
+  </figure>
+  </div>
+</section>
+
+<!-- ================= VARIANT 2 ================= -->
+<section class="var mk-preview-v2">
+  <h2>Variant 2 · Compact grid</h2>
+  <p>Same component with <code>ratio := 1</code>: 4 square columns (94 px), sticky day + stop headers, no heroes, a fast-scroll rail. Pinch out → Story density; the transport-row toggle does the same without a gesture (after phase 1).</p>
+  <div class="shots">
+
+  <figure>
+    <div class="ph">
+      <div class="sb">9:41<span><i class="sig"></i><i class="bat"></i></span></div>
+      <div class="hdr">
+        <span class="btn" aria-hidden="true"></span>
+        <div class="ttl"><b>San Sebastián to Huesca<svg class="ic sm"><use href="#mk-preview-i-down"/></svg></b><span><em>DEMO</em> · 6–10 Sep 2024 · 194 photos</span></div>
+        <span class="btn"><svg class="ic"><use href="#mk-preview-i-more"/></svg></span>
+      </div>
+      <div class="sticky"><div class="dh">MON 9 SEP · DAY 4 OF 5<span>88</span></div><div class="sh">Santa Cruz de la Serós <span>· 16:59–19:01 · 47</span></div></div>
+      <div class="grid" style="margin-top:2px">
+        <i class="t"><b class="g3"></b></i><i class="t"><b class="g11"></b></i><i class="t"><b class="g2"></b></i><i class="t"><b class="g6"></b><s class="vb"><svg><use href="#mk-preview-i-play"/></svg>0:06</s></i>
+        <i class="t"><b class="g14"></b></i><i class="t"><b class="g4"></b></i><i class="t"><b class="g5"></b></i><i class="t"><b class="g9"></b></i>
+        <i class="t"><b class="g4"></b></i><i class="t"><b class="g14"></b><s class="ng"><svg class="ic"><use href="#mk-preview-i-nopin"/></svg></s></i><i class="t"><b class="g2"></b></i><i class="t"><b class="g4"></b></i>
+      </div>
+      <div class="tr2">overnight · ≈ 46 km · Santa Cruz → Huesca</div>
+      <div class="dh">TUE 10 SEP · DAY 5 OF 5<span>92</span></div>
+      <div class="sh">Huesca <span>· from 10:53 · stop 5 of 6 · 44</span></div>
+      <div class="grid">
+        <i class="t"><b class="g13"></b></i><i class="t"><b class="g3"></b></i><i class="t"><b class="g8"></b></i><i class="t"><b class="g13"></b><s class="vb"><svg><use href="#mk-preview-i-play"/></svg>0:06</s></i>
+        <i class="t"><b class="g10"></b></i><i class="t"><b class="g13"></b></i><i class="t"><b class="g11"></b></i><i class="t"><b class="g3"></b></i>
+        <i class="t"><b class="g8"></b></i><i class="t"><b class="g12"></b></i><i class="t"><b class="g13"></b></i><i class="t"><b class="g10"></b></i>
+        <i class="t"><b class="g3"></b></i><i class="t"><b class="g13"></b></i><i class="t"><b class="g12"></b></i><i class="t"><b class="g8"></b></i>
+      </div>
+      <div class="rail"><i class="tick" style="top:4%"></i><i class="tick" style="top:12%"></i><i class="tick" style="top:22%"></i><i class="tick" style="top:56%"></i><i class="tick st" style="top:38%"></i><span class="thumb" style="top:44%"></span></div>
+      <span class="pill"><svg class="ic sm"><use href="#mk-preview-i-up"/></svg>16:59</span>
+      <div class="trow"><span class="vsw"><span>Replay</span><span class="on">Photos</span></span><span class="grow"></span><span class="seg"><span><svg class="ic sm"><use href="#mk-preview-i-rows"/></svg></span><span class="on"><svg class="ic sm"><use href="#mk-preview-i-grid"/></svg></span></span><span class="chipb">Day 4 of 5 <svg class="ic sm"><use href="#mk-preview-i-down"/></svg></span></div>
+      <span class="dot" style="left:352px;top:150px">1</span>
+      <span class="dot" style="left:196px;top:740px">2</span>
+      <span class="dot" style="left:262px;top:180px">3</span>
+      <span class="dot" style="left:170px;top:362px">4</span>
+      <span class="dot" style="left:340px;top:330px">5</span>
+      <span class="dot" style="left:244px;top:690px">6</span>
+      <span class="dot" style="left:20px;top:410px">7</span>
+      <span class="hi"></span>
+    </div>
+    <figcaption><h3>V2·A · Compact, settled (cursor above)</h3><ol>
+      <li><span class="num">1</span><span><b>Two sticky lines</b>: day (40 px) + stop (32 px); the next day header pushes them up.</span></li>
+      <li><span class="num">2</span><span><b>Density toggle</b> in the transport row (after phase 1): Story ⇄ Compact. Pinch does the same, anchored on the tile under the fingers.</span></li>
+      <li><span class="num">3</span><span><b>Video</b> badge; squares crop, the lightbox shows the full frame.</span></li>
+      <li><span class="num">4</span><span><b>No location</b>: badge, never greyed out.</span></li>
+      <li><span class="num">5</span><span><b>Rail</b>: 44 px hit width, 16 px from the edge (OS back gesture), visible while scrolling + 1.5 s.</span></li>
+      <li><span class="num">6</span><span><b>Cursor chip</b> in the status slot (12 px above the transport row): only when the cursor row is off screen; arrow = direction. Tap scrolls back.</span></li>
+      <li><span class="num">7</span><span><b>Transit</b> as a 28 px line between stops.</span></li>
+    </ol></figcaption>
+  </figure>
+
+  <figure>
+    <div class="ph">
+      <div class="sb">9:41<span><i class="sig"></i><i class="bat"></i></span></div>
+      <div class="hdr">
+        <span class="btn" aria-hidden="true"></span>
+        <div class="ttl"><b>San Sebastián to Huesca<svg class="ic sm"><use href="#mk-preview-i-down"/></svg></b><span><em>DEMO</em> · 6–10 Sep 2024 · 194 photos</span></div>
+        <span class="btn"><svg class="ic"><use href="#mk-preview-i-more"/></svg></span>
+      </div>
+      <div class="sticky"><div class="dh">TUE 10 SEP · DAY 5 OF 5<span>92</span></div><div class="sh">Huesca <span>· from 10:53 · stop 5 of 6 · 44</span></div></div>
+      <div class="grid th" style="margin-top:2px">
+        <i class="t"><b class="g13"></b></i><i class="t"><b class="g3"></b></i><i class="t"><b class="g8"></b></i><i class="t"><b class="g13"></b></i>
+        <i class="t"><b class="g10"></b></i><i class="t"><b class="g13"></b></i><i class="t"><b class="g11"></b></i><i class="t"><b class="g3"></b></i>
+        <i class="t"><b class="g8"></b></i><i class="t"><b class="g12"></b></i><i class="t"><b class="g13"></b></i><i class="t"><b class="g10"></b></i>
+        <i class="t"><b class="g3"></b></i><i class="t"><b class="g13"></b></i><i class="t"><b class="g12"></b></i><i class="t"><b class="g8"></b></i>
+        <i class="t"><b class="g10"></b></i><i class="t"><b class="g3"></b></i><i class="t"><b class="g13"></b></i><i class="t"><b class="g11"></b></i>
+        <i class="t"><b class="g12"></b></i><i class="t"><b class="g8"></b></i><i class="t"><b class="g3"></b></i><i class="t"><b class="g13"></b></i>
+      </div>
+      <div class="grid" style="margin-top:2px">
+        <i class="t"><b class="g13"></b></i><i class="t"><b class="g10"></b></i><i class="t"><b class="g3"></b></i><i class="t"><b class="g12"></b></i>
+        <i class="t"><b class="g8"></b></i><i class="t"><b class="g13"></b></i><i class="t"><b class="g11"></b></i><i class="t"><b class="g10"></b></i>
+      </div>
+      <div class="rail">
+        <i class="tick" style="top:3%"></i><span class="lab" style="top:calc(3% - 8px)">6</span>
+        <i class="tick" style="top:10%"></i><span class="lab" style="top:calc(10% - 8px)">7</span>
+        <i class="tick" style="top:19%"></i><span class="lab" style="top:calc(19% - 8px)">8</span>
+        <i class="tick" style="top:21%"></i><span class="lab" style="top:calc(21% + 3px)">9</span>
+        <i class="tick st" style="top:38%"></i>
+        <i class="tick" style="top:55%"></i><span class="lab" style="top:calc(55% - 8px)">10</span>
+        <i class="tick st" style="top:78%"></i>
+        <span class="thumb" style="top:66%"></span>
+      </div>
+      <div class="trow"><span class="vsw"><span>Replay</span><span class="on">Photos</span></span><span class="grow"></span><span class="seg"><span><svg class="ic sm"><use href="#mk-preview-i-rows"/></svg></span><span class="on"><svg class="ic sm"><use href="#mk-preview-i-grid"/></svg></span></span><span class="chipb">Day 5 of 5 <svg class="ic sm"><use href="#mk-preview-i-down"/></svg></span></div>
+      <span class="finger" style="left:322px;top:530px"></span>
+      <div class="bubble" style="top:520px">Tue 10 Sep · 14:20<span>Huesca · photo 141 of 194</span></div>
+      <span class="dot" style="left:150px;top:500px">1</span>
+      <span class="dot" style="left:344px;top:170px">2</span>
+      <span class="dot" style="left:100px;top:260px">3</span>
+      <span class="dot" style="left:60px;top:690px">4</span>
+      <span class="hi"></span>
+    </div>
+    <figcaption><h3>V2·B · Dragging the rail</h3><ol>
+      <li><span class="num">1</span><span><b>Bubble</b>: date, time, stop, "photo 141 of 194" (also the slider's <code>aria-valuetext</code>).</span></li>
+      <li><span class="num">2</span><span><b>Day ticks</b> with day numbers; short ticks = stop starts (Tue 10 has two: Huesca 44, Huesca 48). An empty day (8) is a tick with no span.</span></li>
+      <li><span class="num">3</span><span><b>Thumbhash while fast</b> (≥ 1.5 px/ms): no requests, no spinners, tiles already at final size.</span></li>
+      <li><span class="num">4</span><span><b>On release</b> visible thumbnails load centre-first (≤ 6 in flight), fade in 120 ms; one screen ahead only when idle.</span></li>
+    </ol></figcaption>
+  </figure>
+
+  <figure>
+    <div class="ph">
+      <div class="sb">9:41<span><i class="sig"></i><i class="bat"></i></span></div>
+      <div class="hdr">
+        <span class="btn" aria-hidden="true"></span>
+        <div class="ttl"><b>San Sebastián to Huesca<svg class="ic sm"><use href="#mk-preview-i-down"/></svg></b><span><em>DEMO</em> · 6–10 Sep 2024 · 194 photos</span></div>
+        <span class="btn"><svg class="ic"><use href="#mk-preview-i-more"/></svg></span>
+      </div>
+      <div class="sticky"><div class="dh">TUE 10 SEP · DAY 5 OF 5<span>92</span></div><div class="sh">Huesca <span>· from 10:53 · stop 5 of 6 · 44</span></div></div>
+      <div class="grid" style="margin-top:2px">
+        <i class="t"><b class="g13"></b></i><i class="t"><b class="g3"></b></i><i class="t"><b class="g8"></b></i><i class="t"><b class="g13"></b></i>
+        <i class="t"><b class="g10"></b></i><i class="t"><b class="g13"></b></i><i class="t"><b class="g11"></b></i><i class="t"><b class="g3"></b></i>
+        <i class="t"><b class="g8"></b></i><i class="t"><b class="g12"></b></i><i class="t"><b class="g13"></b></i><i class="t"><b class="g10"></b></i>
+        <i class="t"><b class="g3"></b></i><i class="t"><b class="g13"></b></i><i class="t"><b class="g12"></b></i><i class="t"><b class="g8"></b></i>
+        <i class="t"><b class="g10"></b></i><i class="t"><b class="g3"></b></i><i class="t"><b class="g13"></b></i><i class="t"><b class="g11"></b></i>
+        <i class="t"><b class="g12"></b></i><i class="t"><b class="g8"></b></i><i class="t"><b class="g3"></b></i><i class="t"><b class="g13"></b></i>
+      </div>
+      <div class="trow"><span class="vsw"><span>Replay</span><span class="on">Photos</span></span><span class="grow"></span><span class="seg"><span><svg class="ic sm"><use href="#mk-preview-i-rows"/></svg></span><span class="on"><svg class="ic sm"><use href="#mk-preview-i-grid"/></svg></span></span><span class="chipb">Day 5 of 5 <svg class="ic sm"><use href="#mk-preview-i-down"/></svg></span></div>
+      <div class="scrim"></div>
+      <i class="t ring" style="position:absolute;left:99px;top:275px;width:95px;height:95px"><b class="g13"></b></i>
+      <div class="sheet" style="height:290px">
+        <h4>Huesca · Tue 10 Sep, 12:41 <span>photo 121 of 194</span><i class="sx"><svg class="ic"><use href="#mk-preview-i-x"/></svg></i></h4>
+        <div class="ai"><svg class="ic"><use href="#mk-preview-i-map"/></svg>Show on map<span>Replay, cursor here</span></div>
+        <div class="ai"><svg class="ic"><use href="#mk-preview-i-share"/></svg>Share photo</div>
+        <div class="ai"><svg class="ic"><use href="#mk-preview-i-open"/></svg>Open</div>
+      </div>
+      <span class="dot" style="left:186px;top:262px">1</span>
+      <span class="dot" style="left:182px;top:646px">2</span>
+      <span class="dot" style="left:172px;top:698px">3</span>
+      <span class="dot" style="left:320px;top:520px">4</span>
+      <span class="hi"></span>
+    </div>
+    <figcaption><h3>V2·C · Long-press a tile (both variants)</h3><ol>
+      <li><span class="num">1</span><span><b>Long-press 500 ms</b> (cancel on 8 px move), haptic, the tile gets a ring above the scrim. iOS image callout suppressed. No peek: the lightbox is one tap.</span></li>
+      <li><span class="num">2</span><span><b>Shared action sheet</b> (same component as ⋯, no anchored menu). <b>Show on map</b> = view switch to Replay + cursor on this photo, Follow on.</span></li>
+      <li><span class="num">3</span><span><b>Share photo</b>: URL with <code>at</code> + <code>lb</code>; <code>navigator.share</code>, else copy + toast.</span></li>
+      <li><span class="num">4</span><span><b>Dismiss</b>: ✕, a scrim tap or Back; no grabber, no swipe. Every item also exists in the lightbox; long-press is a shortcut only.</span></li>
+    </ol></figcaption>
+  </figure>
+  </div>
+</section>
+
+<!-- ================= VARIANT 3 ================= -->
+<section class="var mk-preview-v3">
+  <h2>Variant 3 · Lightbox navigation <small>3a recommended</small></h2>
+  <p>Shared rules: full-bleed pager, swipe ←/→ by photo (history replace), swipe ↓ closes to the cursor, pinch / double-tap zoom (paging off while zoomed), tap toggles chrome, visible ✕, day-segmented progress, info sheet with a static SVG route. Variants differ in how you see and cross stops: <b>3a</b> mini filmstrip, <b>3b</b> none, <b>3c</b> vertical story pager.</p>
+  <div class="shots">
+
+  <!-- 3a -->
+  <figure>
+    <div class="ph dark">
+      <div class="sb">9:41<span><i class="sig"></i><i class="bat"></i></span></div>
+      <div class="lbtop">
+        <span class="btn"><svg class="ic"><use href="#mk-preview-i-x"/></svg></span>
+        <div class="mid"><b>56 / 194 · stop 4 of 6</b><span>Mon 9 Sep</span></div>
+        <span class="btn"><svg class="ic"><use href="#mk-preview-i-share"/></svg></span>
+      </div>
+      <div class="prog"><i class="full" style="width:7px"></i><i class="full" style="width:18px"></i><i class="e"></i><i style="width:156px"><em style="width:48%"></em><u style="left:46.6%"></u></i><i style="width:163px"><u style="left:47.8%"></u></i></div>
+      <div class="cross">New stop · <b>3 h 03 later</b> · Yesa → Santa Cruz</div>
+      <svg class="stage" style="top:200px" width="390" height="292" viewBox="0 0 390 292" aria-label="Church of Santa Cruz de la Serós, drawn">
+        <defs><linearGradient id="mk-preview-sky1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7fb2df"/><stop offset="1" stop-color="#dce9f2"/></linearGradient></defs>
+        <rect width="390" height="292" fill="url(#mk-preview-sky1)"/>
+        <path d="M0 150 L60 92 L110 128 L170 70 L230 120 L290 82 L390 140 V292 H0z" fill="#8a9bb4"/>
+        <path d="M0 190 Q100 150 200 176 T390 168 V292 H0z" fill="#6c8a52"/>
+        <path d="M0 236 Q140 214 390 232 V292 H0z" fill="#557341"/>
+        <rect x="150" y="150" width="120" height="78" fill="#c8a77c"/>
+        <path d="M144 152 L210 118 L276 152z" fill="#8a5a3a"/>
+        <rect x="236" y="96" width="34" height="70" fill="#bf9c70"/>
+        <path d="M232 98 L253 78 L274 98z" fill="#7c4f32"/>
+        <path d="M196 228 V200 a14 14 0 0 1 28 0 V228z" fill="#4a3324"/>
+        <rect x="246" y="112" width="8" height="14" rx="4" fill="#4a3324"/>
+        <circle cx="96" cy="206" r="20" fill="#3f5c33"/><circle cx="118" cy="214" r="15" fill="#4a6a3b"/><circle cx="318" cy="208" r="18" fill="#3f5c33"/>
+      </svg>
+      <div class="film" style="top:580px">
+        <span class="lab" style="left:40px"><b>Yesa</b> · 41</span>
+        <span class="lab" style="left:170px"><b>Santa Cruz de la Serós</b> · 47</span>
+        <i class="f" style="margin-left:-14px"><b class="g7"></b></i><i class="f"><b class="g14"></b></i><i class="f"><b class="g2"></b></i><i class="f"><b class="g6"></b></i>
+        <i class="gap"></i>
+        <i class="f on"><b class="g5"></b></i><i class="f"><b class="g3"></b></i><i class="f"><b class="g2"></b></i><i class="f"><b class="g6"></b></i><i class="f"><b class="g11"></b></i><i class="f"><b class="g5"></b></i>
+      </div>
+      <div class="peek">
+        <span class="chev"><svg class="ic sm"><use href="#mk-preview-i-upc"/></svg></span>
+        <div class="l1">Mon 9 Sep 2024 · 16:59 · UTC+2</div>
+        <svg class="mini" viewBox="150 50 160 110" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+          <rect x="0" y="0" width="358" height="168" fill="var(--land)"/>
+          <ellipse cx="176" cy="112" rx="16" ry="5" fill="var(--water)"/>
+          <path d="M120 92 L160 104 L190 110" stroke="var(--route)" stroke-width="5" fill="none" stroke-linecap="round"/>
+          <path d="M190 110 L225 104 L262 96" stroke="var(--route)" stroke-width="5" fill="none" stroke-linecap="round"/>
+          <path d="M262 96 L285 120 L300 150" stroke="var(--route-fut)" stroke-width="4" fill="none" stroke-dasharray="6 5"/>
+          <circle cx="262" cy="96" r="9" fill="#fff" stroke="var(--route)" stroke-width="5"/>
+        </svg>
+        <div class="l2"><svg class="ic sm"><use href="#mk-preview-i-pin"/></svg>Santa Cruz de la Serós, Spain</div>
+      </div>
+      <span class="dot" style="left:8px;top:94px">1</span>
+      <span class="dot" style="left:186px;top:104px">2</span>
+      <span class="dot" style="left:350px;top:132px">3</span>
+      <span class="dot" style="left:184px;top:330px">4</span>
+      <span class="dot" style="left:354px;top:604px">5</span>
+      <span class="dot" style="left:290px;top:740px">6</span>
+      <span class="hi"></span>
+    </div>
+    <figcaption><h3>V3·a · Lightbox + stop-segmented filmstrip</h3><ol>
+      <li><span class="num">1</span><span><b>✕ always visible</b> while chrome shows; counter <code>56 / 194 · stop 4 of 6</code>. Share at right; no ⓘ (the peek is the info entry).</span></li>
+      <li><span class="num">2</span><span><b>Progress by day</b> (width ∝ count, min 6 px); the 2 px notch is empty Sun 8 Sep; black ticks are stop starts (Santa Cruz, Huesca 48).</span></li>
+      <li><span class="num">3</span><span><b>Crossing chip</b> for 1.5 s when a step crosses a stop or transit (+ day when it changes). Polite live region says the same.</span></li>
+      <li><span class="num">4</span><span><b>Photo</b>: swipe ←/→ step, ↓ close to the cursor, ↑ info, pinch / double-tap 2.5×; zoomed = no paging. Tap toggles chrome.</span></li>
+      <li><span class="num">5</span><span><b>Filmstrip</b> (48 px): current stop ± 1, gap + label at the stop change; drag scrubs, tap jumps. Thumbnails only (crisp at 40 px).</span></li>
+      <li><span class="num">6</span><span><b>Info peek 88 px</b>: date · time · UTC offset, place, 56 px route thumb with the position ring. Tap it (⌃) or swipe ↑ on the photo to open. No grabber, no drag.</span></li>
+    </ol></figcaption>
+  </figure>
+
+  <!-- info sheet open, no GPS -->
+  <figure>
+    <div class="ph dark">
+      <div class="sb">9:41<span><i class="sig"></i><i class="bat"></i></span></div>
+      <div class="lbtop">
+        <span class="btn"><svg class="ic"><use href="#mk-preview-i-x"/></svg></span>
+        <div class="mid"><b>23 / 194 · stop 3 of 6</b><span>Mon 9 Sep</span></div>
+        <span class="btn"><svg class="ic"><use href="#mk-preview-i-share"/></svg></span>
+      </div>
+      <div class="prog"><i class="full" style="width:7px"></i><i class="full" style="width:18px"></i><i class="e"></i><i style="width:156px"><em style="width:10%"></em><u style="left:46.6%"></u></i><i style="width:163px"><u style="left:47.8%"></u></i></div>
+      <i class="stage t" style="top:118px;height:250px;position:absolute;left:62px;right:62px;width:auto;border-radius:0"><b class="g7"></b></i>
+      <div class="info">
+        <span class="ix"><svg class="ic"><use href="#mk-preview-i-x"/></svg></span>
+        <div class="l1">Mon 9 Sep 2024 · 13:14 · UTC+2</div>
+        <div class="l2"><svg class="ic sm"><use href="#mk-preview-i-nopin"/></svg>No location · near Yesa</div>
+        <div class="l3">nearest photo with location: 2 min earlier</div>
+        <div class="kv"><span>Coords</span><b>—</b><span>Kind</span><b>Photo · 4:3</b></div>
+        <svg class="route" viewBox="0 0 358 168" aria-label="Route of the trip; this photo has no location, nearest point Yesa">
+          <rect width="358" height="168" fill="var(--land)"/>
+          <path d="M0 0 H128 Q96 18 62 22 Q36 26 18 40 L0 46z" fill="var(--water)"/>
+          <ellipse cx="176" cy="112" rx="16" ry="5" fill="var(--water)"/>
+          <path d="M150 40 L190 26 L230 34 L270 22 L320 34 L358 26" stroke="var(--ridge)" stroke-width="2" fill="none"/>
+          <path d="M30 30 L120 92 M120 92 L300 150 M190 110 L262 96" stroke="var(--road)" stroke-width="2" fill="none"/>
+          <path d="M30 30 Q60 52 82 64 T120 92 L160 104 L190 110" stroke="var(--route)" stroke-width="4" fill="none" stroke-linecap="round"/>
+          <path d="M190 110 L225 104 L262 96 L285 120 L300 150" stroke="var(--route-fut)" stroke-width="3" fill="none" stroke-dasharray="6 5"/>
+          <circle cx="30" cy="30" r="3.5" fill="var(--route)"/><circle cx="262" cy="96" r="3.5" fill="var(--route-fut)"/><circle cx="300" cy="150" r="3.5" fill="var(--route-fut)"/>
+          <circle cx="190" cy="110" r="11" fill="none" stroke="var(--route)" stroke-width="2.5" stroke-dasharray="4 3"/>
+          <g font-size="11" font-family="system-ui, sans-serif" fill="var(--town)">
+            <text x="38" y="46">San Sebastián</text><text x="94" y="84">Pamplona</text><text x="176" y="134">Yesa</text>
+            <text x="230" y="86">Santa Cruz</text><text x="270" y="164">Huesca</text>
+          </g>
+        </svg>
+        <div class="acts"><span><svg class="ic"><use href="#mk-preview-i-share"/></svg>Share</span><span><svg class="ic"><use href="#mk-preview-i-info"/></svg>About &amp; credits</span></div>
+        <div class="credit">Photo: ‹author› · CC BY-SA 4.0 · Wikimedia Commons (from the demo credits file). Owner mode: "Open in Immich" here instead.</div>
+      </div>
+      <span class="dot" style="left:318px;top:414px">1</span>
+      <span class="dot" style="left:200px;top:410px">2</span>
+      <span class="dot" style="left:214px;top:540px">3</span>
+      <span class="dot" style="left:300px;top:640px">4</span>
+      <span class="dot" style="left:180px;top:752px">5</span>
+      <span class="hi"></span>
+    </div>
+    <figcaption><h3>V3·a/b · Info sheet open, photo without GPS</h3><ol>
+      <li><span class="num">1</span><span><b>Two fixed states</b>, peek 88 px and open ~60 %, no drag. ✕, Back or swipe ↓ returns to peek (a second ↓ closes the lightbox). Only open is a history entry. Photo shrinks above, still pageable.</span></li>
+      <li><span class="num">2</span><span><b>"No location · near Yesa"</b>: "near" = the city of the nearest GPS photo within 2 h in the same stop; otherwise just "No location".</span></li>
+      <li><span class="num">3</span><span><b>Hollow dashed ring</b> at the nearest GPS point, never a solid position dot.</span></li>
+      <li><span class="num">4</span><span><b>Static RouteSketch</b> (SVG from <code>routeLines</code> + <code>gpsExtent</code>): past solid, future dashed/faint. No second MapLibre.</span></li>
+      <li><span class="num">5</span><span><b>Share, credits</b> (demo) / Open in Immich (owner).</span></li>
+    </ol></figcaption>
+  </figure>
+
+  <!-- 3b video, no filmstrip -->
+  <figure>
+    <div class="ph dark">
+      <div class="sb">9:41<span><i class="sig"></i><i class="bat"></i></span></div>
+      <div class="lbtop">
+        <span class="btn"><svg class="ic"><use href="#mk-preview-i-x"/></svg></span>
+        <div class="mid"><b>103 / 194 · stop 5 of 6</b><span>Tue 10 Sep</span></div>
+        <span class="btn"><svg class="ic"><use href="#mk-preview-i-share"/></svg></span>
+      </div>
+      <div class="prog"><i class="full" style="width:7px"></i><i class="full" style="width:18px"></i><i class="e"></i><i class="full" style="width:156px"></i><i style="width:163px"><em style="width:1.5%"></em><u style="left:47.8%"></u></i></div>
+      <div class="cross"><b>Tue 10 Sep · Day 5</b> · overnight → Huesca</div>
+      <svg class="stage" style="top:300px" width="390" height="220" viewBox="0 0 390 220" aria-label="Video frame, Huesca cathedral, drawn">
+        <rect width="390" height="220" fill="#9cc3e3"/>
+        <rect x="0" y="120" width="390" height="100" fill="#c39a6a"/>
+        <rect x="140" y="40" width="110" height="140" fill="#b0895c"/>
+        <path d="M160 180 V120 a35 35 0 0 1 70 0 V180z" fill="#6e5136"/>
+        <path d="M172 180 V126 a23 23 0 0 1 46 0 V180z" fill="#3e2c1d"/>
+        <rect x="250" y="20" width="40" height="160" fill="#a97f52"/>
+        <rect x="0" y="100" width="140" height="80" fill="#cfa877"/><rect x="290" y="96" width="100" height="84" fill="#cfa877"/>
+        <rect x="0" y="180" width="390" height="40" fill="#8d8478"/>
+      </svg>
+      <div class="vctl" style="top:468px"><svg class="ic"><use href="#mk-preview-i-pause"/></svg><span>0:02</span><span class="bar2"></span><span>0:06</span><svg class="ic"><use href="#mk-preview-i-mute"/></svg><svg class="ic"><use href="#mk-preview-i-full"/></svg></div>
+      <div class="zone" style="top:456px"><span>pager ignores this band</span></div>
+      <span class="navbtn" style="left:8px;top:388px"><svg class="ic"><use href="#mk-preview-i-prev"/></svg></span>
+      <span class="navbtn" style="right:8px;top:388px"><svg class="ic"><use href="#mk-preview-i-next"/></svg></span>
+      <div class="peek">
+        <span class="chev"><svg class="ic sm"><use href="#mk-preview-i-upc"/></svg></span>
+        <div class="l1">Tue 10 Sep 2024 · 10:53 · UTC+2</div>
+        <svg class="mini" viewBox="210 70 120 100" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+          <rect x="0" y="0" width="358" height="168" fill="var(--land)"/>
+          <path d="M190 110 L225 104 L262 96 L285 120 L300 150" stroke="var(--route)" stroke-width="5" fill="none" stroke-linecap="round"/>
+          <circle cx="300" cy="150" r="9" fill="#fff" stroke="var(--route)" stroke-width="5"/>
+        </svg>
+        <div class="l2"><svg class="ic sm"><use href="#mk-preview-i-pin"/></svg>Huesca, Spain · Video · 0:06</div>
+      </div>
+      <span class="dot" style="left:350px;top:132px">1</span>
+      <span class="dot" style="left:24px;top:310px">2</span>
+      <span class="dot" style="left:150px;top:438px">3</span>
+      <span class="dot" style="left:60px;top:390px">4</span>
+      <span class="dot" style="left:180px;top:600px">5</span>
+      <span class="hi"></span>
+    </div>
+    <figcaption><h3>V3·b · No filmstrip, video page</h3><ol>
+      <li><span class="num">1</span><span><b>Day crossing</b>: chip names the new day and the transit. Without a film this chip + progress are the only boundary cue.</span></li>
+      <li><span class="num">2</span><span><b>Video</b>: muted autoplay + loop after 300 ms settled on the page; pauses when it leaves. Neighbours show posters only. Reduced motion: no autoplay.</span></li>
+      <li><span class="num">3</span><span><b>Native controls band</b> (bottom 64 px of the video box): pointerdowns here go to the native scrubber, not the pager. Swipe anywhere else pages.</span></li>
+      <li><span class="num">4</span><span><b>‹ ›</b> step buttons shown for screen readers, keyboards and when chrome is on with VoiceOver; hidden for plain touch to keep the frame clean.</span></li>
+      <li><span class="num">5</span><span><b>No film</b>: 48 px more photo; moving far = swipe ↓ (closes to Photos at this photo) and tap another.</span></li>
+    </ol></figcaption>
+  </figure>
+
+  <!-- landscape lightbox -->
+  <figure class="wide">
+    <div class="ph dark land">
+      <div class="lbtop">
+        <span class="btn"><svg class="ic"><use href="#mk-preview-i-x"/></svg></span>
+        <div class="mid"><b>56 / 194 · stop 4 of 6</b><span>Mon 9 Sep</span></div>
+        <span class="btn"><svg class="ic"><use href="#mk-preview-i-share"/></svg></span>
+      </div>
+      <div class="prog"><i class="full" style="width:7px"></i><i class="full" style="width:20px"></i><i class="e"></i><i style="width:173px"><em style="width:48%"></em><u style="left:46.6%"></u></i><i style="width:178px"><u style="left:47.8%"></u></i></div>
+      <svg class="stage" style="top:70px;left:47px;width:414px;height:310px" width="414" height="310" viewBox="0 0 390 292" aria-label="Church of Santa Cruz de la Serós, drawn">
+        <rect width="390" height="292" fill="#7fb2df"/>
+        <path d="M0 150 L60 92 L110 128 L170 70 L230 120 L290 82 L390 140 V292 H0z" fill="#8a9bb4"/>
+        <path d="M0 190 Q100 150 200 176 T390 168 V292 H0z" fill="#6c8a52"/>
+        <path d="M0 236 Q140 214 390 232 V292 H0z" fill="#557341"/>
+        <rect x="150" y="150" width="120" height="78" fill="#c8a77c"/>
+        <path d="M144 152 L210 118 L276 152z" fill="#8a5a3a"/>
+        <rect x="236" y="96" width="34" height="70" fill="#bf9c70"/>
+        <path d="M232 98 L253 78 L274 98z" fill="#7c4f32"/>
+        <path d="M196 228 V200 a14 14 0 0 1 28 0 V228z" fill="#4a3324"/>
+        <circle cx="96" cy="206" r="20" fill="#3f5c33"/><circle cx="318" cy="208" r="18" fill="#3f5c33"/>
+      </svg>
+      <div class="info">
+        <span class="ix"><svg class="ic"><use href="#mk-preview-i-x"/></svg></span>
+        <div class="l1">Mon 9 Sep 2024 · 16:59 · UTC+2</div>
+        <div class="l2"><svg class="ic sm"><use href="#mk-preview-i-pin"/></svg>Santa Cruz de la Serós, Spain</div>
+        <div class="kv" style="margin-top:8px"><span>Coords</span><b>42.5240° N, 0.6731° W</b><span>Kind</span><b>Photo · 4:3</b></div>
+        <svg class="route" viewBox="0 0 358 132" preserveAspectRatio="xMidYMid slice" aria-label="Route of the trip, this photo at Santa Cruz de la Serós">
+          <rect width="358" height="168" fill="var(--land)"/>
+          <path d="M0 0 H128 Q96 18 62 22 Q36 26 18 40 L0 46z" fill="var(--water)"/>
+          <ellipse cx="176" cy="112" rx="16" ry="5" fill="var(--water)"/>
+          <path d="M30 30 L120 92 M120 92 L300 150" stroke="var(--road)" stroke-width="2" fill="none"/>
+          <path d="M30 30 Q60 52 82 64 T120 92 L160 104 L190 110 L225 104 L262 96" stroke="var(--route)" stroke-width="4" fill="none" stroke-linecap="round"/>
+          <path d="M262 96 L285 120 L300 130" stroke="var(--route-fut)" stroke-width="3" fill="none" stroke-dasharray="6 5"/>
+          <circle cx="262" cy="96" r="7" fill="#fff" stroke="var(--route)" stroke-width="4"/>
+          <g font-size="11" font-family="system-ui, sans-serif" fill="var(--town)">
+            <text x="38" y="46">San Sebastián</text><text x="170" y="128">Yesa</text><text x="214" y="84">Santa Cruz</text><text x="300" y="124">Huesca</text>
+          </g>
+        </svg>
+        <div class="acts"><span><svg class="ic"><use href="#mk-preview-i-share"/></svg>Share</span><span><svg class="ic"><use href="#mk-preview-i-info"/></svg>About &amp; credits</span></div>
+      </div>
+      <span class="dot" style="left:20px;top:16px">1</span>
+      <span class="dot" style="left:150px;top:50px">2</span>
+      <span class="dot" style="left:240px;top:200px">3</span>
+      <span class="dot" style="left:808px;top:56px">4</span>
+      <span class="dot" style="left:440px;top:340px">5</span>
+      <span class="hi"></span>
+    </div>
+    <figcaption><h3>V3·L · Lightbox in landscape (844 × 390), info open</h3><ol>
+      <li><span class="num">1</span><span><b>Full screen</b>, no status bar. Top bar and progress span the photo area only; 47 px safe area on the notch side. Nothing drags within 20 px of an edge.</span></li>
+      <li><span class="num">2</span><span><b>Progress + crossing chip</b> stay; the <b>filmstrip hides</b> (no height for it).</span></li>
+      <li><span class="num">3</span><span><b>Photo contained</b> in the ~414 px left of the panel; same pager, close and zoom gestures as portrait.</span></li>
+      <li><span class="num">4</span><span><b>Info = 320 px right panel</b> (the open state). ✕, Back or swipe ↓ collapses it to a one-line caption <code>16:59 · Santa Cruz de la Serós ⌃</code> on the photo; tap it or swipe ↑ reopens. Only open is a history entry.</span></li>
+      <li><span class="num">5</span><span><b>Rotation</b> cancels any gesture in progress, resets zoom to 1×, keeps the photo and the info state (portrait open ⇄ this panel; portrait peek ⇄ caption).</span></li>
+    </ol></figcaption>
+  </figure>
+
+  <!-- 3c story pager -->
+  <figure>
+    <div class="ph dark">
+      <div class="sb">9:41<span><i class="sig"></i><i class="bat"></i></span></div>
+      <div class="lbtop">
+        <span class="btn"><svg class="ic"><use href="#mk-preview-i-x"/></svg></span>
+        <div class="mid"><b>Stop 4 of 6</b><span>photo 1 of 47 · 56 / 194</span></div>
+        <span class="btn"><svg class="ic"><use href="#mk-preview-i-share"/></svg></span>
+      </div>
+      <div class="pg" style="top:106px;height:560px">
+        <i class="t ph2"><b class="g5"></b></i>
+        <span class="pgk">STOP 4 · MON 9 SEP</span>
+        <div class="tx"><b>Santa Cruz de la Serós</b><span>16:59–19:01 · 47 photos · 3 h 03 after Yesa</span></div>
+        <div class="strip"><i class="t"><b class="g3"></b></i><i class="t"><b class="g2"></b></i><i class="t"><b class="g6"></b></i><i class="t"><b class="g11"></b></i><i class="t"><b class="g4"></b></i></div>
+        <div class="tx" style="padding-top:0"><span>Swipe ←/→ for photos in this stop</span></div>
+      </div>
+      <div class="pg" style="top:680px;height:200px;opacity:.75">
+        <i class="t ph2" style="height:120px"><b class="g13"></b></i>
+        <span class="pgk">STOP 5 · TUE 10 SEP · HUESCA</span>
+      </div>
+      <span class="dot" style="left:350px;top:640px">1</span>
+      <span class="dot" style="left:350px;top:540px">2</span>
+      <span class="dot" style="left:20px;top:300px">3</span>
+      <span class="hi"></span>
+    </div>
+    <figcaption><h3>V3·c · Vertical story pager <span class="tag-no">Rejected</span></h3><ol>
+      <li><span class="num">1</span><span><b>Swipe ↑/↓ = next/previous stop</b>: collides with the decided swipe ↓ = close (§0); close would become ✕-only.</span></li>
+      <li><span class="num">2</span><span><b>←/→ inside a stop</b>: two paging axes on one surface; zoomed pans get ambiguous.</span></li>
+      <li><span class="num">3</span><span><b>Duplicates Story</b> (stop header + hero + rows) inside the lightbox; Story view already reads by stop.</span></li>
+    </ol></figcaption>
+  </figure>
+  </div>
+</section>
+</div>

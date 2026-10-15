@@ -1,0 +1,416 @@
+<title>Concept C · Map-first deck</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+.mk-concept-c{
+ --bg:#f3f1ec;--ink:#1c1f23;--muted:#6b7078;--line:#d9d5cc;--sheet:#ffffff;--sheet2:#f5f3ef;--chrome:rgba(255,255,255,.92);
+ --land:#ebe6da;--mtn:#ddd5c2;--water:#b9d5e5;--coast:#94b8cc;--road:#ffffff;--roadc:#d3ccbc;--border:#b2a99a;--lab:#3d4249;--halo:#f6f3ec;
+ --amber:#d9822b;--amber2:#f2b85a;--amber3:#a45412;--gps:#2aa874;--nog:#b7bbc1;--vid:#3a7bd5;--dot:#d9822b;--dim:.22;
+ --shadow:0 -6px 24px rgba(30,30,30,.16);
+ color-scheme:light;background:var(--bg);color:var(--ink);
+ font:14px/1.35 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+ padding:24px 16px 40px;
+}
+@media (prefers-color-scheme:dark){.mk-concept-c:not([data-theme="light"]){
+ --bg:#0d1014;--ink:#e9e7e2;--muted:#8d949d;--line:#2a3038;--sheet:#171b21;--sheet2:#1f242b;--chrome:rgba(23,27,33,.9);
+ --land:#1a1f25;--mtn:#20262d;--water:#0d2230;--coast:#1d3a4c;--road:#2b323a;--roadc:#2b323a;--border:#46505b;--lab:#aab1ba;--halo:#14181d;
+ --amber:#f0a541;--amber2:#ffd27f;--amber3:#d0731f;--gps:#3ecf8e;--nog:#59606a;--vid:#5aa0ff;--dot:#f0a541;--dim:.25;
+ --shadow:0 -6px 24px rgba(0,0,0,.5);color-scheme:dark}}
+.mk-concept-c[data-theme="dark"]{
+ --bg:#0d1014;--ink:#e9e7e2;--muted:#8d949d;--line:#2a3038;--sheet:#171b21;--sheet2:#1f242b;--chrome:rgba(23,27,33,.9);
+ --land:#1a1f25;--mtn:#20262d;--water:#0d2230;--coast:#1d3a4c;--road:#2b323a;--roadc:#2b323a;--border:#46505b;--lab:#aab1ba;--halo:#14181d;
+ --amber:#f0a541;--amber2:#ffd27f;--amber3:#d0731f;--gps:#3ecf8e;--nog:#59606a;--vid:#5aa0ff;--dot:#f0a541;--dim:.25;
+ --shadow:0 -6px 24px rgba(0,0,0,.5);color-scheme:dark}
+.mk-concept-c *{box-sizing:border-box}
+.mk-concept-c .c-head{max-width:1700px;margin:0 auto 20px}
+.mk-concept-c .c-head h2{margin:0 0 4px;font-size:22px;letter-spacing:-.01em}
+.mk-concept-c .c-head p{margin:0;color:var(--muted);max-width:820px}
+.mk-concept-c .c-row1{display:flex;flex-wrap:wrap;gap:28px;justify-content:center;align-items:flex-start}
+.mk-concept-c .c-screen{margin:0;width:390px;max-width:100%}
+.mk-concept-c figcaption{font-weight:600;margin:0 0 10px;font-size:15px}
+.mk-concept-c figcaption b{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--ink);color:var(--bg);font-size:12px;margin-right:6px}
+.mk-concept-c .c-phone{position:relative;width:390px;height:844px;border-radius:48px;overflow:hidden;background:var(--land);
+ box-shadow:0 0 0 10px #111,0 0 0 11px #333,0 20px 50px rgba(0,0,0,.35);margin:11px}
+.mk-concept-c .c-map{position:absolute;inset:0;width:390px;height:844px}
+.mk-concept-c .land{fill:var(--land)}
+.mk-concept-c .mtn{fill:var(--mtn)} .mk-concept-c .mtn2{fill:var(--mtn);opacity:.8}
+.mk-concept-c .water{fill:var(--water)}
+.mk-concept-c .coast{fill:none;stroke:var(--coast);stroke-width:1.2;vector-effect:non-scaling-stroke}
+.mk-concept-c .border{fill:none;stroke:var(--border);stroke-width:1;stroke-dasharray:5 3 1 3;vector-effect:non-scaling-stroke}
+.mk-concept-c .river{fill:none;stroke:var(--water);stroke-width:2.5;vector-effect:non-scaling-stroke}
+.mk-concept-c .roads path{fill:none;stroke:var(--roadc);stroke-width:3.2;vector-effect:non-scaling-stroke}
+.mk-concept-c .route{fill:none;stroke:url(#mkc-ramp);stroke-width:4.5;stroke-linecap:round;vector-effect:non-scaling-stroke}
+.mk-concept-c .gapln{fill:none;stroke:var(--amber3);stroke-width:2.5;stroke-dasharray:6 6;vector-effect:non-scaling-stroke}
+.mk-concept-c .r0{stop-color:var(--amber2)} .mk-concept-c .r1{stop-color:var(--amber3)}
+.mk-concept-c .pin{fill:var(--amber);stroke:var(--halo);stroke-width:1.2}
+.mk-concept-c .pinv{fill:var(--vid);stroke:var(--halo);stroke-width:1.2}
+.mk-concept-c .pin.big,.mk-concept-c .pinv.big{stroke-width:2}
+.mk-concept-c .cl circle{fill:var(--halo);stroke:var(--amber);stroke-width:3}
+.mk-concept-c .cl text{fill:var(--ink);font:700 12px system-ui,sans-serif;text-anchor:middle}
+.mk-concept-c .mk{fill:var(--amber);stroke:#fff;stroke-width:3}
+.mk-concept-c .mk-halo{fill:var(--amber);opacity:.25}
+.mk-concept-c .fring{fill:var(--amber);fill-opacity:.08;stroke:var(--amber);stroke-width:1.5;stroke-dasharray:4 4}
+.mk-concept-c .mlab{fill:var(--lab);font:600 11.5px system-ui,sans-serif;paint-order:stroke;stroke:var(--halo);stroke-width:3px;stroke-linejoin:round}
+.mk-concept-c .mlab.sm{font-size:11px;font-weight:500}
+.mk-concept-c .mlab.sea{fill:var(--coast);font-style:italic;font-weight:500;stroke:none}
+.mk-concept-c .mlab.cty{letter-spacing:.2em;font-size:11px;fill:var(--border)}
+.mk-concept-c .c-status{position:absolute;top:0;left:0;right:0;height:47px;display:flex;justify-content:space-between;align-items:center;padding:6px 30px 0 34px;font-weight:600;font-size:15px;z-index:5;color:var(--ink)}
+.mk-concept-c .c-sb{display:flex;gap:3px;align-items:flex-end}
+.mk-concept-c .c-sb i{width:3px;background:var(--ink);border-radius:1px}
+.mk-concept-c .c-sb i:nth-child(1){height:5px}.mk-concept-c .c-sb i:nth-child(2){height:8px}.mk-concept-c .c-sb i:nth-child(3){height:11px}
+.mk-concept-c .c-sb em{width:24px;height:11px;border:1.5px solid var(--ink);border-radius:3px;margin-left:5px;background:linear-gradient(90deg,var(--ink) 70%,transparent 70%);background-clip:content-box;padding:1px}
+.mk-concept-c .c-home{position:absolute;left:50%;bottom:8px;width:134px;height:5px;margin-left:-67px;border-radius:3px;background:var(--ink);opacity:.85}
+.mk-concept-c .c-chrome{position:absolute;display:flex;gap:8px;z-index:3}
+.mk-concept-c .c-pill,.mk-concept-c .c-read{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 13px;border-radius:18px;background:var(--chrome);box-shadow:0 2px 10px rgba(0,0,0,.18);font-weight:600;font-size:13px;color:var(--ink);backdrop-filter:blur(8px)}
+.mk-concept-c .c-read{font-weight:500}
+.mk-concept-c .c-read b{color:var(--amber)}
+.mk-concept-c .c-pill.on{color:var(--amber)}
+.mk-concept-c .c-pill.paused{color:var(--muted)}
+.mk-concept-c .ic{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.mk-concept-c .icf{fill:currentColor}
+.mk-concept-c .c-sheet{position:absolute;left:0;right:0;bottom:0;background:var(--sheet);border-radius:22px 22px 0 0;box-shadow:var(--shadow);padding:0 16px 40px;z-index:4;overflow:hidden}
+.mk-concept-c .c-handle{width:38px;height:5px;border-radius:3px;background:var(--line);margin:8px auto 10px}
+.mk-concept-c .c-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+.mk-concept-c .c-chip{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 14px;border-radius:18px;border:1.5px solid var(--amber);color:var(--amber);font-weight:650;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:300px}
+.mk-concept-c .c-chip i{font-style:normal;font-size:11px}
+.mk-concept-c .c-ibtn{display:grid;place-items:center;width:36px;height:36px;border-radius:50%;background:var(--sheet2);color:var(--ink)}
+.mk-concept-c .c-filter{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 12px;border-radius:17px;background:var(--amber);color:#1b1205;font-weight:650;font-size:13px}
+.mk-concept-c .c-filter i{font-style:normal;margin-left:6px;opacity:.8}
+.mk-concept-c .c-dock{display:flex;align-items:center;gap:10px;padding:6px;margin:0 -6px 8px;border-radius:12px;background:var(--sheet2)}
+.mk-concept-c .c-dock .c-ph{width:52px;height:52px;border-radius:9px;flex:none}
+.mk-concept-c .c-dock div{flex:1;min-width:0;display:flex;flex-direction:column}
+.mk-concept-c .c-dock b{font-size:14px}
+.mk-concept-c .c-dock small,.mk-concept-c .c-sec small,.mk-concept-c .c-card small,.mk-concept-c .c-vh small,.mk-concept-c .c-dayh small{color:var(--muted);font-size:12px}
+.mk-concept-c .c-pos{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums;padding-right:4px}
+.mk-concept-c .c-scrub{display:flex;align-items:center;gap:10px;position:relative}
+.mk-concept-c .c-play{flex:none;display:grid;place-items:center;width:44px;height:44px;border-radius:50%;background:var(--amber);color:#1b1205}
+.mk-concept-c .c-stripw{position:relative;height:50px;flex:1;overflow:hidden;border-radius:8px}
+.mk-concept-c .c-strip{display:block}
+.mk-concept-c .c-strip .gps{fill:var(--gps)} .mk-concept-c .c-strip .nog{fill:url(#mkc-hatch)}
+.mk-concept-c .c-strip .dim{opacity:var(--dim)}
+.mk-concept-c .c-strip .band{fill:var(--amber);opacity:.14}
+.mk-concept-c .c-strip .tick{stroke:var(--line);stroke-width:1}
+.mk-concept-c .c-strip .tlab{fill:var(--muted);font:500 11px system-ui,sans-serif}
+.mk-concept-c .c-strip .ph{stroke:var(--ink);stroke-width:2}
+.mk-concept-c .c-strip .phc{fill:var(--ink)}
+.mk-concept-c .c-phlab{position:absolute;bottom:0;white-space:nowrap;transform:translateX(-50%);background:var(--ink);color:var(--sheet);font-size:11.5px;font-weight:700;padding:0 5px;border-radius:4px;line-height:15px}
+.mk-concept-c .c-body{margin-top:12px}
+.mk-concept-c .c-visit{padding:10px 0;border-top:1px solid var(--line)}
+.mk-concept-c .c-vh{display:flex;flex-direction:column;margin-bottom:8px}
+.mk-concept-c .c-vthumbs{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+.mk-concept-c .c-vthumbs .c-ph{aspect-ratio:1;border-radius:8px}
+.mk-concept-c .c-dayh{display:flex;justify-content:space-between;align-items:baseline;padding:8px 0 6px;background:var(--sheet)}
+.mk-concept-c .c-dayh.sticky{border-bottom:1px solid var(--line);margin-bottom:6px}
+.mk-concept-c .c-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:3px}
+.mk-concept-c .c-grid .c-ph{aspect-ratio:1;border-radius:3px}
+.mk-concept-c .c-ph{position:relative;display:block;background-color:#888}
+.mk-concept-c .c-ph.sel{outline:3px solid var(--amber);outline-offset:-3px}
+.mk-concept-c .c-vid{position:absolute;right:4px;bottom:3px;font-style:normal;color:#fff;font-size:11px;text-shadow:0 1px 2px #000}
+.mk-concept-c .c-fast{position:absolute;right:4px;top:330px;display:flex;align-items:center;gap:6px}
+.mk-concept-c .c-fast span{background:var(--ink);color:var(--sheet);font-size:12px;font-weight:700;padding:5px 10px;border-radius:14px;position:relative;right:4px}
+.mk-concept-c .c-fast::after{content:"";width:6px;height:42px;border-radius:3px;background:var(--amber)}
+.mk-concept-c .c-search{display:flex;align-items:center;gap:8px;height:42px;padding:0 14px;border-radius:12px;background:var(--sheet2);color:var(--muted);margin-bottom:12px}
+.mk-concept-c .c-sec{display:flex;justify-content:space-between;align-items:baseline;margin:6px 0 4px}
+.mk-concept-c .c-sec span{font-weight:700}
+.mk-concept-c .c-months{display:grid;grid-template-columns:repeat(12,1fr);margin-left:44px;width:300px;color:var(--muted);font-size:11px;text-align:center}
+.mk-concept-c .c-year{display:flex;align-items:center;gap:8px;height:44px}
+.mk-concept-c .c-yl{width:36px;font-weight:650;font-variant-numeric:tabular-nums;color:var(--muted)}
+.mk-concept-c .c-year .gps{fill:var(--gps)} .mk-concept-c .c-year .nog{fill:url(#mkc-hatch)}
+.mk-concept-c .c-year .mg{stroke:var(--line);stroke-width:1}
+.mk-concept-c .c-year .tb{fill:var(--amber);opacity:.55} .mk-concept-c .c-year .tb.sel{opacity:1}
+.mk-concept-c .c-year .tb.home{fill:var(--nog)}
+.mk-concept-c .c-card{display:flex;align-items:center;gap:6px;padding:8px;border-radius:12px;background:var(--sheet2);margin-bottom:6px}
+.mk-concept-c .c-card.sel{box-shadow:inset 0 0 0 1.5px var(--amber)}
+.mk-concept-c .c-card .c-ph{width:44px;height:44px;border-radius:8px;flex:none}
+.mk-concept-c .c-card div{display:flex;flex-direction:column;margin-left:6px;min-width:0}
+.mk-concept-c .c-tm{position:absolute;width:34px;height:34px;z-index:2}
+.mk-concept-c .c-tm>.c-ph{width:34px;height:34px;border-radius:50%;border:2.5px solid var(--halo);box-shadow:0 0 0 2px var(--amber),0 3px 8px rgba(0,0,0,.3)}
+.mk-concept-c .c-tm.sel>.c-ph{width:42px;height:42px;margin:-4px;box-shadow:0 0 0 3px var(--amber),0 0 0 9px rgba(240,165,65,.25)}
+.mk-concept-c .c-tml{position:absolute;top:2px;white-space:nowrap;background:var(--chrome);border-radius:8px;padding:2px 7px;display:flex;flex-direction:column;line-height:1.2;box-shadow:0 1px 5px rgba(0,0,0,.18)}
+.mk-concept-c .c-tml b{font-size:11px}.mk-concept-c .c-tml small{font-size:11px;color:var(--muted)}
+.mk-concept-c .c-tml.r{left:40px}.mk-concept-c .c-tml.b{top:40px;left:0}.mk-concept-c .c-tml.t{top:-40px;left:50%;transform:translateX(-50%)}.mk-concept-c .c-tml.l{right:40px}.mk-concept-c .c-tml.rb{left:24px;top:34px}
+.mk-concept-c .c-edge{position:absolute;z-index:2;font-size:11px;font-weight:600;background:var(--chrome);padding:4px 8px;border-radius:10px;color:var(--ink);box-shadow:0 1px 5px rgba(0,0,0,.18)}
+.mk-concept-c .c-dot{position:absolute;z-index:9;display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:#e5484d;color:#fff;font:700 12px/1 system-ui,sans-serif;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35)}
+.mk-concept-c .c-legend{list-style:none;margin:20px 0 0;padding:0;display:flex;flex-direction:column;gap:8px;font-size:13px}
+.mk-concept-c .c-legend li{display:flex;gap:8px}
+.mk-concept-c .c-legend li>b{flex:none;display:grid;place-items:center;width:20px;height:20px;border-radius:50%;background:#e5484d;color:#fff;font-size:11px}
+.mk-concept-c .c-legend em{font-style:normal;font-weight:650}
+.mk-concept-c code{font:12px ui-monospace,Menlo,monospace;background:var(--sheet2);padding:0 3px;border-radius:3px}
+.mk-concept-c .c-foot{max-width:1700px;margin:28px auto 0;color:var(--muted);font-size:13px}
+/* photos as gradients */
+.mk-concept-c .p1{background:linear-gradient(160deg,transparent 55%,#4c6b45 55%),linear-gradient(205deg,transparent 48%,#7d9c63 48%),linear-gradient(#8ec5e8,#dcefff)}
+.mk-concept-c .p2{background:radial-gradient(circle at 68% 36%,#fff1c4 0 7%,transparent 8%),linear-gradient(#f6c27e 0 34%,#e58a5c 34% 46%,#2c6a8c 46% 80%,#e9d7b0 80%)}
+.mk-concept-c .p3{background:linear-gradient(#a9cde6 0 26%,transparent 26%),linear-gradient(90deg,#c9a77c 0 28%,#9c774c 28% 31%,#dcc095 31% 68%,#a57c50 68%)}
+.mk-concept-c .p4{background:radial-gradient(circle at 50% 55%,#c4583a 0 14%,#f4efe6 15% 32%,#3b2a22 33%)}
+.mk-concept-c .p5{background:linear-gradient(170deg,#24412c,#567d4a 60%,#a7c57d)}
+.mk-concept-c .p6{background:radial-gradient(circle at 30% 60%,#ffd27a 0 4%,transparent 5%),radial-gradient(circle at 72% 58%,#ffd27a 0 4%,transparent 5%),linear-gradient(#1e2a44 0 52%,#e0a85a 52% 54%,#3a3a46 54%)}
+.mk-concept-c .p7{background:linear-gradient(175deg,transparent 40%,#6f8f5f 40% 50%,transparent 50%),linear-gradient(#cfe6f2 0 38%,#7a9b6a 38% 50%,#4f88a8 50%)}
+.mk-concept-c .p8{background:linear-gradient(90deg,transparent 38%,#8f6f4f 38% 62%,transparent 62%),linear-gradient(transparent 18%,#b7d4ea 18%),linear-gradient(90deg,transparent 46%,#7a5b3e 46% 54%,transparent 54%),linear-gradient(#b7d4ea 0 60%,#c2a27c 60%)}
+.mk-concept-c .p9{background:linear-gradient(200deg,transparent 50%,#5b5146 50%),linear-gradient(150deg,transparent 58%,#7c6c5a 58%),linear-gradient(#f0d9b8,#c9b6d6)}
+.mk-concept-c .p10{background:radial-gradient(ellipse at 50% 100%,#3d7a3a 0 40%,transparent 41%),linear-gradient(#5d9bd0,#bfe0f4 70%,#3d7a3a 70%)}
+/* rev 2 */
+.mk-concept-c .hatch-bg{fill:var(--sheet)} .mk-concept-c .hatch-ln{stroke:var(--nog);stroke-width:2.2}
+.mk-concept-c .c-deck{position:absolute;left:0;right:0;bottom:0;background:var(--sheet);border-radius:22px 22px 0 0;box-shadow:var(--shadow);padding:0 16px 40px;z-index:4}
+.mk-concept-c .c-grab{width:38px;height:5px;border-radius:3px;background:var(--line);margin:7px auto 0}
+.mk-concept-c .c-trow{display:flex;align-items:center;gap:8px;height:46px}
+.mk-concept-c .c-tt{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.2}
+.mk-concept-c .c-tt b{font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mk-concept-c .c-tt b i{font-style:normal;color:var(--muted);font-size:12px;margin-left:4px}
+.mk-concept-c .c-tt small{color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mk-concept-c .c-gbtn{display:inline-flex;align-items:center;gap:5px;height:36px;padding:0 11px;border-radius:18px;background:var(--sheet2);font-weight:650;font-size:13px;flex:none}
+.mk-concept-c .c-card2{display:flex;align-items:center;gap:10px;padding:6px;margin:4px -6px 8px;border-radius:12px;background:var(--sheet2)}
+.mk-concept-c .c-card2 .c-ph{width:52px;height:52px;border-radius:9px;flex:none}
+.mk-concept-c .c-card2>div{flex:1;min-width:0;display:flex;flex-direction:column}
+.mk-concept-c .c-card2 b{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mk-concept-c .c-card2 small{color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mk-concept-c .c-step{flex:none;display:grid;place-items:center;width:44px;height:44px;border-radius:12px;background:var(--sheet);color:var(--ink);font-size:20px;font-weight:600}
+.mk-concept-c .c-play.pulse{box-shadow:0 0 0 6px rgba(217,130,43,.28),0 0 0 13px rgba(217,130,43,.12)}
+.mk-concept-c .c-strip .stp{fill:var(--amber)}
+.mk-concept-c .c-hint{position:absolute;z-index:6;left:14px;width:250px;background:var(--ink);color:var(--sheet);font-size:13px;font-weight:600;line-height:1.3;padding:9px 12px;border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+.mk-concept-c .c-hint::after{content:"";position:absolute;left:30px;bottom:-7px;border:7px solid transparent;border-bottom:0;border-top-color:var(--ink)}
+.mk-concept-c .c-hint small{display:block;font-weight:500;opacity:.75;font-size:12px}
+.mk-concept-c .c-tc{position:absolute;z-index:2;display:grid;place-items:center;width:40px;height:40px;border-radius:50%;background:var(--halo);box-shadow:0 0 0 3px var(--amber),0 3px 8px rgba(0,0,0,.3);font-weight:750;font-size:14px;color:var(--ink)}
+.mk-concept-c .c-tc span{position:absolute;top:46px;left:50%;transform:translateX(-50%);white-space:nowrap;background:var(--chrome);border-radius:8px;padding:2px 7px;font-size:11px;font-weight:600;box-shadow:0 1px 5px rgba(0,0,0,.18);display:flex;flex-direction:column;line-height:1.25;text-align:center}
+.mk-concept-c .c-tc span small{color:var(--muted);font-weight:500;font-size:11px}
+.mk-concept-c .c-lib{position:absolute;left:0;right:0;bottom:0;background:var(--sheet);border-radius:22px 22px 0 0;box-shadow:var(--shadow);padding:14px 16px 40px;z-index:4;overflow:hidden}
+.mk-concept-c .c-inview{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 10px;border-radius:15px;background:var(--sheet2);font-size:12px;font-weight:600;color:var(--ink)}
+.mk-concept-c .c-inview i{font-style:normal;color:var(--muted)}
+.mk-concept-c .c-card .c-nav{margin-left:auto;display:flex;gap:4px;flex:none}
+.mk-concept-c .c-card .c-nav span{display:grid;place-items:center;width:36px;height:44px;border-radius:10px;background:var(--sheet);font-size:18px;font-weight:600}
+.mk-concept-c .c-card>div.c-ct{flex:1}
+.mk-concept-c .c-psheet{position:absolute;left:0;right:0;bottom:0;background:var(--sheet);border-radius:22px 22px 0 0;box-shadow:var(--shadow);padding:6px 16px 40px;z-index:4;overflow:hidden}
+.mk-concept-c .c-ph2{display:flex;align-items:center;gap:10px;min-height:56px}
+.mk-concept-c .c-ph2>svg{flex:none;color:var(--amber)}
+.mk-concept-c .c-ph2>div{flex:1;display:flex;flex-direction:column;line-height:1.25}
+.mk-concept-c .c-ph2 b{font-size:17px}
+.mk-concept-c .c-ph2 small{color:var(--muted);font-size:12.5px}
+.mk-concept-c .c-x{flex:none;display:grid;place-items:center;width:44px;height:44px;border-radius:50%;background:var(--sheet2);font-size:16px}
+.mk-concept-c .c-vrow{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
+.mk-concept-c .c-vrow>div{display:flex;flex-direction:column;min-width:0}
+.mk-concept-c .c-vrow small{color:var(--muted);font-size:12px}
+.mk-concept-c .c-zoom{flex:none;display:inline-flex;align-items:center;height:36px;padding:0 12px;border-radius:18px;border:1.5px solid var(--amber);color:var(--amber);font-weight:650;font-size:13px}
+.mk-concept-c .c-v4{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+.mk-concept-c .c-v4 .c-ph{aspect-ratio:4/3;border-radius:7px}
+.mk-concept-c .c-also{margin-top:4px;padding-top:10px;border-top:1px solid var(--line)}
+.mk-concept-c .c-also>small{color:var(--muted);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.05em}
+.mk-concept-c .c-arow{display:flex;align-items:center;gap:10px;margin-top:8px;padding:8px;border-radius:12px;background:var(--sheet2)}
+.mk-concept-c .c-arow .c-ph{width:44px;height:44px;border-radius:8px;flex:none}
+.mk-concept-c .c-arow>div{flex:1;display:flex;flex-direction:column;min-width:0}
+.mk-concept-c .c-arow small{color:var(--muted);font-size:12px}
+.mk-concept-c .c-arow>i{font-style:normal;font-size:20px;color:var(--muted);padding-right:6px}
+.mk-concept-c .c-pscreen{position:absolute;left:0;right:0;bottom:0;background:var(--sheet);border-radius:18px 18px 0 0;box-shadow:var(--shadow);padding:0 16px 40px;z-index:4;overflow:hidden}
+.mk-concept-c .c-phead{display:flex;align-items:center;gap:8px;height:56px}
+.mk-concept-c .c-back{flex:none;display:inline-flex;align-items:center;gap:4px;height:44px;padding:0 12px 0 8px;border-radius:22px;background:var(--sheet2);font-weight:650;font-size:14px}
+.mk-concept-c .c-chap{display:flex;flex-direction:column;padding:6px 0 6px;border-bottom:1px solid var(--line);margin-bottom:6px;background:var(--sheet)}
+.mk-concept-c .c-chap em{font-style:normal;color:var(--amber);font-weight:700;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase}
+.mk-concept-c .c-chap b{font-size:15px}
+.mk-concept-c .c-stop{display:flex;justify-content:space-between;align-items:baseline;margin:6px 0 5px;font-size:13px}
+.mk-concept-c .c-stop b{font-weight:650} .mk-concept-c .c-stop small{color:var(--muted);font-size:12px}
+.mk-concept-c .c-transit{display:flex;flex-direction:column;margin:8px 0 4px 6px;padding:3px 0 3px 12px;border-left:2px dashed var(--amber3);font-size:12.5px;line-height:1.35}
+.mk-concept-c .c-transit b{font-weight:650} .mk-concept-c .c-transit small{color:var(--muted);font-size:12px}
+.mk-concept-c .c-nog{position:absolute;left:4px;bottom:3px;width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,.55);display:grid;place-items:center}
+.mk-concept-c .c-locate{position:absolute;right:16px;z-index:6;display:inline-flex;align-items:center;gap:6px;height:44px;padding:0 15px;border-radius:22px;background:var(--chrome);box-shadow:0 3px 12px rgba(0,0,0,.25);font-weight:650;font-size:14px;color:var(--ink);backdrop-filter:blur(8px)}
+.mk-concept-c .c-curtag{position:absolute;left:4px;top:4px;background:var(--amber);color:#1b1205;font-size:11px;font-weight:700;padding:0 5px;border-radius:4px;line-height:16px}
+.mk-concept-c .c-lip{position:absolute;z-index:3;left:14px;top:54px}
+.mk-concept-c .c-notes{max-width:1700px;margin:30px auto 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px 28px;font-size:13px}
+.mk-concept-c .c-notes h3{margin:0 0 4px;font-size:14px}
+.mk-concept-c .c-notes p{margin:0;color:var(--muted)}
+
+</style>
+<div class="mk-concept-c">
+ <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <linearGradient id="mkc-ramp" gradientUnits="userSpaceOnUse" x1="92" y1="172" x2="300" y2="300"><stop class="r0" offset="0"/><stop class="r1" offset="1"/></linearGradient>
+  <pattern id="mkc-hatch" patternUnits="userSpaceOnUse" width="4" height="4" patternTransform="rotate(45)"><rect class="hatch-bg" width="4" height="4"/><line class="hatch-ln" x1="0" y1="0" x2="0" y2="4"/></pattern>
+ </defs></svg>
+ <header class="c-head"><h2>Concept C · Map-first with a fixed deck <small style="font-weight:500;color:var(--muted);font-size:14px">rev. 2</small></h2>
+  <p>One full-screen map for the whole session. Time lives in a fixed bottom deck (title, cursor card with stop stepping, fixed-playhead strip + Play) that never drags. Photos and the Library are pushed screens; a cluster opens a fixed place sheet that navigates to visits instead of filtering. Demo data: "San Sebastián to Huesca, 6–10 Sep 2024".</p></header>
+ <div class="c-row1">
+<figure class="c-screen">
+ <figcaption><b>1</b> Trip: the demo landing</figcaption>
+ <div class="c-phone">
+    <svg class="c-map" viewBox="0 0 390 844" aria-hidden="true">
+
+ <rect class="land" x="-400" y="-400" width="1200" height="1700"/>
+ <path class="mtn" d="M120,150 C180,190 240,215 390,215 L390,290 C320,300 260,280 200,250 C160,230 130,200 110,170Z"/>
+ <path class="mtn2" d="M180,205 C230,230 300,250 390,248 L390,268 C310,275 240,258 190,228Z"/>
+ <path class="water" d="M-400,-400 H165 V0 C158,40 150,90 132,140 C120,160 105,170 92,172 C70,176 40,190 -400,215 Z"/>
+ <path class="coast" d="M165,0 C158,40 150,90 132,140 C120,160 105,170 92,172 C70,176 40,190 -10,212"/>
+ <path class="border" d="M128,150 C170,175 200,200 240,215 C280,228 330,240 400,236"/>
+ <path class="river" d="M40,560 C120,545 180,590 250,575 S350,600 420,610"/>
+ <path class="river" d="M262,352 C290,380 330,420 360,520"/>
+ <ellipse class="water" cx="262" cy="352" rx="14" ry="5" transform="rotate(-12 262 352)"/>
+ <g class="roads">
+  <path d="M92,172 C110,210 125,250 150,290 S166,322 170,330"/>
+  <path d="M170,330 C200,340 230,350 255,358 C275,340 290,315 300,300"/>
+  <path d="M300,300 C305,360 315,420 322,470"/>
+  <path d="M-20,300 C60,310 120,320 170,330"/>
+  <path d="M170,330 C150,420 120,500 90,660"/>
+  <path d="M322,470 C350,490 380,515 420,530"/>
+  <path d="M300,300 C330,295 360,285 420,280"/>
+  <path d="M92,172 C60,175 30,180 -20,182"/>
+  <path d="M170,330 C220,400 270,450 322,470"/>
+  <path d="M322,470 C300,540 280,600 260,680"/>
+ </g>
+ <path class="route" d="M92,172 C110,210 125,250 150,290 S166,322 170,330 C200,340 230,350 255,358 C275,340 290,315 300,300"/>
+ <path class="gapln" d="M300,300 C305,360 315,420 322,470"/>
+
+   <circle class="pin" cx="131.1" cy="273.0" r="3.6"/><circle class="pin" cx="213.5" cy="351.9" r="3.6"/><circle class="pin" cx="129.7" cy="242.2" r="3.6"/><circle class="pin" cx="195.7" cy="342.0" r="3.6"/><circle class="pin" cx="224.9" cy="355.1" r="3.6"/><circle class="pin" cx="226.5" cy="351.4" r="3.6"/><circle class="pin" cx="252.0" cy="358.2" r="3.6"/><circle class="pinv" cx="207.8" cy="349.3" r="3.6"/><circle class="pin" cx="145.4" cy="288.8" r="3.6"/><circle class="pin" cx="215.3" cy="340.3" r="3.6"/><circle class="pin" cx="233.8" cy="351.1" r="3.6"/><circle class="pin" cx="269.4" cy="328.4" r="3.6"/><circle class="pin" cx="265.6" cy="361.8" r="3.6"/><circle class="pin" cx="226.4" cy="348.7" r="3.6"/><circle class="pin" cx="147.8" cy="307.8" r="3.6"/><circle class="pinv" cx="93.8" cy="199.1" r="3.6"/><circle class="pin" cx="215.1" cy="333.3" r="3.6"/><circle class="pin" cx="104.1" cy="194.8" r="3.6"/><circle class="pinv" cx="169.1" cy="306.8" r="3.6"/><circle class="pin" cx="246.8" cy="360.4" r="3.6"/><circle class="pin" cx="144.9" cy="302.9" r="3.6"/><circle class="pin" cx="144.7" cy="283.1" r="3.6"/><circle class="pin" cx="279.9" cy="326.6" r="3.6"/><circle class="pin" cx="288.9" cy="318.8" r="3.6"/><circle class="pin" cx="154.4" cy="304.0" r="3.6"/><circle class="pin" cx="289.7" cy="308.9" r="3.6"/><circle class="pin" cx="260.7" cy="351.3" r="3.6"/><circle class="pin" cx="158.2" cy="314.2" r="3.6"/><circle class="pin" cx="253.2" cy="359.7" r="3.6"/><circle class="pin" cx="228.8" cy="345.8" r="3.6"/><circle class="pin" cx="234.4" cy="341.3" r="3.6"/><circle class="pin" cx="237.3" cy="353.9" r="3.6"/><circle class="pin" cx="149.1" cy="298.4" r="3.6"/><circle class="pin" cx="116.9" cy="210.0" r="3.6"/><g class="cl"><circle cx="92" cy="172" r="17"/><text x="92" y="176">48</text></g><g class="cl"><circle cx="170" cy="330" r="16"/><text x="170" y="334">41</text></g><g class="cl"><circle cx="300" cy="300" r="15"/><text x="300" y="304">36</text></g><g class="cl"><circle cx="322" cy="470" r="14"/><text x="322" y="474">28</text></g><text class="mlab" x="104" y="158">Donostia / San Sebastián</text><text class="mlab" x="190" y="318">Pamplona</text><text class="mlab" x="268" y="382">Yesa</text><text class="mlab" x="318" y="288">Jaca</text><text class="mlab" x="338" y="474">Huesca</text><text class="mlab cty" x="232" y="230">FRANCE</text><text class="mlab sea" x="210" y="600">Ebro</text>
+   <circle class="mk-halo" cx="252" cy="357" r="16"/><circle class="mk" cx="252" cy="357" r="7"/>
+  </svg>
+  <div class="c-status"><span>9:41</span><span class="c-sb"><i></i><i></i><i></i><em></em></span></div>
+  <div class="c-chrome" style="left:14px;top:56px"><span class="c-read"><b>Day 4</b> · Mon 9 Sep · 13:04</span></div>
+  <div class="c-chrome" style="right:14px;top:462px;flex-direction:column;align-items:flex-end"><span class="c-pill on"><svg viewBox="0 0 24 24" width="15" height="15"><circle class="ic" cx="12" cy="12" r="7"/><circle class="icf" cx="12" cy="12" r="2.6"/><path class="ic" d="M12 1v4M12 19v4M1 12h4M19 12h4"/></svg> Following</span><span class="c-pill"><svg viewBox="0 0 24 24" width="15" height="15"><path class="ic" d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg> Fit</span></div>
+  <div class="c-hint" style="top:548px">Press &#9654; to replay the trip<small>or drag the strip · shown once</small></div>
+    <div class="c-deck" style="top:612px">
+   <div class="c-grab"></div>
+   <div class="c-trow"><div class="c-tt"><b>San Sebastián to Huesca<i>&#9662;</i></b><small>6–10 Sep 2024 · 194 · 4 without location</small></div><span class="c-gbtn"><svg viewBox="0 0 24 24" width="15" height="15"><rect class="ic" x="4" y="4" width="7" height="7" rx="1"/><rect class="ic" x="13" y="4" width="7" height="7" rx="1"/><rect class="ic" x="4" y="13" width="7" height="7" rx="1"/><rect class="ic" x="13" y="13" width="7" height="7" rx="1"/></svg> 194</span><span class="c-ibtn"><svg viewBox="0 0 24 24" width="18" height="18"><path class="ic" d="M12 3v12M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg></span></div>
+   <div class="c-card2"><span class="c-ph p7"></span><div><b>Yesa reservoir, Navarre</b><small>Mon 9 Sep · 13:04 · 112 / 194</small><small>Stop 6 of 11 · CC BY Kent Wang</small></div><span class="c-step">&#8249;</span><span class="c-step">&#8250;</span></div>
+   <div class="c-scrub"><span class="c-play pulse"><svg viewBox="0 0 24 24" width="18" height="18"><path class="icf" d="M8 5v14l11-7z"/></svg></span><div class="c-stripw"><svg class="c-strip" viewBox="0 0 278 50" width="278" height="50" aria-hidden="true"><rect class="gps" x="3.2" y="35.5" width="1.7" height="10.5" rx="1"/><rect class="gps" x="8.5" y="43.9" width="1.7" height="2.1" rx="1"/><rect class="nog" x="45.9" y="43.6" width="1.7" height="2.4" rx="1"/><rect class="nog" x="48.6" y="38.1" width="1.7" height="7.9" rx="1"/><rect class="gps" x="51.3" y="38.3" width="1.7" height="7.7" rx="1"/><rect class="gps" x="56.6" y="25.1" width="1.7" height="20.9" rx="1"/><rect class="gps" x="59.3" y="36.7" width="1.7" height="9.3" rx="1"/><rect class="gps" x="62.0" y="34.2" width="1.7" height="11.8" rx="1"/><rect class="gps" x="64.7" y="33.0" width="1.7" height="13.0" rx="1"/><rect class="gps" x="70.0" y="27.2" width="1.7" height="18.8" rx="1"/><rect class="gps" x="72.7" y="28.1" width="1.7" height="17.9" rx="1"/><rect class="gps" x="78.0" y="36.6" width="1.7" height="9.4" rx="1"/><rect class="gps" x="83.4" y="37.2" width="1.7" height="8.8" rx="1"/><rect class="gps" x="86.0" y="43.5" width="1.7" height="2.5" rx="1"/><rect class="gps" x="126.1" y="37.2" width="1.7" height="8.8" rx="1"/><rect class="gps" x="128.8" y="31.6" width="1.7" height="14.4" rx="1"/><rect class="gps" x="131.5" y="33.3" width="1.7" height="12.7" rx="1"/><rect class="nog" x="134.2" y="31.8" width="1.7" height="14.2" rx="1"/><rect class="gps" x="139.5" y="15.5" width="1.7" height="30.5" rx="1"/><rect class="gps" x="142.2" y="24.2" width="1.7" height="21.8" rx="1"/><rect class="gps" x="147.5" y="24.8" width="1.7" height="21.2" rx="1"/><rect class="gps" x="155.5" y="26.0" width="1.7" height="20.0" rx="1"/><rect class="nog" x="158.2" y="37.7" width="1.7" height="8.3" rx="1"/><rect class="gps" x="163.6" y="42.1" width="1.7" height="3.9" rx="1"/><rect class="gps" x="201.0" y="43.7" width="1.7" height="2.3" rx="1"/><rect class="gps" x="203.7" y="40.8" width="1.7" height="5.2" rx="1"/><rect class="gps" x="206.3" y="35.5" width="1.7" height="10.5" rx="1"/><rect class="gps" x="209.0" y="34.9" width="1.7" height="11.1" rx="1"/><rect class="nog" x="211.7" y="36.0" width="1.7" height="10.0" rx="1"/><rect class="gps" x="214.3" y="22.6" width="1.7" height="23.4" rx="1"/><rect class="gps" x="217.0" y="35.8" width="1.7" height="10.2" rx="1"/><rect class="nog" x="222.4" y="32.6" width="1.7" height="13.4" rx="1"/><rect class="gps" x="225.0" y="17.1" width="1.7" height="28.9" rx="1"/><rect class="gps" x="227.7" y="27.6" width="1.7" height="18.4" rx="1"/><rect class="gps" x="230.4" y="28.7" width="1.7" height="17.3" rx="1"/><line class="tick" x1="18.5" y1="10" x2="18.5" y2="46"/><text class="tlab" x="21.5" y="9">Sun 8</text><line class="tick" x1="96.5" y1="10" x2="96.5" y2="46"/><text class="tlab" x="99.5" y="9">Mon 9</text><line class="tick" x1="174.5" y1="10" x2="174.5" y2="46"/><text class="tlab" x="177.5" y="9">Tue 10</text><path class="stp" d="M40.5,10 h7 l-3.5,5z"/><path class="stp" d="M50.5,10 h7 l-3.5,5z"/><path class="stp" d="M121.5,10 h7 l-3.5,5z"/><path class="stp" d="M134.5,10 h7 l-3.5,5z"/><path class="stp" d="M166.5,10 h7 l-3.5,5z"/><path class="stp" d="M196.5,10 h7 l-3.5,5z"/><path class="stp" d="M217.5,10 h7 l-3.5,5z"/><line class="ph" x1="139.0" y1="12" x2="139.0" y2="48"/></svg><span class="c-phlab" style="left:139.0px">13:04</span></div></div>
+   <div class="c-home"></div>
+  </div>
+  <b class="c-dot" style="left:186px;top:598px">1</b><b class="c-dot" style="left:300px;top:598px">2</b><b class="c-dot" style="left:296px;top:652px">3</b><b class="c-dot" style="left:4px;top:790px">4</b><b class="c-dot" style="left:214px;top:800px">5</b><b class="c-dot" style="left:136px;top:352px">6</b><b class="c-dot" style="left:296px;top:432px">7</b>
+ </div>
+ <ol class="c-legend"><li><b>1</b><span>The deck is fixed: it never drags, so the scrubber can't collapse it. Tap the title → Library. <em>Swipe up</em> on this row (or tap ▦) → Photos.</span></li><li><b>2</b><span>▦ 194 opens Photos (screen 3). Share sends the current URL; contract unchanged.</span></li><li><b>3</b><span>Cursor card: tap → lightbox. <em>‹ ›</em> step by stop (44 px each). No swipe on the card, so it never competes with the strip.</span></li><li><b>4</b><span>Play pulses once on first visit with the hint above; both go away on the first touch of the deck.</span></li><li><b>5</b><span>Fixed-playhead strip, <code>touch-action:none</code>: horizontal drag scrubs, nothing else. Amber ticks are stop boundaries; a fling settles on one. <code>at</code> is written with <em>replace</em>.</span></li><li><b>6</b><span>Tap a cluster → place sheet (screen 2). Tap a pin → cursor seeks there and the card shows it.</span></li><li><b>7</b><span>Follow / Fit in the right thumb arc. Camera insets = deck height, so the marker never hides under the deck.</span></li></ol>
+</figure>
+<figure class="c-screen">
+ <figcaption><b>2</b> Tap a cluster: place sheet</figcaption>
+ <div class="c-phone">
+    <svg class="c-map" viewBox="0 0 390 844" aria-hidden="true">
+   <g class="zoomed" transform="translate(-179 -516) scale(2.2)">
+
+ <rect class="land" x="-400" y="-400" width="1200" height="1700"/>
+ <path class="mtn" d="M120,150 C180,190 240,215 390,215 L390,290 C320,300 260,280 200,250 C160,230 130,200 110,170Z"/>
+ <path class="mtn2" d="M180,205 C230,230 300,250 390,248 L390,268 C310,275 240,258 190,228Z"/>
+ <path class="water" d="M-400,-400 H165 V0 C158,40 150,90 132,140 C120,160 105,170 92,172 C70,176 40,190 -400,215 Z"/>
+ <path class="coast" d="M165,0 C158,40 150,90 132,140 C120,160 105,170 92,172 C70,176 40,190 -10,212"/>
+ <path class="border" d="M128,150 C170,175 200,200 240,215 C280,228 330,240 400,236"/>
+ <path class="river" d="M40,560 C120,545 180,590 250,575 S350,600 420,610"/>
+ <path class="river" d="M262,352 C290,380 330,420 360,520"/>
+ <ellipse class="water" cx="262" cy="352" rx="14" ry="5" transform="rotate(-12 262 352)"/>
+ <g class="roads">
+  <path d="M92,172 C110,210 125,250 150,290 S166,322 170,330"/>
+  <path d="M170,330 C200,340 230,350 255,358 C275,340 290,315 300,300"/>
+  <path d="M300,300 C305,360 315,420 322,470"/>
+  <path d="M-20,300 C60,310 120,320 170,330"/>
+  <path d="M170,330 C150,420 120,500 90,660"/>
+  <path d="M322,470 C350,490 380,515 420,530"/>
+  <path d="M300,300 C330,295 360,285 420,280"/>
+  <path d="M92,172 C60,175 30,180 -20,182"/>
+  <path d="M170,330 C220,400 270,450 322,470"/>
+  <path d="M322,470 C300,540 280,600 260,680"/>
+ </g>
+ <path class="route" d="M92,172 C110,210 125,250 150,290 S166,322 170,330 C200,340 230,350 255,358 C275,340 290,315 300,300"/>
+ <path class="gapln" d="M300,300 C305,360 315,420 322,470"/>
+</g>
+   <ellipse class="fring" cx="195" cy="210" rx="78" ry="64"/>
+   <circle class="pin big" cx="164.6" cy="185.4" r="5"/><circle class="pin big" cx="194.4" cy="201.8" r="5"/><circle class="pinv big" cx="232.5" cy="198.4" r="5"/><circle class="pin big" cx="181.3" cy="212.3" r="5"/><circle class="pin big" cx="204.1" cy="210.6" r="5"/><circle class="pinv big" cx="196.2" cy="199.6" r="5"/><circle class="pin big" cx="194.6" cy="209.7" r="5"/><circle class="pin big" cx="199.3" cy="223.8" r="5"/><circle class="pin big" cx="184.2" cy="245.7" r="5"/><circle class="pin big" cx="208.7" cy="249.2" r="5"/><circle class="pin big" cx="205.4" cy="203.2" r="5"/><circle class="pin big" cx="197.9" cy="213.1" r="5"/><circle class="pin big" cx="220.5" cy="210.5" r="5"/><circle class="pin big" cx="202.6" cy="196.2" r="5"/><circle class="pinv big" cx="192.8" cy="203.6" r="5"/><circle class="pin big" cx="195.0" cy="204.0" r="5"/><circle class="pinv big" cx="192.6" cy="212.3" r="5"/><circle class="pin big" cx="206.2" cy="230.0" r="5"/><circle class="pin big" cx="226.3" cy="197.6" r="5"/><circle class="pin big" cx="178.9" cy="207.9" r="5"/><circle class="pin big" cx="198.0" cy="201.7" r="5"/><circle class="pin big" cx="211.0" cy="218.6" r="5"/><circle class="pin big" cx="172.0" cy="240.2" r="5"/><circle class="pinv big" cx="193.3" cy="213.2" r="5"/><circle class="pinv big" cx="185.7" cy="190.7" r="5"/><circle class="pin big" cx="217.6" cy="208.4" r="5"/>
+   <text class="mlab" x="212" y="296">Pamplona / Iruña</text><text class="mlab sm" x="40" y="120">to San Sebastián</text><text class="mlab sm" x="300" y="250">to Yesa</text>
+   <circle class="mk-halo" cx="180" cy="196" r="15"/><circle class="mk" cx="180" cy="196" r="7"/>
+  </svg>
+  <div class="c-status"><span>9:41</span><span class="c-sb"><i></i><i></i><i></i><em></em></span></div>
+  <div class="c-chrome" style="right:14px;top:356px"><span class="c-pill paused"><svg viewBox="0 0 24 24" width="15" height="15"><circle class="ic" cx="12" cy="12" r="7"/><circle class="icf" cx="12" cy="12" r="2.6"/><path class="ic" d="M12 1v4M12 19v4M1 12h4M19 12h4"/></svg> Follow &#9208;</span></div>
+    <div class="c-psheet" style="top:404px">
+   <div class="c-ph2"><svg viewBox="0 0 24 24" width="22" height="22"><path class="icf" d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg><div><b>Pamplona / Iruña</b><small>2 visits in this trip · 41 photos</small></div><span class="c-x">&#10005;</span></div>
+   <div class="c-visit"><div class="c-vrow"><div><b>Sat 7 Sep · 10:12 – 14:40</b><small>Old town, Plaza del Castillo · 24</small></div><span class="c-zoom">Zoom to visit &#8250;</span></div><div class="c-v4"><span class="c-ph p3"></span><span class="c-ph p4"></span><span class="c-ph p6"><i class="c-vid">&#9654;</i></span><span class="c-ph p8"></span></div></div>
+   <div class="c-visit"><div class="c-vrow"><div><b>Mon 9 Sep · 09:05 – 10:30</b><small>Ciudadela · 17</small></div><span class="c-zoom">Zoom to visit &#8250;</span></div><div class="c-v4"><span class="c-ph p5"></span><span class="c-ph p1"></span><span class="c-ph p9"></span><span class="c-ph p10"></span></div></div>
+   <div class="c-also"><small>Also here</small>
+    <div class="c-arow"><span class="c-ph p3"></span><div><b>Pamplona &amp; Basque Country</b><small>Aug 2024 · 3 visits · 71 photos</small></div><i>&#8250;</i></div></div>
+   <div class="c-home"></div>
+  </div>
+  <b class="c-dot" style="left:300px;top:396px">1</b><b class="c-dot" style="left:230px;top:632px">2</b><b class="c-dot" style="left:60px;top:548px">3</b><b class="c-dot" style="left:330px;top:718px">4</b><b class="c-dot" style="left:100px;top:236px">5</b>
+ </div>
+ <ol class="c-legend"><li><b>1</b><span>Fixed height, not draggable; it covers the deck. ✕, Back or a tap on the map closes it. No filter mode: the trip selection is untouched.</span></li><li><b>2</b><span><em>Zoom to visit</em> = desktop's cluster zoom (<code>zoomInto</code>, <code>from/to</code> to the minute, history push, Back returns). Play and stepping then run over that visit.</span></li><li><b>3</b><span>Visits from <code>clusterVisits</code>, 4-up preview. Tap a thumb → lightbox within the trip.</span></li><li><b>4</b><span>"Also here": other trips with photos in the same index <code>city</code>. Opening one is an ordinary trip pick. This is what is left of the cross-visit place filter, without breaking the contiguous selection.</span></li><li><b>5</b><span>The map fits the cluster and its pins spread out; fitting paused Follow. Reduced motion: fit is a jump, not a flight.</span></li></ol>
+</figure>
+<figure class="c-screen">
+ <figcaption><b>3</b> Photos: a pushed screen, not a sheet snap</figcaption>
+ <div class="c-phone">
+    <svg class="c-map" viewBox="0 0 390 844" aria-hidden="true"><g transform="translate(-60 -275)">
+
+ <rect class="land" x="-400" y="-400" width="1200" height="1700"/>
+ <path class="mtn" d="M120,150 C180,190 240,215 390,215 L390,290 C320,300 260,280 200,250 C160,230 130,200 110,170Z"/>
+ <path class="mtn2" d="M180,205 C230,230 300,250 390,248 L390,268 C310,275 240,258 190,228Z"/>
+ <path class="water" d="M-400,-400 H165 V0 C158,40 150,90 132,140 C120,160 105,170 92,172 C70,176 40,190 -400,215 Z"/>
+ <path class="coast" d="M165,0 C158,40 150,90 132,140 C120,160 105,170 92,172 C70,176 40,190 -10,212"/>
+ <path class="border" d="M128,150 C170,175 200,200 240,215 C280,228 330,240 400,236"/>
+ <path class="river" d="M40,560 C120,545 180,590 250,575 S350,600 420,610"/>
+ <path class="river" d="M262,352 C290,380 330,420 360,520"/>
+ <ellipse class="water" cx="262" cy="352" rx="14" ry="5" transform="rotate(-12 262 352)"/>
+ <g class="roads">
+  <path d="M92,172 C110,210 125,250 150,290 S166,322 170,330"/>
+  <path d="M170,330 C200,340 230,350 255,358 C275,340 290,315 300,300"/>
+  <path d="M300,300 C305,360 315,420 322,470"/>
+  <path d="M-20,300 C60,310 120,320 170,330"/>
+  <path d="M170,330 C150,420 120,500 90,660"/>
+  <path d="M322,470 C350,490 380,515 420,530"/>
+  <path d="M300,300 C330,295 360,285 420,280"/>
+  <path d="M92,172 C60,175 30,180 -20,182"/>
+  <path d="M170,330 C220,400 270,450 322,470"/>
+  <path d="M322,470 C300,540 280,600 260,680"/>
+ </g>
+ <path class="route" d="M92,172 C110,210 125,250 150,290 S166,322 170,330 C200,340 230,350 255,358 C275,340 290,315 300,300"/>
+ <path class="gapln" d="M300,300 C305,360 315,420 322,470"/>
+</g>
+   <circle class="mk" cx="192" cy="82" r="6"/></svg>
+  <div class="c-status"><span>9:41</span><span class="c-sb"><i></i><i></i><i></i><em></em></span></div>
+  <div class="c-pscreen" style="top:112px">
+   <div class="c-phead"><span class="c-back">&#8249; Map</span><div class="c-tt"><b>San Sebastián to Huesca</b><small>194 photos · 5 days · 11 stops</small></div><span class="c-ibtn"><svg viewBox="0 0 24 24" width="18" height="18"><path class="ic" d="M12 3v12M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg></span></div>
+   <div class="c-chap"><em>Mon 9 Sep · Day 4 of 5</em><b>Pamplona → Yesa → Jaca</b></div>
+   <div class="c-stop"><b>Yesa reservoir</b><small>12:40 – 13:30 · 18</small></div>
+   <div class="c-grid"><span class="c-ph p7 sel"><span class="c-curtag">13:04</span></span><span class="c-ph p1"></span><span class="c-ph p10"></span><span class="c-ph p5"><i class="c-vid">&#9654;</i></span><span class="c-ph p2"></span><span class="c-ph p7"></span><span class="c-ph p9"></span><span class="c-ph p1"></span></div>
+   <div class="c-transit"><b>2 h 05 · about 62 km</b><small>Yesa → Jaca, no photos</small></div>
+   <div class="c-stop"><b>Jaca</b><small>15:40 – 18:10 · 22</small></div>
+   <div class="c-grid"><span class="c-ph p8"></span><span class="c-ph p3"></span><span class="c-ph p6"></span><span class="c-ph p4"></span><span class="c-ph p9"><span class="c-nog"><svg viewBox="0 0 24 24" width="12" height="12" style="color:#fff"><path class="ic" d="M12 21s-6-6.5-6-11a6 6 0 0 1 10.5-4M18 9.5c0 1.2-.4 2.5-1 3.8M3 3l18 18"/></svg></span></span><span class="c-ph p8"><i class="c-vid">&#9654;</i></span><span class="c-ph p3"></span><span class="c-ph p6"></span></div>
+   <div class="c-chap" style="margin-top:8px"><em>Tue 10 Sep · Day 5 of 5</em><b>Jaca → Huesca</b></div>
+   <div class="c-fast" style="top:420px"><span>Mon 9 Sep</span></div>
+   <div class="c-home"></div>
+  </div>
+  <span class="c-locate" style="top:744px"><svg viewBox="0 0 24 24" width="15" height="15"><circle class="ic" cx="12" cy="12" r="7"/><circle class="icf" cx="12" cy="12" r="2.6"/><path class="ic" d="M12 1v4M12 19v4M1 12h4M19 12h4"/></svg> Cursor photo</span>
+  <b class="c-dot" style="left:356px;top:58px">1</b><b class="c-dot" style="left:150px;top:98px">2</b><b class="c-dot" style="left:240px;top:182px">3</b><b class="c-dot" style="left:138px;top:280px">4</b><b class="c-dot" style="left:12px;top:486px">5</b><b class="c-dot" style="left:346px;top:520px">6</b><b class="c-dot" style="left:20px;top:640px">7</b><b class="c-dot" style="left:250px;top:736px">8</b>
+ </div>
+ <ol class="c-legend"><li><b>1</b><span>Static map lip: the cursor can't move here, so the map's render loop is paused.</span></li><li><b>2</b><span><em>‹ Map</em>, Back or a swipe down on this header returns. A history entry, its own scroll container: nothing nested in a draggable surface.</span></li><li><b>3</b><span>Day chapters and stop sub-headers (from <code>stops.ts</code>, shared with A/B).</span></li><li><b>4</b><span>The cursor tile is ringed and tagged. <em>Scrolling never moves the cursor</em>; a tap sets it and opens the lightbox.</span></li><li><b>5</b><span>Transit rows between stops (from A): time and distance of the gap, so the grid reads like the trip.</span></li><li><b>6</b><span>Fast-scroll thumb with a day label, inset 16 px from the edge.</span></li><li><b>7</b><span>No-GPS photos sit in time order with a crossed-pin badge.</span></li><li><b>8</b><span>Scrolls back to the cursor photo. Tiles: thumbhash while flinging, thumbnails once settled, ≤ 6 in flight.</span></li></ol>
+</figure>
+<figure class="c-screen">
+ <figcaption><b>4</b> Library: map of trips + years</figcaption>
+ <div class="c-phone">
+    <svg class="c-map" viewBox="0 0 390 844" aria-hidden="true">
+
+ <rect class="water" x="-400" y="-400" width="1200" height="1700"/>
+ <path class="land" d="M400,-20 L400,210 L375,210 L334,221 L297,218 L282,237 L265,272 L240,300 L208,323 L200,350 L195,375 L163,396 L121,399 L95,418 L70,425 L50,410 L24,391 L20,370 L18,345 L12,320 L10,300 L8,262 L15,224 L45,214 L80,215 L130,214 L174,220 L182,200 L185,190 L191,159 L192,144 L180,128 L169,116 L140,100 L119,83 L135,74 L150,70 L182,72 L195,55 L205,30 L215,-20Z"/>
+ <path class="coast" d="M400,-20 L400,210 L375,210 L334,221 L297,218 L282,237 L265,272 L240,300 L208,323 L200,350 L195,375 L163,396 L121,399 L95,418 L70,425 L50,410 L24,391 L20,370 L18,345 L12,320 L10,300 L8,262 L15,224 L45,214 L80,215 L130,214 L174,220 L182,200 L185,190 L191,159 L192,144 L180,128 L169,116 L140,100 L119,83 L135,74 L150,70 L182,72 L195,55 L205,30 L215,-20Z"/>
+ <path class="border" d="M174,220 C200,232 240,238 282,237"/>
+ <path class="border" d="M18,345 C30,330 40,300 34,260 C30,240 25,228 15,224"/>
+ <g class="roads">
+  <path d="M18,345 C80,320 140,300 160,290 C180,280 190,250 181,234"/>
+  <path d="M181,234 C220,250 250,265 265,272"/>
+  <path d="M174,220 C185,190 191,159 191,159 C230,150 280,150 322,154 C330,130 336,118 336,118"/>
+  <path d="M297,218 C305,190 315,170 322,154"/>
+  <path d="M160,290 C180,320 200,330 208,323"/>
+ </g>
+
+   <text class="mlab sm" x="30" y="360">Lisboa</text><text class="mlab sm" x="318" y="170">Lyon</text><text class="mlab sm" x="270" y="286">Barcelona</text><text class="mlab sm" x="150" y="340">Madrid</text>
+   <text class="mlab sea" x="60" y="160">Bay of Biscay</text>
+  </svg>
+  <div class="c-status"><span>9:41</span><span class="c-sb"><i></i><i></i><i></i><em></em></span></div>
+  <div class="c-tm sel" style="left:160px;top:205px"><span class="c-ph p2"></span><span class="c-tml t"><b>San Sebastián to Huesca</b><small>Sep 2024 · 194</small></span></div><div class="c-tc" style="left:128px;top:262px">2<span><b>Pamplona · Pyrenees</b><small>tap to spread</small></span></div><div class="c-tm" style="left:300px;top:196px"><span class="c-ph p6"></span><span class="c-tml t"><b>Sète, Lyon &amp; Dole</b><small>May 2025 · 142</small></span></div><div class="c-tm" style="left:349px;top:84px"><span class="c-ph p8"></span><span class="c-tml l"><b>Alsace &amp; Freiburg</b><small>May 2025 · 257</small></span></div><div class="c-edge" style="left:10px;top:372px">&#8592; Lisbon &amp; Queluz</div>
+  <div class="c-lib" style="top:420px">
+   <div class="c-search"><svg viewBox="0 0 24 24" width="16" height="16"><circle class="ic" cx="11" cy="11" r="6.5"/><path class="ic" d="M16 16l5 5"/></svg><span>Search trips, places, years</span></div>
+   <div class="c-sec"><span>Years</span><small>tap a year or month · hold &amp; drag = range</small></div>
+   <div class="c-months"><span>J</span><span>F</span><span>M</span><span>A</span><span>M</span><span>J</span><span>J</span><span>A</span><span>S</span><span>O</span><span>N</span><span>D</span></div>
+      <div class="c-year"><span class="c-yl">2026</span><svg viewBox="0 0 300 34" width="300" height="34" aria-hidden="true"><line class="mg" x1="25.0" y1="0" x2="25.0" y2="24"/><line class="mg" x1="50.0" y1="0" x2="50.0" y2="24"/><line class="mg" x1="75.0" y1="0" x2="75.0" y2="24"/><line class="mg" x1="100.0" y1="0" x2="100.0" y2="24"/><line class="mg" x1="125.0" y1="0" x2="125.0" y2="24"/><line class="mg" x1="150.0" y1="0" x2="150.0" y2="24"/><line class="mg" x1="175.0" y1="0" x2="175.0" y2="24"/><line class="mg" x1="200.0" y1="0" x2="200.0" y2="24"/><line class="mg" x1="225.0" y1="0" x2="225.0" y2="24"/><line class="mg" x1="250.0" y1="0" x2="250.0" y2="24"/><line class="mg" x1="275.0" y1="0" x2="275.0" y2="24"/><rect class="gps " x="0.5" y="0.0" width="5.2" height="22.0" rx="1"/><rect class="gps " x="6.8" y="2.4" width="5.2" height="19.6" rx="1"/><rect class="gps " x="13.0" y="0.0" width="5.2" height="22.0" rx="1"/><rect class="nog " x="19.2" y="8.8" width="5.2" height="13.2" rx="1"/><rect class="gps " x="25.5" y="11.4" width="5.2" height="10.6" rx="1"/><rect class="gps " x="31.8" y="20.0" width="5.2" height="2.0" rx="1"/><rect class="nog " x="38.0" y="20.0" width="5.2" height="2.0" rx="1"/><rect class="gps " x="44.2" y="9.7" width="5.2" height="12.3" rx="1"/><rect class="nog " x="56.8" y="1.3" width="5.2" height="20.7" rx="1"/><rect class="gps " x="63.0" y="11.9" width="5.2" height="10.1" rx="1"/><rect class="nog " x="81.8" y="20.0" width="5.2" height="2.0" rx="1"/><rect class="nog " x="100.5" y="16.1" width="5.2" height="5.9" rx="1"/><rect class="gps " x="106.8" y="14.3" width="5.2" height="7.7" rx="1"/><rect class="gps " x="113.0" y="14.7" width="5.2" height="7.3" rx="1"/><rect class="gps " x="119.2" y="15.6" width="5.2" height="6.4" rx="1"/><rect class="gps " x="125.5" y="0.0" width="5.2" height="22.0" rx="1"/><rect class="gps " x="131.8" y="5.3" width="5.2" height="16.7" rx="1"/><rect class="gps " x="138.0" y="18.5" width="5.2" height="3.5" rx="1"/><rect class="gps " x="144.2" y="18.9" width="5.2" height="3.1" rx="1"/><rect class="gps " x="156.8" y="16.9" width="5.2" height="5.1" rx="1"/><rect class="gps " x="163.0" y="17.2" width="5.2" height="4.8" rx="1"/><rect class="nog " x="169.2" y="5.1" width="5.2" height="16.9" rx="1"/><rect class="gps " x="181.8" y="3.1" width="5.2" height="18.9" rx="1"/><rect class="gps " x="188.0" y="0.7" width="5.2" height="21.3" rx="1"/><rect class="gps " x="194.2" y="20.0" width="5.2" height="2.0" rx="1"/><rect class="nog " x="200.5" y="7.3" width="5.2" height="14.7" rx="1"/><rect class="gps " x="206.8" y="20.0" width="5.2" height="2.0" rx="1"/><rect class="gps " x="213.0" y="1.3" width="5.2" height="20.7" rx="1"/><rect class="gps " x="219.2" y="20.0" width="5.2" height="2.0" rx="1"/><rect class="gps " x="225.5" y="20.0" width="5.2" height="2.0" rx="1"/><rect class="gps " x="238.0" y="20.0" width="5.2" height="2.0" rx="1"/><rect class="gps " x="244.2" y="15.8" width="5.2" height="6.2" rx="1"/><rect class="gps " x="256.8" y="20.0" width="5.2" height="2.0" rx="1"/><rect class="nog " x="263.0" y="20.0" width="5.2" height="2.0" rx="1"/><rect class="nog " x="269.2" y="20.0" width="5.2" height="2.0" rx="1"/><rect class="gps " x="275.5" y="1.1" width="5.2" height="20.9" rx="1"/><rect class="gps " x="281.8" y="18.7" width="5.2" height="3.3" rx="1"/><rect class="gps " x="288.0" y="20.0" width="5.2" height="2.0" rx="1"/><rect class="gps " x="294.2" y="4.8" width="5.2" height="17.2" rx="1"/><rect class="tb home" x="3.2" y="27" width="21.8" height="6" rx="3"/></svg></div><div class="c-year"><span class="c-yl">2025</span><svg viewBox="0 0 300 34" width="300" height="34" aria-hidden="true"><line class="mg" x1="25.0" y1="0" x2="25.0" y2="24"/><line class="mg" x1="50.0" y1="0" x2="50.0" y2="24"/><line class="mg" x1="75.0" y1="0" x2="75.0" y2="24"/><line class="mg" x1="100.0" y1="0" x2="100.0" y2="24"/><line class="mg" x1="125.0" y1="0" x2="125.0" y2="24"/><line class="mg" x1="150.0" y1="0" x2="150.0" y2="24"/><line class="mg" x1="175.0" y1="0" x2="175.0" y2="24"/><line class="mg" x1="200.0" y1="0" x2="200.0" y2="24"/><line class="mg" x1="225.0" y1="0" x2="225.0" y2="24"/><line class="mg" x1="250.0" y1="0" x2="250.0" y2="24"/><line class="mg" x1="275.0" y1="0" x2="275.0" y2="24"/><rect class="gps " x="0.5" y="10.8" width="5.2" height="11.2" rx="1"/><rect class="gps " x="6.8" y="20.0" width="5.2" height="2.0" rx="1"/><rect class="gps " x="19.2" y="19.1" width="5.2" height="2.9" rx="1"/><rect class="gps " x="25.5" y="9.9" width="5.2" height="12.1" rx="1"/><rect class="gps " x="31.8" y="13.4" width="5.2" height="8.6" rx="1"/><rect class="gps " x="38.0" y="20.0" width="5.2" height="2.0" rx="1"/><rect class="gps " x="44.2" y="20.0" width="5.2" height="2.0" rx="1"/><rect class="gps " x="50.5" y="20.0" width="5.2" height="2.0" rx="1"/><rect class="gps " x="56.8" y="20.0" width="5.2" height="2.0" rx="1"/><rect class="gps " x="63.0" y="18.0" width="5.2" height="4.0" rx="1"/><rect class="gps " x="69.2" y="5.3" width="5.2" height="16.7" rx="1"/><rect class="gps " x="88.0" y="14.5" width="5.2" height="7.5" rx="1"/><rect class="nog " x="100.5" y="0.0" width="5.2" height="22.0" rx="1"/><rect class="gps " x="106.8" y="0.0" width="5.2" height="22.0" rx="1"/><rect class="gps " x="113.0" y="7.9" width="5.2" height="14.1" rx="1"/><rect class="gps " x="119.2" y="0.0" width="5.2" height="22.0" rx="1"/><rect class="gps " x="131.8" y="20.0" width="5.2" height="2.0" rx="1"/><rect class="nog " x="144.2" y="16.9" width="5.2" height="5.1" rx="1"/><rect class="gps " x="150.5" y="12.3" width="5.2" height="9.7" rx="1"/><rect class="gps " x="156.8" y="17.2" width="5.2" height="4.8" rx="1"/><rect class="gps " x="169.2" y="1.1" width="5.2" height="20.9" rx="1"/><rect class="gps " x="175.5" y="10.6" width="5.2" height="11.4" rx="1"/><rect class="gps " x="181.8" y="17.6" width="5.2" height="4.4" rx="1"/><rect class="gps " x="188.0" y="10.3" width="5.2" height="11.7" rx="1"/><rect class="gps " x="200.5" y="17.6" width="5.2" height="4.4" rx="1"/><rect class="gps " x="206.8" y="6.4" width="5.2" height="15.6" rx="1"/><rect class="gps " x="219.2" y="16.3" width="5.2" height="5.7" rx="1"/><rect class="gps " x="225.5" y="20.0" width="5.2" height="2.0" rx="1"/><rect class="gps " x="231.8" y="17.2" width="5.2" height="4.8" rx="1"/><rect class="gps " x="238.0" y="20.0" width="5.2" height="2.0" rx="1"/><rect class="gps " x="244.2" y="20.0" width="5.2" height="2.0" rx="1"/><rect class="nog " x="250.5" y="20.0" width="5.2" height="2.0" rx="1"/><rect class="gps " x="256.8" y="18.0" width="5.2" height="4.0" rx="1"/><rect class="gps " x="263.0" y="20.0" width="5.2" height="2.0" rx="1"/><rect class="gps " x="269.2" y="20.0" width="5.2" height="2.0" rx="1"/><rect class="gps " x="275.5" y="15.2" width="5.2" height="6.8" rx="1"/><rect class="gps " x="281.8" y="15.2" width="5.2" height="6.8" rx="1"/><rect class="gps " x="288.0" y="20.0" width="5.2" height="2.0" rx="1"/><rect class="gps " x="294.2" y="17.6" width="5.2" height="4.4" rx="1"/><rect class="tb" x="102.4" y="27" width="4.8" height="6" rx="3"/><rect class="tb" x="111.3" y="27" width="8.9" height="6" rx="3"/></svg></div><div class="c-year"><span class="c-yl">2024</span><svg viewBox="0 0 300 34" width="300" height="34" aria-hidden="true"><line class="mg" x1="25.0" y1="0" x2="25.0" y2="24"/><line class="mg" x1="50.0" y1="0" x2="50.0" y2="24"/><line class="mg" x1="75.0" y1="0" x2="75.0" y2="24"/><line class="mg" x1="100.0" y1="0" x2="100.0" y2="24"/><line class="mg" x1="125.0" y1="0" x2="125.0" y2="24"/><line class="mg" x1="150.0" y1="0" x2="150.0" y2="24"/><line class="mg" x1="175.0" y1="0" x2="175.0" y2="24"/><line class="mg" x1="200.0" y1="0" x2="200.0" y2="24"/><line class="mg" x1="225.0" y1="0" x2="225.0" y2="24"/><line class="mg" x1="250.0" y1="0" x2="250.0" y2="24"/><line class="mg" x1="275.0" y1="0" x2="275.0" y2="24"/><rect class="nog " x="0.5" y="9.9" width="5.2" height="12.1" rx="1"/><rect class="gps " x="6.8" y="5.1" width="5.2" height="16.9" rx="1"/><rect class="gps " x="19.2" y="20.0" width="5.2" height="2.0" rx="1"/><rect class="nog " x="25.5" y="8.6" width="5.2" height="13.4" rx="1"/><rect class="nog " x="38.0" y="20.0" width="5.2" height="2.0" rx="1"/><rect class="gps " x="44.2" y="16.3" width="5.2" height="5.7" rx="1"/><rect class="gps " x="50.5" y="12.1" width="5.2" height="9.9" rx="1"/><rect class="gps " x="63.0" y="20.0" width="5.2" height="2.0" rx="1"/><rect class="gps " x="69.2" y="6.4" width="5.2" height="15.6" rx="1"/><rect class="gps " x="75.5" y="5.7" width="5.2" height="16.3" rx="1"/><rect class="nog " x="81.8" y="1.8" width="5.2" height="20.2" rx="1"/><rect class="gps " x="88.0" y="19.6" width="5.2" height="2.4" rx="1"/><rect class="gps " x="94.2" y="15.0" width="5.2" height="7.0" rx="1"/><rect class="gps " x="100.5" y="13.2" width="5.2" height="8.8" rx="1"/><rect class="gps " x="106.8" y="17.6" width="5.2" height="4.4" rx="1"/><rect class="gps " x="113.0" y="18.5" width="5.2" height="3.5" rx="1"/><rect class="gps " x="125.5" y="6.6" width="5.2" height="15.4" rx="1"/><rect class="gps " x="131.8" y="9.9" width="5.2" height="12.1" rx="1"/><rect class="gps " x="138.0" y="8.1" width="5.2" height="13.9" rx="1"/><rect class="gps " x="150.5" y="16.1" width="5.2" height="5.9" rx="1"/><rect class="gps " x="156.8" y="8.8" width="5.2" height="13.2" rx="1"/><rect class="gps " x="163.0" y="1.1" width="5.2" height="20.9" rx="1"/><rect class="gps " x="169.2" y="2.4" width="5.2" height="19.6" rx="1"/><rect class="gps " x="175.5" y="3.7" width="5.2" height="18.3" rx="1"/><rect class="gps " x="181.8" y="8.8" width="5.2" height="13.2" rx="1"/><rect class="gps " x="188.0" y="19.8" width="5.2" height="2.2" rx="1"/><rect class="gps " x="194.2" y="20.0" width="5.2" height="2.0" rx="1"/><rect class="gps " x="200.5" y="8.4" width="5.2" height="13.6" rx="1"/><rect class="nog " x="206.8" y="0.0" width="5.2" height="22.0" rx="1"/><rect class="gps " x="213.0" y="9.0" width="5.2" height="13.0" rx="1"/><rect class="gps " x="219.2" y="20.0" width="5.2" height="2.0" rx="1"/><rect class="gps " x="231.8" y="5.5" width="5.2" height="16.5" rx="1"/><rect class="gps " x="238.0" y="20.0" width="5.2" height="2.0" rx="1"/><rect class="gps " x="244.2" y="4.4" width="5.2" height="17.6" rx="1"/><rect class="gps " x="250.5" y="6.6" width="5.2" height="15.4" rx="1"/><rect class="gps " x="256.8" y="4.8" width="5.2" height="17.2" rx="1"/><rect class="gps " x="263.0" y="9.0" width="5.2" height="13.0" rx="1"/><rect class="nog " x="275.5" y="12.1" width="5.2" height="9.9" rx="1"/><rect class="gps " x="281.8" y="20.0" width="5.2" height="2.0" rx="1"/><rect class="gps " x="288.0" y="12.8" width="5.2" height="9.2" rx="1"/><rect class="gps " x="294.2" y="17.8" width="5.2" height="4.2" rx="1"/><rect class="tb" x="161.3" y="27" width="10.5" height="6" rx="3"/><rect class="tb" x="176.6" y="27" width="8.1" height="6" rx="3"/><rect class="tb sel" x="204.8" y="27" width="4.0" height="6" rx="3"/></svg></div>
+   <div class="c-sec" style="margin-top:8px"><span>Trips</span><span class="c-inview">In view · 5 of 6 <i>&#10005;</i></span></div>
+   <div class="c-card sel"><span class="c-ph p2"></span><div class="c-ct"><b>San Sebastián to Huesca</b><small>6–10 Sep 2024 · 5 days · 194</small></div><span class="c-nav"><span>&#8249;</span><span>&#8250;</span></span></div>
+   <div class="c-card"><span class="c-ph p3"></span><div class="c-ct"><b>Pamplona &amp; Basque Country</b><small>2–12 Aug 2024 · 11 days · 211</small></div></div>
+   <div class="c-home"></div>
+  </div>
+  <b class="c-dot" style="left:330px;top:406px">1</b><b class="c-dot" style="left:6px;top:520px">2</b><b class="c-dot" style="left:172px;top:256px">3</b><b class="c-dot" style="left:300px;top:692px">4</b><b class="c-dot" style="left:346px;top:760px">5</b>
+ </div>
+ <ol class="c-legend"><li><b>1</b><span>Search matches trip names, years and <em>places</em> (index <code>city</code>/<code>country</code>). "Pamplona" lists the trips and visits there; each opens a normal selection. Before the index lands, only names and dates show.</span></li><li><b>2</b><span>All-years overview as rows: one per year, month density (solid = GPS, <em>hatched = no GPS</em>), trip bars under it. The whole column is the hit area. Tap a year or month; hold and drag for a month range.</span></li><li><b>3</b><span>Trips are a clustered map layer (same mechanism as photo pins): overlapping trips become a count bubble, labels never collide. Tap a bubble → it spreads; tap a trip → fly there, Trip state.</span></li><li><b>4</b><span>Panning the map filters the list; the chip says so and ✕ shows all. A list filter only, never the selection.</span></li><li><b>5</b><span><em>‹ ›</em> on the selected card: previous / next trip. They moved here from swipes on the title.</span></li></ol>
+</figure>
+ </div>
+ <div class="c-notes">
+ <div><h3>What rev. 2 removed</h3><p>Three-snap draggable sheet, half-snap stop list, the <code>near</code> place filter and its dimmed scrubber, swipe-on-title for prev/next trip, long-press "photos near here", grid scroll moving the cursor.</p></div>
+ <div><h3>Landscape</h3><p>Map left 60%, the deck becomes a right column (title, card, strip stacked); the place sheet, Photos and Library open in that column. Same components, insets.r = column width.</p></div>
+ <div><h3>360 × 640</h3><p>Deck stays 222 px; map keeps ~370 px. The card truncates its place line before it shrinks the 44 px ‹ › targets. Strip ~250 px wide.</p></div>
+ <div><h3>Accessibility</h3><p>Strip is a <code>role="slider"</code> with time, place and "112 of 194" as value text, arrows by photo, Page Up/Down by stop. Map hidden from screen readers; the readout chip and card carry the same text.</p></div>
+</div>
+ <p class="c-foot">States: Trip (deck 222 px), Place sheet (fixed, ~440 px), Photos (pushed, 112 px map lip), Library (pushed). No snap physics. Red dots are annotations, not UI. Photos are gradient stand-ins.</p>
+</div>
