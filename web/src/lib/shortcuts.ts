@@ -20,11 +20,12 @@ export const SHORTCUTS: ShortcutGroup[] = [
     {keys: ['←', '→'], what: 'move the selection by a day (when focused)'},
     {keys: ['Shift+←/→'], what: 'move it by a week'},
     {keys: ['Alt+←/→'], what: 'make it a day shorter / longer'},
-    {keys: ['click outside', 'Esc'], what: 'clear the selection'},
+    {keys: ['double-click', 'Esc'], what: 'clear the selection (a single click never does)'},
   ]},
   {title: 'All-years strip', where: 'the thin strip above the timeline', items: [
     {keys: ['drag the window'], what: 'choose the period the timeline shows'},
     {keys: ['click'], what: 'centre the window there'},
+    {keys: ['double-click'], what: 'clear the selection'},
     {keys: ['scroll'], what: 'zoom the timeline'},
   ]},
   {title: 'Map', items: [

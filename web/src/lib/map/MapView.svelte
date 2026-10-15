@@ -13,7 +13,7 @@
   import type {LibraryIndex} from '../index/model.ts';
   import {library, phaseText} from '../index/store.svelte.ts';
   import {explainIndex, explainMedia, probeMedia, retryLibrary, type MediaFailure} from '../failure.ts';
-  import {lowerBound, sameSelection, selection, writeUrl, type Selection} from '../selection.svelte.ts';
+  import {lowerBound, sameSelection, selection, toLocal, writeUrl, type Selection} from '../selection.svelte.ts';
   import {thumbHashDataUrl} from '../thumbhash.ts';
   import {thumbUrl} from '../lightbox/media.ts';
   import {dayAround, fDays, selName, zoomName, zoomSpan} from '../nav.ts';
@@ -239,9 +239,9 @@
     selection.zoomInto(z, label, v.t0);
     writeUrl('commit', v.t0);
   }
-  /** Library pin without a selection: select the (UTC) day it was taken, cursor on it. Back returns to no selection. */
+  /** Library pin without a selection: select the (local) day it was taken, cursor on it. Back returns to no selection. */
   function pickDay(ix: LibraryIndex, r: number) {
-    const t = ix.t[r], [d0, d1] = dayAround(t), place = ix.city[r] || ix.country[r] || '';
+    const t = ix.t[r], [d0, d1] = dayAround(t, ix.off[r]), place = ix.city[r] || ix.country[r] || '';
     const z: Selection = {kind: 'range', t0: d0, t1: d1}, label = zoomName(null, d0, d1 - 1, place) || fFullDay(t, ix.off[r]);
     narrowed(z, label, `the day of this photo, ${fDays(d0, d1)}`);
     selection.zoomInto(z, label, t);
@@ -523,7 +523,8 @@
     pos.kind === 'after' ? 'after last GPS fix' :
     pos.kind === 'interp' ? 'estimated position' : '');
 
-  const legend = $derived(active ? {from: fFullDay(active.t0, 0), to: fFullDay(active.t1 - 1, 0)} : null);
+  // Local days, like the overview's readout.
+  const legend = $derived(active ? {from: fFullDay(toLocal(active.t0), 0), to: fFullDay(toLocal(active.t1 - 1), 0)} : null);
 
   // First-run states, centred over the map: nothing to show yet (loading or failed), an empty
   // library, or a library where nothing has GPS. With a library shown, a failed refresh is a notice.

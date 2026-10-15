@@ -134,8 +134,10 @@ describe('demo stub through the viewer adapter', () => {
     for (const a of albums) {
       const members = albumMembers(manifest, manifest.albums.find(m => m.id === a.id)!);
       expect(a.count).toBe(members.length);
-      expect(a.start).toBe(Math.min(...members.map(m => Date.parse(m.takenAt))));
-      expect(a.end).toBe(Math.max(...members.map(m => Date.parse(m.takenAt))));
+      // Like Immich: local calendar days, midnight read as UTC.
+      const days = members.map(m => Math.floor((Date.parse(m.takenAt) + m.localOffsetHours * 3600e3) / 86400e3) * 86400e3);
+      expect(a.start).toBe(Math.min(...days));
+      expect(a.end).toBe(Math.max(...days));
       expect(a.shared).toBe(a.id === sharedAlbum.id);
     }
   });

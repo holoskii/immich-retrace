@@ -4,9 +4,12 @@ import {
   smooth, snapDay, sumRange, fLength, trimOutliers, viewAround, viewToShow, zoomAt, albumLabel,
 } from '../web/src/lib/overview/data.ts';
 import {withLookup, type IndexColumns} from '../web/src/lib/index/model.ts';
-import {applyUrl, lightboxPending, selection, selectionFromUrl, selectionToQuery, urlReady, writeUrl, type Selection} from '../web/src/lib/selection.svelte.ts';
+import {
+  albumSpan, applyUrl, fromLocal, lightboxPending, selection, selectionFromUrl, selectionToQuery, toLocal, urlReady, writeUrl, type Selection,
+} from '../web/src/lib/selection.svelte.ts';
+import {library} from '../web/src/lib/index/store.svelte.ts';
 import type {AlbumSummary} from '../shared/api.ts';
-import {zoomSpan} from '../web/src/lib/nav.ts';
+import {dayAround, fDays, zoomSpan} from '../web/src/lib/nav.ts';
 import {shortAlbum} from '../web/src/lib/overview/trips.ts';
 
 const D = (s: string) => Date.parse(s + 'T00:00:00Z');
@@ -255,8 +258,9 @@ describe('brush', () => {
 });
 
 describe('URL', () => {
-  const albums = [{id: 'alb', start: D('2024-05-01') + 5 * H, end: D('2024-05-09') + 7 * H}];
-  it('range round-trips through from/to (UTC days, to inclusive)', () => {
+  // Immich album dates: local calendar days, midnight read as UTC.
+  const albums = [{id: 'alb', start: D('2024-05-01'), end: D('2024-05-09')}];
+  it('range round-trips through from/to (days, to inclusive)', () => {
     const sel: Selection = {kind: 'range', t0: D('2026-08-01'), t1: D('2026-08-31')};
     const q = selectionToQuery(sel, null, new URLSearchParams('x=1&at=5&mode=range'));
     expect(q.toString()).toBe('x=1&from=2026-08-01&to=2026-08-30');
@@ -264,9 +268,11 @@ describe('URL', () => {
   });
   it('album round-trips; mode only when range; at only inside the selection', () => {
     const sel = selectionFromUrl(new URLSearchParams('album=alb'), albums) as Extract<Selection, {kind: 'album'}>;
-    expect(sel).toEqual({kind: 'album', albumId: 'alb', mode: 'members', t0: albums[0].start, t1: albums[0].end + 1});
+    // The span runs through the end of the album's last day.
+    expect(sel).toEqual({kind: 'album', albumId: 'alb', mode: 'members', t0: D('2024-05-01'), t1: D('2024-05-10')});
     const at = D('2024-05-03');
     expect(selectionToQuery(sel, at).toString()).toBe(`album=alb&at=${at}`);
+    expect(selectionToQuery(sel, D('2024-05-09') + 23 * H).toString()).toBe(`album=alb&at=${D('2024-05-09') + 23 * H}`);
     expect(selectionToQuery({...sel, mode: 'range'}, D('2024-06-01')).toString()).toBe('album=alb&mode=range');
     expect(selectionFromUrl(selectionToQuery({...sel, mode: 'range'}, null), albums)).toEqual({...sel, mode: 'range'});
   });
@@ -398,3 +404,52 @@ describe('fLength', () => {
   });
 });
 
+
+describe('local days (overview axis ↔ instants)', () => {
+  // A trip at UTC+3 then UTC−5: offsets come from the nearest library photo.
+  const lib = ix([
+    ['2024-05-01T08:00:00Z', 3, 0, 1], ['2024-05-03T20:00:00Z', 3, 0, 1],
+    ['2024-05-10T15:00:00Z', -5, 0, 1], ['2024-05-12T15:00:00Z', -5, 0, 1],
+  ]);
+  it('converts with the nearest photo\'s offset and round-trips', () => {
+    expect(toLocal(D('2024-05-02'), lib)).toBe(D('2024-05-02') + 3 * H);
+    expect(fromLocal(D('2024-05-02'), lib)).toBe(D('2024-05-02') - 3 * H);
+    expect(fromLocal(D('2024-05-11'), lib)).toBe(D('2024-05-11') + 5 * H);
+    for (const l of [D('2024-05-02'), D('2024-05-11'), D('2024-05-13')]) expect(toLocal(fromLocal(l, lib), lib)).toBe(l);
+    expect([toLocal(5, null), fromLocal(5, null)]).toEqual([5, 5]);
+  });
+  it('a photo at 01:00 local belongs to that local day: brush, URL and readout agree with the wave', () => {
+    // Local 2024-05-04 01:00 at UTC+3 is 2024-05-03 22:00 UTC; selecting local 4 May must include it.
+    const p = Date.parse('2024-05-03T22:00:00Z'), day = [fromLocal(D('2024-05-04'), lib), fromLocal(D('2024-05-05'), lib)];
+    expect(p >= day[0] && p < day[1]).toBe(true);
+    const sel: Selection = {kind: 'range', t0: day[0], t1: day[1]};
+    const q = selectionToQuery(sel, null, undefined, lib);
+    expect(q.toString()).toBe('from=2024-05-04&to=2024-05-04');
+    expect(selectionFromUrl(q, [], lib)).toEqual(sel);
+  });
+  it('an album spans its local days through the end of the last one', () => {
+    const a = {start: D('2024-05-01'), end: D('2024-05-11')};
+    expect(albumSpan(a, lib)).toEqual([D('2024-05-01') - 3 * H, D('2024-05-12') + 5 * H]);
+    // The last photo (local 12 May 10:00 at −5) is on a later day: outside; one on 11 May local evening is inside.
+    const [, t1] = albumSpan(a, lib);
+    expect(Date.parse('2024-05-12T03:00:00Z') < t1).toBe(true); // local 11 May 22:00
+    expect(Date.parse('2024-05-12T15:00:00Z') < t1).toBe(false);
+  });
+  it('on a day the offset changes, a span that wouldn\'t read back from days is written to the minute', () => {
+    const tz = ix([['2024-05-01T20:00:00Z', 3, 0, 1], ['2024-05-01T23:00:00Z', 2, 0, 1]]);
+    const sel: Selection = {kind: 'range', t0: Date.parse('2024-05-01T21:00:00Z'), t1: Date.parse('2024-05-02T22:00:00Z')};
+    const q = selectionToQuery(sel, null, undefined, tz);
+    expect(q.get('from')).toBe('2024-05-01T21:00Z');
+    expect(selectionFromUrl(q, [], tz)).toEqual(sel);
+  });
+  it('names and pin days follow the library\'s offsets', () => {
+    library.index = withLookup(lib);
+    try {
+      const p = Date.parse('2024-05-03T22:00:00Z');
+      const [d0, d1] = dayAround(p, 3);
+      expect([d0, d1]).toEqual([D('2024-05-04') - 3 * H, D('2024-05-05') - 3 * H]);
+      expect(fDays(d0, d1)).toBe('4 May 2024');
+      expect(selectionToQuery({kind: 'range', t0: d0, t1: d1}, null).toString()).toBe('from=2024-05-04&to=2024-05-04');
+    } finally { library.index = null; }
+  });
+});

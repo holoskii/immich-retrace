@@ -264,7 +264,7 @@ export function dragTo(grip: Grip, anchor: number, t: number, cur: Span, lo: num
 
 export const snapDay = (t: number) => Math.round(t / DAY) * DAY;
 
-// ---- formatting (UTC: range selections are UTC days) ----
+// ---- formatting (read as UTC: the axis, album dates and labels are local wall time read as UTC, see `toLocal`) ----
 
 const fmt = (o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat('en-GB', {timeZone: 'UTC', ...o});
 const F_DAY = fmt({day: 'numeric', month: 'short', year: 'numeric'}), F_MON = fmt({month: 'short'}), F_DM = fmt({day: 'numeric', month: 'short'});
@@ -274,7 +274,7 @@ export const fDayMonth = (t: number) => F_DM.format(t);
 export const fNum = (n: number) => Math.round(n).toLocaleString('en-US').replace(/,/g, ' ');
 
 /**
- * Calendar length of [t0, t1) (UTC): "2y 3m 14d", "5d", or hours under two days ("30h", a cluster zoom).
+ * Calendar length of [t0, t1) (axis times, read as UTC): "2y 3m 14d", "5d", or hours under two days ("30h", a cluster zoom).
  * Days are the calendar days touched, so 1 May 00:00 → 3 May 00:00 (exclusive) is "2d" and an album 29 Apr → 6 May is "8d".
  */
 export function fLength(t0: number, t1: number) {

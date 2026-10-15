@@ -1,10 +1,11 @@
 <script lang="ts">
   // Overview O-A: all-years context strip with a viewport window, zoomed √-density wave with the
   // selection brush, album rail. Writes `selection.sel` (and the URL), hover only draws a cursor here (it never moves the map).
+  // Everything here (view, brush, hover, labels) is on the local-time axis (`toLocal`); selections are UTC instants.
   import {untrack} from 'svelte';
   import {headerStatus, library} from '../index/store.svelte.ts';
   import {explainAlbums, retryLibrary} from '../failure.ts';
-  import {lowerBound, offsetNear, selection, writeUrl, type AlbumRequest, type Selection} from '../selection.svelte.ts';
+  import {albumSpan, fromLocal, lowerBound, selection, toLocal, writeUrl, type AlbumRequest, type Selection} from '../selection.svelte.ts';
   import {config} from '../config.svelte.ts';
   import {hooks} from '../hooks.svelte.ts';
   import {selName} from '../nav.ts';
@@ -19,7 +20,7 @@
 
   let ctxCv = $state<HTMLCanvasElement>(), mainCv = $state<HTMLCanvasElement>();
   let size = $state(0);
-  /** Hover position on the wave: drawn as the overview's cursor, never written to `selection.cursor`. */
+  /** Hover position on the wave (axis time): drawn as the overview's cursor, never written to `selection.cursor`. */
   let hoverT = $state<number | null>(null);
   let focus = $state(false);
   let hoverAlbum = $state<string | null>(null);
@@ -39,13 +40,14 @@
   const trips = $derived(tripsOf(library.albums, library.index));
   const rail = $derived(railAlbums(library.albums, trips.isTrip));
   /**
-   * The brush while it is dragged (or moved by held keys). The selection itself — and so the whole map:
+   * The brush while it is dragged (or moved by held keys), on the axis. The selection itself — and so the whole map:
    * route, pins, camera track — follows only when the brush rests or is released, not on every move.
    */
   let draft = $state.raw<Span | null>(null);
   let draftTimer: ReturnType<typeof setTimeout> | undefined;
   const REST_MS = 220;
-  const selSpan = $derived<Span | null>(draft ?? (selection.sel ? [selection.sel.t0, selection.sel.t1] : null));
+  /** The brush on the axis: the draft, or the selection's instants in local time. */
+  const selSpan = $derived<Span | null>(draft ?? (selection.sel ? [toLocal(selection.sel.t0), toLocal(selection.sel.t1)] : null));
   const album = $derived.by(() => {
     const s = selection.sel;
     return s?.kind === 'album' ? library.albums.find(a => a.id === s.albumId) ?? null : null;
@@ -85,9 +87,9 @@
 
   // Publish the visible period to the map once the timeline rests: re-clustering the library per frame would stutter.
   $effect(() => {
-    const v = view;
+    const v = view, ix = library.index;
     if (!v) return;
-    const h = setTimeout(() => (selection.timeline = v), 200);
+    const h = setTimeout(() => (selection.timeline = [fromLocal(v[0], ix), fromLocal(v[1], ix)]), 200);
     return () => clearTimeout(h);
   });
 
@@ -111,7 +113,8 @@
   // Redraw on any input change, at most once per frame.
   let raf = 0;
   $effect(() => {
-    const st = {days, view, sel: selSpan, cursor: hoverT ?? selection.cursor, cursorOff: offsetNear(hoverT ?? selection.cursor), albums: rail, activeAlbum: album?.id ?? null, hoverAlbum, focus};
+    const cur = selection.cursor;
+    const st = {days, view, sel: selSpan, cursor: hoverT ?? (cur == null ? null : toLocal(cur)), albums: rail, activeAlbum: album?.id ?? null, hoverAlbum, focus};
     void size;
     const ext = strip;
     if (!ctxCv || !mainCv || !st.view || !ext) return;
@@ -141,10 +144,11 @@
 
   let drag: {grip: Grip; anchor: number; cur: Span; x: number; moved: boolean} | null = null;
 
+  /** `s`: axis span (local days). */
   function selectRange(s: Span, how: 'live' | 'commit') {
     // A brushed range is no longer the named zoom level; Back still returns to where the zoom came from.
     selection.zoomLabel = null;
-    void selection.select({kind: 'range', t0: s[0], t1: s[1]});
+    void selection.select({kind: 'range', t0: fromLocal(s[0]), t1: fromLocal(s[1])});
     writeUrl(how);
   }
   /** Moves the brush; the selection follows after REST_MS without further moves. */
@@ -164,7 +168,7 @@
   $effect(() => {
     const s = selection.sel;
     untrack(() => {
-      if (draft && !(s?.kind === 'range' && s.t0 === draft[0] && s.t1 === draft[1])) { clearTimeout(draftTimer); draft = null; }
+      if (draft && !(s?.kind === 'range' && s.t0 === fromLocal(draft[0]) && s.t1 === fromLocal(draft[1]))) { clearTimeout(draftTimer); draft = null; }
     });
   });
   $effect(() => () => clearTimeout(draftTimer));
@@ -175,7 +179,7 @@
     if (!inWave(y)) return;
     const s = selSpan, t = mainT(x);
     const grip = s ? hitGrip(x, mainX(s[0]), mainX(s[1])) : 'n';
-    // Edges snap to UTC days (the URL format), so an album's exact span becomes whole days once touched.
+    // Edges snap to local days (the wave's bins and the URL format), so a cluster zoom's span becomes whole days once touched.
     const cur: Span = s ? [snapDay(s[0]), Math.max(snapDay(s[0]) + DAY, snapDay(s[1]))] : [t, t];
     drag = {grip, anchor: grip === 'm' ? t - cur[0] : t, cur, x, moved: false};
     mainCv!.setPointerCapture(ev.pointerId);
@@ -205,13 +209,16 @@
     }
   }
 
+  /** When a drag on a timeline last ended: a double click that began with a drag isn't a reset. */
+  let draggedAt = -Infinity;
+  const DBL_MS = 800;
   function onMainUp(ev: PointerEvent) {
     const d = drag;
     drag = null;
     if (d) {
+      if (d.moved) draggedAt = performance.now();
+      // A single click on the wave never clears (a double click does, `onDblClick`).
       if (d.moved) commitDraft();
-      // A plain click outside the selection clears it; inside or on an edge does nothing.
-      else if (d.grip === 'n' && selection.sel) clearSelection();
       return;
     }
     const [x, y] = local(ev, mainCv!), hit = railHit(x, y);
@@ -221,6 +228,12 @@
   function onMainLeave() {
     if (drag) return;
     hoverAlbum = null; tip = null; hoverT = null;
+  }
+
+  /** Double click on either timeline (the wave, not the album rail): clear the selection, as Esc does. */
+  function onDblClick(ev: MouseEvent, cv: HTMLCanvasElement) {
+    if (performance.now() - draggedAt < DBL_MS || (cv === mainCv && !inWave(local(ev, cv)[1]))) return;
+    if (selection.sel || draft) clearSelection();
   }
 
   function clearSelection() {
@@ -237,8 +250,10 @@
   /** `req`: an album opened from outside (selection.albumRequest), with its own cursor and history choice. */
   function pickAlbum(a: RailAlbum, req?: AlbumRequest) {
     selection.resetZoom();
-    if (dom) animateView(viewAround(a.start, a.end + 1, dom[0], dom[1]));
-    const sel: Selection = {kind: 'album', albumId: a.id, mode: 'members', t0: a.start, t1: a.end + 1};
+    // Album dates are local calendar days, as on the axis: the bar ends with its last day.
+    if (dom) animateView(viewAround(a.start, a.end + DAY, dom[0], dom[1]));
+    const [t0, t1] = albumSpan(a);
+    const sel: Selection = {kind: 'album', albumId: a.id, mode: 'members', t0, t1};
     selection.cursor = null;
     // Start at the album's first photo, so the map opens with a position and a photo card.
     selection.select(sel).then(() => {
@@ -296,7 +311,7 @@
       ctxCv!.style.cursor = g === 'l' || g === 'r' ? 'ew-resize' : g === 'm' ? 'grab' : 'crosshair';
       // Inside the window: what it is; in the shaded part outside: what a click does.
       tip = g === 'n'
-        ? {x: ev.clientX, y: ev.clientY, title: 'Outside the timeline below', text: 'Click to move the timeline here, or drag the bright window'}
+        ? {x: ev.clientX, y: ev.clientY, title: 'Outside the timeline below', text: `Click to move the timeline here, or drag the bright window${selection.sel ? '; double-click clears the selection' : ''}`}
         : {x: ev.clientX, y: ev.clientY, title: `Timeline below: ${fDay(view[0])} → ${fDay(view[1])}`, text: 'Drag the window to move it, its edges to resize; scroll to zoom'};
       return;
     }
@@ -311,6 +326,7 @@
     const d = vdrag;
     vdrag = null;
     frozen = null;
+    if (d?.moved) draggedAt = performance.now();
     if (!d || d.moved || !view || !dom) return;
     // A click recenters the window there.
     const [x] = local(ev, ctxCv!), span = view[1] - view[0], v0 = clamp(ctxT(x) - span / 2, dom[0], dom[1] - span);
@@ -369,13 +385,14 @@
 
   // ---- readout & status ----
 
+  // Days in local time, as the brush and the wave's bins: the axis span.
   const readout = $derived.by(() => {
-    const d = draft, s: Selection | null = d ? {kind: 'range', t0: d[0], t1: d[1]} : selection.sel;
-    if (!s) return null;
-    const name = selection.zoomLabel && !d ? selection.zoomLabel : s.kind === 'album' ? (album ? albumLabel(album.name) : 'Album') : null;
-    const head = `${fDay(s.t0)} → ${fDay(s.t1 - 1)} · ${fLength(s.t0, s.t1)}`;
+    const d = draft, s = selection.sel, l = selSpan;
+    if (!l || (!d && !s)) return null;
+    const name = selection.zoomLabel && !d ? selection.zoomLabel : s?.kind === 'album' && !d ? (album ? albumLabel(album.name) : 'Album') : null;
+    const head = `${fDay(l[0])} → ${fDay(l[1] - 1)} · ${fLength(l[0], l[1])}`;
     const lib = library.index;
-    const a = d ? (lib ? {ix: lib, lo: lowerBound(lib.t, d[0]), hi: lowerBound(lib.t, d[1])} : null) : selection.active;
+    const a = d ? (lib ? {ix: lib, lo: lowerBound(lib.t, fromLocal(d[0])), hi: lowerBound(lib.t, fromLocal(d[1]))} : null) : selection.active;
     if (!a) return {name, head, gps: null, nogps: null};
     const c = countRows(a.ix, a.lo, a.hi);
     return {name, head, gps: fNum(c.gps), nogps: fNum(c.photos + c.videos - c.gps)};
@@ -434,7 +451,7 @@
       {/if}
     </div>
     {#if selection.sel}
-      <button class="btn" onclick={clearSelection} title="Clear the selection (Esc on the timeline)">✕ clear</button>
+      <button class="btn" onclick={clearSelection} title="Clear the selection (Esc, or double-click a timeline)">✕ clear</button>
     {/if}
     {#if selection.sel?.kind === 'album'}
       <div class="seg" role="group" aria-label="Album selection mode">
@@ -474,16 +491,17 @@
 
   <canvas
     bind:this={ctxCv} class="ctx" style:height="{CTX.h}px"
-    aria-label="All years; drag the window to choose the zoomed period"
+    aria-label="All years; drag the window to choose the zoomed period, double-click to clear the selection"
     onpointerdown={onCtxDown} onpointermove={onCtxMove} onpointerup={onCtxUp} onpointercancel={() => { vdrag = null; frozen = null; }}
     onpointerleave={() => { if (!vdrag) tip = null; }}
+    ondblclick={ev => onDblClick(ev, ctxCv!)}
     onwheel={ev => onWheel(ev, ctxCv!, true)}
   ></canvas>
   <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
   <canvas
     bind:this={mainCv} class="main" style:height="{MAIN.h}px" tabindex="0"
-    aria-label="Zoomed timeline. Drag to select a range; arrow keys move it by a day (Shift: a week), Alt+arrows resize it, Escape clears"
-    onpointerdown={onMainDown} onpointermove={onMainMove} onpointerup={onMainUp}
+    aria-label="Zoomed timeline. Drag to select a range; arrow keys move it by a day (Shift: a week), Alt+arrows resize it, Escape or a double click clears"
+    onpointerdown={onMainDown} onpointermove={onMainMove} onpointerup={onMainUp} ondblclick={ev => onDblClick(ev, mainCv!)}
     onpointercancel={() => { drag = null; commitDraft(); }} onpointerleave={onMainLeave}
     onwheel={ev => onWheel(ev, mainCv!, false)}
     onkeydown={onKey} onkeyup={onKeyUp}

@@ -57,19 +57,14 @@ another user:
 
 ## Bugs
 
-- Album range may drop the last day. `t1: a.end + 1` (`selection.svelte.ts` ~154,
-  `Overview.svelte` ~230, `draw.ts` ~155) assumes `end` is the last instant, but Immich's `endDate`
-  may be the last day at local midnight. The stub returns real times, so the demo hides it. Check
-  Immich's source or a real response first.
 - Album ranges break on outlier dates: the trip filter skips albums over 45 days or under 10 items
   (`2021-07_Georgia` spans 818 days from one outlier, `2024-09_Greece` 72 days). Trim outlier
-  members the way the overview does.
-- Brush label is in local time, the readout in UTC, so they can be a day apart. Same root cause:
-  the wave bins by local day while brush and selection are UTC instants.
-- The two timelines react differently to clicks. On the zoomed wave, a plain click (so also a
-  double click) outside the selection clears it and resets the zoom (`Overview.svelte` ~214,
-  `clearSelection`). The all-years strip above it has no such reset. Pick one behaviour for both,
-  e.g. double click resets on either and a single click never clears.
+  members the way the overview does. Blocked on data: `/api/albums` carries only Immich's
+  min/max day and the count, so trimming needs per-album member times (one
+  `/timeline/buckets?albumId=` per long album for month counts, plus the edge months' buckets for
+  exact days, cached by album version), against the "no per-album calls" trip decision. And
+  `trimOutliers`' library rule (gap ≥ 1 year) would not trim Greece; albums need their own scale.
+  Parked: needs design work and the owner's attention.
 
 From the map review (stage 4, Codex), not fixed yet:
 

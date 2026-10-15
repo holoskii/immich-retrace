@@ -114,7 +114,8 @@ function ellipsize(ctx: CanvasRenderingContext2D, s: string, max: number) {
 export interface RailHit { a: RailAlbum; x0: number; x1: number; y: number }
 
 export interface MainState {
-  days: Days | null; view: Span; sel: Span | null; cursor: number | null; /** Local offset (h) for the cursor's label: days here are local days. */ cursorOff: number;
+  /** `view`, `sel`, `cursor` and album dates are axis times: local wall time read as UTC (`toLocal`), like the day bins. */
+  days: Days | null; view: Span; sel: Span | null; cursor: number | null;
   albums: RailAlbum[]; activeAlbum: string | null; hoverAlbum: string | null; focus: boolean;
 }
 
@@ -155,7 +156,8 @@ export function drawMain(cv: HTMLCanvasElement, s: MainState): RailHit[] {
   // album rail: bars with labels underneath, packed into lanes so labels don't collide
   ctx.font = MONO_S;
   const vis = s.albums.filter(a => a.end + DAY > V0 && a.start < V1).map(a => {
-    const bx0 = X(a.start), bx1 = Math.max(bx0 + 3, X(a.end + 1)), label = ellipsize(ctx, albumLabel(a.name), 200);
+    // Album dates are local days (midnight): the bar runs through the end of the last one.
+    const bx0 = X(a.start), bx1 = Math.max(bx0 + 3, X(a.end + DAY)), label = ellipsize(ctx, albumLabel(a.name), 200);
     const lw = ctx.measureText(label).width;
     // The label starts at the bar, or at the left edge while the bar starts off-screen.
     const lx = Math.max(bx0, 0);
@@ -179,7 +181,7 @@ export function drawMain(cv: HTMLCanvasElement, s: MainState): RailHit[] {
     const x = Math.round(X(s.cursor)) + .5;
     ctx.strokeStyle = C.ink; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(x, MAIN.top); ctx.lineTo(x, MAIN.base); ctx.stroke();
-    ctx.font = MONO; const lab = fDayMonth(s.cursor + s.cursorOff * 3600e3), tw = ctx.measureText(lab).width;
+    ctx.font = MONO; const lab = fDayMonth(s.cursor), tw = ctx.measureText(lab).width;
     ctx.fillStyle = C.ink; ctx.fillText(lab, clamp(x - tw / 2, 0, w - tw), MAIN.top - 4);
   }
   return hits;

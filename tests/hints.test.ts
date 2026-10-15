@@ -95,10 +95,14 @@ describe('camera control (Follow toggle + Fit)', () => {
 });
 
 describe('dayAround', () => {
-  it('is the UTC day containing the instant, end exclusive', () => {
+  it('is the local day containing the instant, end exclusive (identity conversion without an index)', () => {
     const d = Date.UTC(2025, 4, 12);
     expect(dayAround(d + 13.5 * 3600e3)).toEqual([d, d + DAY]);
     expect(dayAround(d)).toEqual([d, d + DAY]);
     expect(dayAround(d + DAY - 1)).toEqual([d, d + DAY]);
+    // 23:00 UTC at UTC+2 is 01:00 the next local day; the photo itself always stays inside.
+    expect(dayAround(d + 23 * 3600e3, 2)).toEqual([d + 23 * 3600e3, d + 2 * DAY]);
+    // Clamped edges stay whole minutes (the URL's finest format) and still contain the photo.
+    expect(dayAround(d + 23 * 3600e3 + 30e3, 2)).toEqual([d + 23 * 3600e3, d + 2 * DAY]);
   });
 });

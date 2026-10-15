@@ -1,9 +1,12 @@
 // What is selected and where the time cursor is: the contract between the overview (stage 3,
 // writes the selection, owns URL sync) and the map + scrubber (stage 4, reads it, writes the cursor).
-import type {LibraryIndex} from './index/model.ts';
+import type {IndexColumns, LibraryIndex} from './index/model.ts';
 import {library} from './index/store.svelte.ts';
 
-/** Times are UTC instants (epoch ms); `t1` is exclusive. */
+/**
+ * Times are UTC instants (epoch ms); `t1` is exclusive. Whole-day selections (brush, URL days, albums, a pin's day)
+ * span local calendar days, converted with `fromLocal`.
+ */
 export type Selection =
   | {kind: 'range'; t0: number; t1: number}
   /**
@@ -44,8 +47,8 @@ class SelectionStore {
    */
   cursorId = $state<string | null>(null);
   /**
-   * The period visible in the overview timeline, once it stops moving. Without a selection the map shows
-   * only the library's photos from it. (The overview axis is local wall time; close enough here.)
+   * The period visible in the overview timeline, once it stops moving (UTC instants, converted from the local axis).
+   * Without a selection the map shows only the library's photos from it.
    */
   timeline = $state.raw<[number, number] | null>(null);
   /** Zoom stack: selections a cluster zoom came from, innermost last. `label` names the zoomed-in level. */
@@ -82,7 +85,10 @@ class SelectionStore {
     if (s.kind === 'album' && s.mode === 'members') {
       const m = this.members;
       if (!m || m.albumId !== s.albumId) return null;
-      return s.sub ? {ix: m.ix, lo: lowerBound(m.ix.t, s.t0), hi: lowerBound(m.ix.t, s.t1), t0: s.t0, t1: s.t1} : {ix: m.ix, lo: 0, hi: m.ix.n, t0: s.t0, t1: s.t1};
+      if (s.sub) return {ix: m.ix, lo: lowerBound(m.ix.t, s.t0), hi: lowerBound(m.ix.t, s.t1), t0: s.t0, t1: s.t1};
+      // The album's days were converted with the library's offsets; a member shot in another zone can fall just outside.
+      const n = m.ix.n;
+      return {ix: m.ix, lo: 0, hi: n, t0: n ? Math.min(s.t0, m.ix.t[0]) : s.t0, t1: n ? Math.max(s.t1, m.ix.t[n - 1] + 1) : s.t1};
     }
     if (!lib) return null;
     return {ix: lib, lo: lowerBound(lib.t, s.t0), hi: lowerBound(lib.t, s.t1), t0: s.t0, t1: s.t1};
@@ -150,44 +156,67 @@ class SelectionStore {
 
 export const selection = new SelectionStore();
 
-/** Local offset (hours) of the library asset nearest to t; 0 without an index. */
-export function offsetNear(t: number | null) {
-  const ix = library.index;
+/** Local offset (hours) of the row of `ix` nearest to instant t; 0 without rows. */
+export function offsetIn(ix: IndexColumns | null, t: number | null) {
   if (t == null || !ix?.n) return 0;
   const i = lowerBound(ix.t, t), j = i > 0 && (i === ix.n || t - ix.t[i - 1] < ix.t[i] - t) ? i - 1 : i;
   return ix.off[j];
 }
 
+/** Local offset (hours) of the library asset nearest to t; 0 without an index. */
+export const offsetNear = (t: number | null) => offsetIn(library.index, t);
+
+const HOUR = 3600e3, DAY = 86400e3;
+/**
+ * The overview, its labels and the URL's days speak local calendar days, as the wave bins by them and the map and
+ * lightbox show local times; selections hold UTC instants. `toLocal`: instant → local wall time read as UTC (the
+ * overview axis), with the offset of the nearest library photo. `fromLocal` is its inverse (the offset looked up
+ * at the instant it lands on). Without an index both are the identity.
+ */
+export const toLocal = (t: number, ix: IndexColumns | null = library.index) => t + offsetIn(ix, t) * HOUR;
+export const fromLocal = (l: number, ix: IndexColumns | null = library.index) => l - offsetIn(ix, l - offsetIn(ix, l) * HOUR) * HOUR;
+
+/**
+ * An album's span as instants. Immich's album startDate/endDate are local calendar days (max/min of
+ * `localDateTime::date`, midnight read as UTC; server/src/repositories/album.repository.ts `getMetadataForIds`),
+ * so the span runs to the end of the last day.
+ */
+export const albumSpan = (a: {start: number; end: number}, ix: IndexColumns | null = library.index): [number, number] =>
+  [fromLocal(a.start, ix), fromLocal(a.end + DAY, ix)];
+
 // URL format (stage 3 owns writing it via writeUrl(): replaceState while dragging, pushState on release):
-//   ?from=2026-08-01&to=2026-08-30        range, UTC calendar days, `to` inclusive
+//   ?from=2026-08-01&to=2026-08-30        range, local calendar days (`fromLocal`), `to` inclusive
 //   ?album=<uuid>[&mode=range]            album, members by default
 //   from/to may also be 2026-08-01T14:00Z (UTC to the minute, `to` exclusive): a map cluster zoom
 //   ?album=<uuid>&from=…&to=…             album narrowed to that span (map cluster zoom)
 //   &at=<epoch ms>                        cursor (optional)
 //   &lb=<asset id>                        open lightbox (optional; written from selection.lightboxId by every writeUrl)
-const DAY = 86400e3;
 const day = (s: string | null) => (s && /^\d{4}-\d{2}-\d{2}$/.test(s) ? Date.parse(s + 'T00:00:00Z') : NaN);
 const HOUR_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}Z$/;
 const hour = (s: string | null) => (s && HOUR_RE.test(s) ? Date.parse(s) : NaN);
-/** from/to: whole days (`to` inclusive), or UTC instants to the minute (`to` exclusive), as a cluster zoom writes them. */
-function span(q: URLSearchParams): [number, number] | null {
+/** from/to: whole local days (`to` inclusive), or UTC instants to the minute (`to` exclusive), as a cluster zoom writes them. */
+function span(q: URLSearchParams, ix: IndexColumns | null): [number, number] | null {
   const f = q.get('from'), t = q.get('to');
-  const t0 = HOUR_RE.test(f ?? '') ? hour(f) : day(f), t1 = HOUR_RE.test(t ?? '') ? hour(t) : day(t) + DAY;
+  const t0 = HOUR_RE.test(f ?? '') ? hour(f) : fromLocal(day(f), ix), t1 = HOUR_RE.test(t ?? '') ? hour(t) : fromLocal(day(t) + DAY, ix);
   return Number.isFinite(t0) && Number.isFinite(t1) && t1 > t0 ? [t0, t1] : null;
 }
 
-/** Reads a selection from the URL. Album t0/t1 come from the album list, so albums resolve once it is loaded. */
-export function selectionFromUrl(q: URLSearchParams, albums: {id: string; start: number | null; end: number | null}[]): Selection | null {
+/**
+ * Reads a selection from the URL. Album t0/t1 come from the album list, so albums resolve once it is loaded.
+ * `ix`: the library, for local days (the index is in before the URL is applied, `urlReady`).
+ */
+export function selectionFromUrl(q: URLSearchParams, albums: {id: string; start: number | null; end: number | null}[], ix: IndexColumns | null = library.index): Selection | null {
   const album = q.get('album');
   if (album) {
     const a = albums.find(x => x.id === album);
     if (!a || a.start == null || a.end == null) return null;
     const mode = q.get('mode') === 'range' ? 'range' : 'members';
-    const sp = span(q);
+    const sp = span(q, ix);
     if (sp) return {kind: 'album', albumId: a.id, mode, t0: sp[0], t1: sp[1], sub: true};
-    return {kind: 'album', albumId: a.id, mode, t0: a.start, t1: a.end + 1};
+    const [t0, t1] = albumSpan({start: a.start, end: a.end}, ix);
+    return {kind: 'album', albumId: a.id, mode, t0, t1};
   }
-  const sp = span(q);
+  const sp = span(q, ix);
   return sp ? {kind: 'range', t0: sp[0], t1: sp[1]} : null;
 }
 
@@ -197,16 +226,18 @@ const URL_KEYS = ['from', 'to', 'album', 'mode', 'at', 'lb'];
 
 /**
  * `base` with the selection keys replaced. `at` is written only when it lies inside the selection.
- * Range days are UTC: t0 → its day, exclusive t1 → the day of t1 - 1 ms.
+ * Range days are local (`toLocal`): t0 → its day, exclusive t1 → the day before.
  */
-export function selectionToQuery(sel: Selection | null, at: number | null, base = new URLSearchParams()): URLSearchParams {
+export function selectionToQuery(sel: Selection | null, at: number | null, base = new URLSearchParams(), ix: IndexColumns | null = library.index): URLSearchParams {
   const q = new URLSearchParams(base);
   for (const k of URL_KEYS) q.delete(k);
   if (!sel) return q;
   if (sel.kind === 'album') { q.set('album', sel.albumId); if (sel.mode === 'range') q.set('mode', 'range'); }
   if (sel.kind === 'range' || sel.sub) {
-    // Whole days stay readable; anything finer (a cluster zoom) is written to the minute.
-    if (sel.t0 % DAY === 0 && sel.t1 % DAY === 0) { q.set('from', isoDay(sel.t0)); q.set('to', isoDay(sel.t1 - 1)); }
+    // Whole local days stay readable; anything finer (a cluster zoom) is written to the minute, in UTC. Days only
+    // when they read back to the same instants (not always so on a day the offset changes).
+    const l0 = toLocal(sel.t0, ix), l1 = toLocal(sel.t1, ix);
+    if (l0 % DAY === 0 && l1 % DAY === 0 && fromLocal(l0, ix) === sel.t0 && fromLocal(l1, ix) === sel.t1) { q.set('from', isoDay(l0)); q.set('to', isoDay(l1 - 1)); }
     else { q.set('from', isoMin(sel.t0)); q.set('to', isoMin(sel.t1)); }
   }
   if (at != null && Number.isFinite(at) && at >= sel.t0 && at < sel.t1) q.set('at', String(Math.round(at)));

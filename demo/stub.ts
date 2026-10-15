@@ -44,7 +44,8 @@ export function createStub({manifest, mediaDir}: StubOptions): (req: Request) =>
 
   const userDto = (u: DemoUser) => ({...USERS[u], profileImagePath: '', avatarColor: 'primary', profileChangedAt: frozenAt});
   const albumDto = (al: DemoAlbum, members: DemoAsset[]) => {
-    const times = members.map(a => a.takenAt).sort();
+    // Immich: min/max of `localDateTime::date`, i.e. local calendar days at midnight, serialized as UTC.
+    const days = members.map(a => new Date(localMs(a)).toISOString().slice(0, 10) + 'T00:00:00.000Z').sort();
     // Immich: albumUsers = the members other than the owner, with their role.
     const others: DemoUser[] = al.shared ? (al.owner === 'me' ? ['friend'] : ['me']) : [];
     return {
@@ -63,7 +64,7 @@ export function createStub({manifest, mediaDir}: StubOptions): (req: Request) =>
       order: 'desc',
       assetCount: members.length,
       // Empty albums have no start/end in Immich (absent, not null).
-      ...(times.length ? {startDate: times[0], endDate: times.at(-1), lastModifiedAssetTimestamp: frozenAt} : {}),
+      ...(days.length ? {startDate: days[0], endDate: days.at(-1), lastModifiedAssetTimestamp: frozenAt} : {}),
     };
   };
 

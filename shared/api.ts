@@ -66,7 +66,10 @@ export interface MonthColumns extends AssetColumns {
 export interface AlbumSummary {
   id: string;
   name: string;
-  /** Epoch ms of first/last asset; null for an empty album. */
+  /**
+   * Local calendar day (midnight, read as UTC) of the first/last asset, as Immich computes them
+   * (`localDateTime::date`); null for an empty album. Not instants: see `albumSpan` in web/src/lib/selection.svelte.ts.
+   */
   start: number | null;
   end: number | null;
   count: number;
