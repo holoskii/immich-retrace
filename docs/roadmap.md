@@ -50,6 +50,10 @@ another user:
   members the way the overview does.
 - Brush label is in local time, the readout in UTC, so they can be a day apart. Same root cause:
   the wave bins by local day while brush and selection are UTC instants.
+- The two timelines react differently to clicks. On the zoomed wave, a plain click (so also a
+  double click) outside the selection clears it and resets the zoom (`Overview.svelte` ~214,
+  `clearSelection`). The all-years strip above it has no such reset. Pick one behaviour for both,
+  e.g. double click resets on either and a single click never clears.
 - `web-index.test.ts` "never reuses staged months" is flaky (failed once in 5 runs).
 
 From the map review (stage 4, Codex), not fixed yet:
