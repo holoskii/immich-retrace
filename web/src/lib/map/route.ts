@@ -136,9 +136,9 @@ export function gpsBounds(ix: IndexColumns, lo: number, hi: number): [number, nu
 }
 
 /**
- * Where the cursor is on the route:
- * - exact: a fix within EXACT_MS of the cursor;
- * - interp: between two fixes of the same run (an estimate, drawn differently);
+ * Where the cursor is on the route, for `row` (the asset on show, see cursorRow):
+ * - exact: `row` is itself a fix within EXACT_MS of the cursor (a photo without GPS is never shown as recorded);
+ * - interp: between two fixes of the same run, or at a fix taken at the same instant as `row` (an estimate, drawn differently);
  * - gap: between runs, on the dashed connector (in transit, position unknown);
  * - before / after: outside the GPS span, pinned to the first / last fix.
  * `i` is the entry of `route.rows` the position is at or after.
@@ -146,14 +146,16 @@ export function gpsBounds(ix: IndexColumns, lo: number, hi: number): [number, nu
 export type RoutePos = {lon: number; lat: number; kind: 'exact' | 'interp' | 'gap' | 'before' | 'after'; i: number};
 export const EXACT_MS = 2 * 60e3;
 
-export function positionAt(ix: IndexColumns, route: Route, c: number): RoutePos | null {
+export function positionAt(ix: IndexColumns, route: Route, c: number, row: number): RoutePos | null {
   const n = route.rows.length;
   if (!n) return null;
   const at = (i: number, kind: RoutePos['kind']): RoutePos => ({lon: ix.lon[route.rows[i]], lat: ix.lat[route.rows[i]], kind, i});
+  if (row >= 0 && ix.gps[row] && Math.abs(ix.t[row] - c) <= EXACT_MS) {
+    // The entry of `row` (same-instant fixes sit next to each other in rows order).
+    for (let i = lowerBound(route.t, ix.t[row]); i < n && route.t[i] === ix.t[row]; i++) if (route.rows[i] === row) return at(i, 'exact');
+  }
   const b = lowerBound(route.t, c);
-  const near = (i: number) => i >= 0 && i < n && Math.abs(route.t[i] - c) <= EXACT_MS;
-  if (near(b) && (!near(b - 1) || route.t[b] - c <= c - route.t[b - 1])) return at(b, 'exact');
-  if (near(b - 1)) return at(b - 1, 'exact');
+  if (b < n && route.t[b] === c) return at(b, 'interp');
   if (b === 0) return at(0, 'before');
   if (b === n) return at(n - 1, 'after');
   const a = b - 1, k = (c - route.t[a]) / (route.t[b] - route.t[a]);
@@ -173,15 +175,25 @@ export function nearestRow(ix: IndexColumns, lo: number, hi: number, c: number) 
   return c - ix.t[b - 1] < ix.t[b] - c ? b - 1 : b;
 }
 
-/** Time of the previous (dir -1) / next (+1) asset strictly before / after c, or null at the end. */
-export function stepTime(ix: IndexColumns, lo: number, hi: number, c: number, dir: -1 | 1) {
-  if (dir < 0) {
-    const b = lowerBound(ix.t, c, lo, hi);
-    return b > lo ? ix.t[b - 1] : null;
-  }
-  let a = lo, b = hi; // first row with t > c (c may be fractional)
+/**
+ * The row the cursor is on: `pick` (the row it was put on: a pin, a step, the lightbox) when that lies in lo..hi-1
+ * at exactly c, so the right one of several assets taken at the same instant shows; else nearestRow.
+ */
+export function cursorRow(ix: IndexColumns, lo: number, hi: number, c: number, pick: number | undefined) {
+  return pick != null && pick >= lo && pick < hi && ix.t[pick] === c ? pick : nearestRow(ix, lo, hi, c);
+}
+
+/**
+ * The row before (dir -1) / after (+1) the cursor, or -1 at the end. On an asset (`cur`, at exactly c) it is the
+ * neighbouring row, so assets taken at the same instant are each visited; between assets (c may be fractional),
+ * the last one before / first one after c.
+ */
+export function stepRow(ix: IndexColumns, lo: number, hi: number, c: number, cur: number, dir: -1 | 1) {
+  if (cur >= lo && cur < hi && ix.t[cur] === c) { const r = cur + dir; return r >= lo && r < hi ? r : -1; }
+  if (dir < 0) { const b = lowerBound(ix.t, c, lo, hi); return b > lo ? b - 1 : -1; }
+  let a = lo, b = hi; // first row with t > c
   while (a < b) { const m = (a + b) >>> 1; if (ix.t[m] <= c) a = m + 1; else b = m; }
-  return a < hi ? ix.t[a] : null;
+  return a < hi ? a : -1;
 }
 
 /** Media with / without GPS per bin over t0..t1. */

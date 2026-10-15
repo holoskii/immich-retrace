@@ -74,19 +74,7 @@ another user:
 
 From the map review (stage 4, Codex), not fixed yet:
 
-- After a selection switch, pins can be read against the wrong index for one frame (`MapView`
-  `pinIx` vs. the rendered source), so hover can throw or select the wrong asset. Key features by
-  asset id.
-- The "exact" marker within 2 min of a fix shows a no-GPS photo's position as recorded GPS
-  (`route.ts` ~151). Reserve "exact" for the fix's own row.
 - Antimeridian: interpolation, lines, bounds and the inset take the long way round.
-- → key stepping can skip an asset after a fractional cursor (`route.ts` ~179): search t > c.
-- Same-timestamp pins: a click selects the first duplicate. Use the asset id as tie-breaker.
-- Cluster tooltip time range comes from at most 2000 spatially ordered leaves, so it is wrong for
-  big clusters.
-- Pending cluster hover and click promises survive leaving or a selection change.
-- Pop-out card placement projects the unwrapped longitude (wrong side on world copies); the
-  height clamp assumes 180 px.
 
 Smaller known gaps:
 

@@ -2,7 +2,7 @@
 // along. Started from the button by the time strip or with Space; never on its own. The timing is
 // here (pure); TimeStrip.svelte runs the timer.
 import type {IndexColumns} from '../index/model.ts';
-import {stepTime} from './route.ts';
+import {stepRow} from './route.ts';
 
 export const PLAY = {
   /**
@@ -23,12 +23,13 @@ export function playDelay(gapMs: number, reduced: boolean) {
 }
 
 /**
- * Where Play starts in rows lo..hi-1: the cursor, or the first photo when there is no cursor or nothing
- * comes after it (the end: play again from the start). null for an empty range.
+ * Where Play starts in rows lo..hi-1: the row to put the cursor on first, the first one when there is no cursor
+ * or nothing comes after it (`cur`: the row it is on, see cursorRow) and Play starts again; -1 to go on from the
+ * cursor; null for an empty range.
  */
-export function playStart(ix: IndexColumns, lo: number, hi: number, cursor: number | null): number | null {
+export function playStart(ix: IndexColumns, lo: number, hi: number, cursor: number | null, cur: number): number | null {
   if (hi <= lo) return null;
-  return cursor == null || stepTime(ix, lo, hi, cursor, 1) == null ? ix.t[lo] : cursor;
+  return cursor == null || stepRow(ix, lo, hi, cursor, cur, 1) < 0 ? lo : -1;
 }
 
 /** Whether a Space keydown toggles Play: not typed into a field, not on a control Space activates, no modifiers. */

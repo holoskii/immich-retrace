@@ -19,7 +19,7 @@
   import {dayAround, fDays, selName, zoomName, zoomSpan} from '../nav.ts';
   import {countRows, DAY, fNum} from '../overview/data.ts';
   import {fDay, fDuration, fFullDay, fSpan, fWhen} from './format.ts';
-  import {clusterVisits, gpsBounds, nearestRow, pinsGeoJSON, positionAt, routeGeoJSON, segmentRoute, typicalOffset, type PinProps, type Visit} from './route.ts';
+  import {clusterVisits, cursorRow, gpsBounds, pinsGeoJSON, positionAt, routeGeoJSON, segmentRoute, typicalOffset, type PinProps, type Visit} from './route.ts';
   import {binFixes, boxOf, buildTrack, mercX, mercY, type Track} from './camera.ts';
   import type {TrackRequest} from './camera.worker.ts';
   import {camNext, FOLLOW, Follower, type CamEvent, type CamState} from './follow.ts';
@@ -61,8 +61,9 @@
   const offset = $derived(active ? typicalOffset(active.ix, active.lo, active.hi) : 0);
   const gpsCount = $derived(route?.rows.length ?? 0);
   const cursor = $derived(active && selection.cursor != null && selection.cursor >= active.t0 && selection.cursor < active.t1 ? selection.cursor : null);
-  const pos = $derived(active && route && cursor != null ? positionAt(active.ix, route, cursor) : null);
-  const nearest = $derived(active && cursor != null ? nearestRow(active.ix, active.lo, active.hi, cursor) : -1);
+  /** The asset on show at the cursor (the pop-out card). */
+  const nearest = $derived(active && cursor != null ? cursorRow(active.ix, active.lo, active.hi, cursor, selection.pickIn(active)) : -1);
+  const pos = $derived(active && route && cursor != null ? positionAt(active.ix, route, cursor, nearest) : null);
 
   // Camera control state (follow.ts camNext): the mode the follower runs, and what a new selection starts in.
   let cam = $state<CamState>({mode: 'follow', auto: 'follow'});
@@ -117,13 +118,14 @@
       marker = new maplibregl.Marker({element: markerEl!, anchor: 'center'}).setLngLat([0, 0]);
       follower = new Follower(m, () => { placeCard(); drawInset(); }, (lon, lat) => marker?.setLngLat([lon, lat]));
       follower.reduced = reduced;
-      m.on('move', () => { placeCard(); drawInset(); });
-      m.on('resize', () => { placeCard(); follower?.kick(); });
+      m.on('move', () => { queueCard(); drawInset(); });
+      m.on('resize', () => { queueCard(); follower?.kick(); });
       // A user gesture (drag, wheel, keys, zoom buttons all carry originalEvent) hands the camera over.
       m.on('movestart', e => { if ((e as {originalEvent?: Event}).originalEvent) toManual(); });
       m.on('wheel', toManual);
       m.on('movestart', e => { if ((e as {originalEvent?: Event}).originalEvent) menu = null; });
-      m.on('click', e => { if (!m.queryRenderedFeatures(e.point, {layers: ['clusters']}).length) menu = null; });
+      // Anything but a cluster (a pin, the map) also drops a cluster click still waiting for its leaves.
+      m.on('click', e => { if (!m.queryRenderedFeatures(e.point, {layers: ['clusters']}).length) { menu = null; clickSeq++; } });
       // jumpTo() resets MapLibre's gesture handlers: hold the camera while a pointer is down on the map.
       m.getCanvasContainer().addEventListener('pointerdown', () => { if (follower) follower.held = true; });
       failed = null;
@@ -185,34 +187,38 @@
       const f = e.features?.[0], g = gen, ix = pinsOf, a = active, seq = ++clickSeq;
       // A cluster still rendered from the previous data: its id means something else in the new data.
       if (!f || !ix || f.properties.g !== g) return;
+      menu = null;
+      /** Same data, and no click since (on a pin, the map or another cluster). */
+      const live = () => g === gen && seq === clickSeq;
       const src = m.getSource('pins') as GeoJSONSource, cid = f.properties.cluster_id as number;
       const center = (f.geometry as Point).coordinates as [number, number];
       const expand = async () => {
         try {
           const zoom = await src.getClusterExpansionZoom(cid);
-          if (g !== gen) return; // data changed meanwhile: that cluster id means something else now
+          if (!live()) return;
           toManual();
           if (reduced) m.jumpTo({center, zoom}); else m.easeTo({center, zoom, duration: 500});
         } catch { /* cluster gone (data replaced) */ }
       };
       try {
         const leaves = await src.getClusterLeaves(cid, Infinity, 0);
-        if (g !== gen || seq !== clickSeq) return;
+        if (!live()) return;
         const [lo, hi] = a && a.ix === ix ? [a.lo, a.hi] : libRows ?? [0, ix.n];
         const visits = clusterVisits(ix, lo, hi, leaves.map(l => (l.properties as PinProps).r)).filter(v => narrows(v.t0, v.t1));
         if (visits.length > 1) { menu = {x: e.point.x, y: e.point.y, visits, expand, off: a ? offset : 0}; return; }
         if (visits.length === 1) { zoomTo(visits[0]); return; }
       } catch { /* no leaves: just expand */ }
-      void expand();
+      if (live()) void expand();
     });
     // A pin: the cursor goes there; without a selection (library pins), its day is selected first.
     m.on('click', 'pin', e => {
       const p = e.features?.[0]?.properties as PinProps | undefined;
       const a = active, ix = pinsOf;
       if (!p || p.g !== gen || !ix) return;
+      clickSeq++; // a pin drawn over a cluster wins, as with hover
       if (!selection.sel) { if (ix === library.index && p.r < ix.n) pickDay(ix, p.r); return; }
       if (!a || ix !== a.ix || p.r < a.lo || p.r >= a.hi) return;
-      selection.cursor = a.ix.t[p.r];
+      selection.cursorTo(a.ix, p.r);
     });
   }
 
@@ -239,6 +245,7 @@
     const z: Selection = {kind: 'range', t0: d0, t1: d1}, label = zoomName(null, d0, d1 - 1, place) || fFullDay(t, ix.off[r]);
     narrowed(z, label, `the day of this photo, ${fDays(d0, d1)}`);
     selection.zoomInto(z, label, t);
+    selection.cursorId = ix.id[r];
     writeUrl('commit', t);
   }
 
@@ -266,12 +273,13 @@
 
   async function hover(m: MlMap, f: MapGeoJSONFeature | undefined, p: {x: number; y: number}) {
     const ix = pinsOf;
-    if (!f || !ix) return;
+    // A pin or cluster still rendered from the previous data (a cluster id there names another cluster now).
+    if (!f || !ix || f.properties.g !== gen) return;
     const cid = f.properties.cluster_id as number | undefined;
     if (cid == null) {
       const pp = f.properties as PinProps;
-      if (pp.g !== gen || pp.r >= ix.n) return;
-      hoverKey = '';
+      if (pp.r >= ix.n) return;
+      hoverSeq++; hoverKey = ''; // a cluster's answer still on its way must not replace this pin's tip
       tip = {x: p.x, y: p.y, row: pp.r, count: 1, first: ix.t[pp.r], last: ix.t[pp.r]};
       return;
     }
@@ -299,7 +307,7 @@
     if (!ready || !map) return;
     const a = active, r = route, lib = library.index, m = map;
     const pins = m.getSource('pins') as GeoJSONSource, lines = m.getSource('route') as GeoJSONSource, gaps = m.getSource('gaps') as GeoJSONSource;
-    tip = null; hoverSeq++; hoverKey = '';
+    tip = null; hoverSeq++; hoverKey = ''; clickSeq++;
     const g = ++gen;
     if (a && r) {
       const geo = routeGeoJSON(a.ix, r, a.t0, a.t1);
@@ -492,6 +500,14 @@
   // Card note only for causes worth knowing (a missing file or an odd format just keeps the blur).
   const thumbNote = $derived(thumbIssue === 'permission' ? 'no thumbnails: the API key needs asset.view'
     : thumbIssue === 'unavailable' || thumbIssue === 'network' || thumbIssue === 'signed-out' ? explainMedia(thumbIssue, false).text : '');
+
+  /** On a map 'move': after the marker's own handler (added later, so it runs later) has re-wrapped it. */
+  let cardQueued = false;
+  function queueCard() {
+    if (cardQueued) return;
+    cardQueued = true;
+    queueMicrotask(() => { cardQueued = false; placeCard(); });
+  }
 
   const CARD_W = 172, GAP = 22;
   const cardSide = $derived(mpt && mpt.x + GAP + CARD_W > mpt.w - 8 ? 'left' : 'right');

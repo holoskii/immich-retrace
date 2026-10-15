@@ -13,7 +13,7 @@ export type Selection =
   | {kind: 'album'; albumId: string; mode: 'members' | 'range'; t0: number; t1: number; sub?: true};
 
 /** A selection to return to (zoom stack): what was selected (null: nothing, the whole library), the cursor, its name for Back. */
-export interface Crumb { sel: Selection | null; cursor: number | null; label: string }
+export interface Crumb { sel: Selection | null; cursor: number | null; cursorId: string | null; label: string }
 
 export const sameSelection = (a: Selection | null, b: Selection | null) =>
   a === b || (!!a && !!b && a.kind === b.kind && a.t0 === b.t0 && a.t1 === b.t1
@@ -38,6 +38,11 @@ class SelectionStore {
   sel = $state.raw<Selection | null>(null);
   /** Shared time cursor: overview hover, map scrubber, lightbox. null = none. */
   cursor = $state<number | null>(null);
+  /**
+   * The asset the cursor was put on (a pin, a step, the lightbox): which of several assets taken at the cursor's
+   * exact instant is on show. Ignored at any other cursor time, so a scrub needn't clear it (route.ts cursorRow).
+   */
+  cursorId = $state<string | null>(null);
   /**
    * The period visible in the overview timeline, once it stops moving. Without a selection the map shows
    * only the library's photos from it. (The overview axis is local wall time; close enough here.)
@@ -108,9 +113,20 @@ class SelectionStore {
     if (s) this.select(s).catch(e => console.warn('album members:', e));
   }
 
+  /** Puts the cursor on row `r` of `ix`. */
+  cursorTo(ix: LibraryIndex, r: number) {
+    this.cursor = ix.t[r];
+    this.cursorId = ix.id[r];
+  }
+
+  /** The row of `a.ix` the cursor id names, if any (route.ts cursorRow's `pick`). */
+  pickIn(a: Active) {
+    return this.cursorId == null ? undefined : a.ix.idToRow.get(this.cursorId);
+  }
+
   /** Narrows to `sel` remembering the current selection and cursor; `label` names the new level. */
   zoomInto(sel: Selection, label: string, cursor: number | null) {
-    this.stack = [...this.stack, {sel: this.sel, cursor: this.cursor, label: this.zoomLabel ?? ''}];
+    this.stack = [...this.stack, {sel: this.sel, cursor: this.cursor, cursorId: this.cursorId, label: this.zoomLabel ?? ''}];
     this.zoomLabel = label;
     this.select(sel).catch(e => console.warn('album members:', e));
     this.cursor = cursor;
@@ -124,6 +140,7 @@ class SelectionStore {
     this.zoomLabel = top.label || null;
     this.select(top.sel).catch(e => console.warn('album members:', e));
     this.cursor = top.cursor;
+    this.cursorId = top.cursorId;
     return true;
   }
 

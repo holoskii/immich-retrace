@@ -3,8 +3,8 @@ import {rgbaToThumbHash, thumbHashToRGBA as refDecode} from 'thumbhash';
 import type {AssetColumns} from '../shared/api.ts';
 import {buildIndex} from '../web/src/lib/index/model.ts';
 import {
-  breakBetween, clusterVisits, densityBins, EXACT_MS, gpsBounds, haversineKm, nearestRow, pinsGeoJSON, positionAt,
-  routeGeoJSON, segmentRoute, stepTime, typicalOffset,
+  breakBetween, clusterVisits, cursorRow, densityBins, EXACT_MS, gpsBounds, haversineKm, nearestRow, pinsGeoJSON, positionAt,
+  routeGeoJSON, segmentRoute, stepRow, typicalOffset,
 } from '../web/src/lib/map/route.ts';
 import {base64Bytes, thumbHashRatio, thumbHashToRGBA} from '../web/src/lib/thumbhash.ts';
 
@@ -115,11 +115,24 @@ describe('routeGeoJSON', () => {
 describe('positionAt', () => {
   const ix = index([[0, 42, 75], [60, 42.01, 75], [600, 42.5, 75], [660, 42.51, 75]]);
   const route = segmentRoute(ix, 0, ix.n);
-  const at = (min: number) => positionAt(ix, route, T0 + min * M)!;
+  const near = (c: number) => nearestRow(ix, 0, ix.n, c);
+  const at = (min: number) => positionAt(ix, route, T0 + min * M, near(T0 + min * M))!;
 
   it('is exact at (or within 2 min of) a fix', () => {
     expect(at(60)).toMatchObject({kind: 'exact', lat: 42.01, i: 1});
-    expect(positionAt(ix, route, T0 + 60 * M - EXACT_MS)).toMatchObject({kind: 'exact', i: 1});
+    expect(positionAt(ix, route, T0 + 60 * M - EXACT_MS, 1)).toMatchObject({kind: 'exact', i: 1});
+  });
+
+  it('is exact only for the fix on show, never for a photo without GPS next to it', () => {
+    // 59 min: no GPS; 60 min: two photos at one instant, the second without GPS.
+    const ix = index([[0, 42, 75], [59, null, null], [60, 42.01, 75], [60, null, null], [120, 42.02, 75]]);
+    const route = segmentRoute(ix, 0, ix.n);
+    const p = positionAt(ix, route, T0 + 59 * M, 1)!;
+    expect(p.kind).toBe('interp');
+    expect(p.lat).toBeCloseTo(42 + 0.01 * 59 / 60, 9);
+    expect(positionAt(ix, route, T0 + 60 * M, 2)).toMatchObject({kind: 'exact', lat: 42.01});
+    expect(positionAt(ix, route, T0 + 60 * M, 3)).toMatchObject({kind: 'interp', lat: 42.01});
+    expect(positionAt(ix, route, T0, -1)).toMatchObject({kind: 'interp', lat: 42});
   });
 
   it('interpolates only inside a run, and marks it as such', () => {
@@ -135,26 +148,42 @@ describe('positionAt', () => {
   it('pins to the ends outside the GPS span', () => {
     expect(at(-30)).toMatchObject({kind: 'before', lat: 42});
     expect(at(700)).toMatchObject({kind: 'after', lat: 42.51});
-    expect(positionAt(index([]), segmentRoute(index([]), 0, 0), T0)).toBeNull();
+    expect(positionAt(index([]), segmentRoute(index([]), 0, 0), T0, -1)).toBeNull();
   });
 });
 
 describe('selection helpers', () => {
   const ix = index([[0, null, null], [10, 42, 75, 1], [20, 41, 76], [30, null, null]]);
 
-  it('nearestRow and stepTime walk assets in time order', () => {
+  it('nearestRow and stepRow walk assets in time order', () => {
     expect(nearestRow(ix, 0, ix.n, T0 + 14 * M)).toBe(1);
     expect(nearestRow(ix, 0, ix.n, T0 + 16 * M)).toBe(2);
     expect(nearestRow(ix, 0, ix.n, T0 - H)).toBe(0);
     expect(nearestRow(ix, 1, 3, T0 + H)).toBe(2);
     expect(nearestRow(ix, 2, 2, T0)).toBe(-1);
-    expect(stepTime(ix, 0, ix.n, T0 + 10 * M, 1)).toBe(T0 + 20 * M);
-    expect(stepTime(ix, 0, ix.n, T0 + 10 * M, -1)).toBe(T0);
-    expect(stepTime(ix, 0, ix.n, T0 + 30 * M, 1)).toBeNull();
-    expect(stepTime(ix, 1, ix.n, T0 + 10 * M, -1)).toBeNull();
+    expect(stepRow(ix, 0, ix.n, T0 + 10 * M, 1, 1)).toBe(2);
+    expect(stepRow(ix, 0, ix.n, T0 + 10 * M, 1, -1)).toBe(0);
+    expect(stepRow(ix, 0, ix.n, T0 + 30 * M, 3, 1)).toBe(-1);
+    expect(stepRow(ix, 1, ix.n, T0 + 10 * M, 1, -1)).toBe(-1);
     // Scrubbing yields fractional ms: the next asset half a ms ahead is still "next".
-    expect(stepTime(ix, 0, ix.n, T0 + 20 * M - 0.5, 1)).toBe(T0 + 20 * M);
-    expect(stepTime(ix, 0, ix.n, T0 + 10 * M + 0.5, -1)).toBe(T0 + 10 * M);
+    expect(stepRow(ix, 0, ix.n, T0 + 20 * M - 0.5, 2, 1)).toBe(2);
+    expect(stepRow(ix, 0, ix.n, T0 + 10 * M + 0.5, 1, -1)).toBe(1);
+    expect(stepRow(ix, 0, ix.n, T0 + 10 * M + 0.5, 1, 1)).toBe(2);
+  });
+
+  it('tells assets taken at the same instant apart by the one the cursor was put on', () => {
+    const dup = index([[0, 42, 75], [10, 42, 75], [10, 42.01, 75], [10, null, null], [20, 41, 76]]);
+    const c = T0 + 10 * M;
+    expect(cursorRow(dup, 0, dup.n, c, undefined)).toBe(1);
+    expect(cursorRow(dup, 0, dup.n, c, 2)).toBe(2);
+    expect(cursorRow(dup, 0, dup.n, c - 0.5, 2)).toBe(1); // a scrub off that instant: nearest again
+    expect(cursorRow(dup, 0, 2, c, 2)).toBe(1); // outside the range
+    // Stepping visits each of them in index order (time, then id).
+    expect(stepRow(dup, 0, dup.n, c, 1, 1)).toBe(2);
+    expect(stepRow(dup, 0, dup.n, c, 2, 1)).toBe(3);
+    expect(stepRow(dup, 0, dup.n, c, 3, 1)).toBe(4);
+    expect(stepRow(dup, 0, dup.n, c, 2, -1)).toBe(1);
+    expect(stepRow(dup, 0, dup.n, T0 + 15 * M, 3, -1)).toBe(3);
   });
 
   it('pins, bounds and density use the gps flag and the range', () => {

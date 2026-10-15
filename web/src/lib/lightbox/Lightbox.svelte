@@ -25,7 +25,7 @@
       if (r !== row) { selection.lightbox = r; return; } // the effect runs again with r
       if (r == null) return;
       const id = a.ix.id[r];
-      if (prev?.id !== id) selection.cursor = a.ix.t[r];
+      if (prev?.id !== id) selection.cursorTo(a.ix, r);
       prev = {ix: a.ix, id};
     });
   });

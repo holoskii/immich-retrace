@@ -245,7 +245,7 @@
       const act = selection.active;
       if (selection.sel !== sel || !act || act.hi <= act.lo || selection.cursor != null) return;
       const r = req?.cursor?.(act) ?? act.lo;
-      selection.cursor = act.ix.t[r >= act.lo && r < act.hi ? r : act.lo];
+      selection.cursorTo(act.ix, r >= act.lo && r < act.hi ? r : act.lo);
       writeUrl('replace', selection.cursor);
     }).catch(e => console.warn('album members:', e));
     writeUrl(req?.history ?? 'commit', null);

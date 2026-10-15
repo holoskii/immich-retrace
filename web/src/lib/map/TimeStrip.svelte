@@ -6,7 +6,7 @@
   import {untrack} from 'svelte';
   import type {Active} from '../selection.svelte.ts';
   import {selection, writeUrl} from '../selection.svelte.ts';
-  import {densityBins, nearestRow, stepTime} from './route.ts';
+  import {cursorRow, densityBins, stepRow} from './route.ts';
   import {markScrub} from './scrub.ts';
   import {isPlayKey, playDelay, playStart} from './play.ts';
   import {fDay, fMonthYear, fWeekday, fWhen} from './format.ts';
@@ -122,28 +122,31 @@
     writeUrl('replace', selection.cursor);
   }
 
+  /** The row the cursor at `c` is on (of several at one instant, the one it was put on). */
+  const rowAt = (c: number) => cursorRow(active.ix, active.lo, active.hi, c, selection.pickIn(active));
+
   function play() {
-    const {ix, lo, hi} = active, start = playStart(ix, lo, hi, cursorIn);
+    const {ix, lo, hi} = active, start = playStart(ix, lo, hi, cursorIn, cursorIn == null ? -1 : rowAt(cursorIn));
     if (start == null) return;
     playing = true;
     // A jump back to the start is a seek (the camera snaps there), not a scrub.
-    if (start !== cursorIn) { selection.cursor = start; playUrl(true); }
+    if (start >= 0) { selection.cursorTo(ix, start); playUrl(true); }
     next();
   }
   /** Waits on the current photo, then steps to the one after whatever the cursor is on by then. */
   function next() {
     clearTimeout(timer);
     const {ix, lo, hi} = active, c = selection.cursor;
-    const t = c == null ? null : stepTime(ix, lo, hi, c, 1);
-    if (c == null || t == null) { pause(); return; }
+    const r = c == null ? -1 : stepRow(ix, lo, hi, c, rowAt(c), 1);
+    if (c == null || r < 0) { pause(); return; }
     timer = setTimeout(() => {
-      const c2 = selection.cursor, t2 = c2 == null ? null : stepTime(active.ix, active.lo, active.hi, c2, 1);
-      if (!playing || t2 == null) { pause(); return; }
+      const c2 = selection.cursor, r2 = c2 == null ? -1 : stepRow(active.ix, active.lo, active.hi, c2, rowAt(c2), 1);
+      if (!playing || r2 < 0) { pause(); return; }
       markScrub(); // the follow camera flies along, as with a drag
-      selection.cursor = t2;
+      selection.cursorTo(active.ix, r2);
       playUrl();
       next();
-    }, playDelay(t - c, !!reducedMq?.matches));
+    }, playDelay(ix.t[r] - c, !!reducedMq?.matches));
   }
   /** `write`: put the final cursor in the URL (not when something else is taking it over). */
   function pause(write = true) {
@@ -188,25 +191,25 @@
 
   function key(e: KeyboardEvent) {
     const {ix, lo, hi} = active;
-    let t: number | null = null;
+    let r = -1;
     const c = cursorIn;
     if (e.key === 'Enter') {
-      const r = nearestRow(ix, lo, hi, c ?? active.t0);
+      r = rowAt(c ?? active.t0);
       if (r >= 0) { e.preventDefault(); selection.lightbox = r; }
       return;
     }
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
       const dir = e.key === 'ArrowLeft' ? -1 : 1;
-      t = c == null ? (hi > lo ? ix.t[dir < 0 ? hi - 1 : lo] : null) : stepTime(ix, lo, hi, c, dir);
-    } else if (e.key === 'Home') t = hi > lo ? ix.t[lo] : null;
-    else if (e.key === 'End') t = hi > lo ? ix.t[hi - 1] : null;
+      r = c == null ? (hi > lo ? (dir < 0 ? hi - 1 : lo) : -1) : stepRow(ix, lo, hi, c, rowAt(c), dir);
+    } else if (e.key === 'Home') r = hi > lo ? lo : -1;
+    else if (e.key === 'End') r = hi > lo ? hi - 1 : -1;
     else return;
     e.preventDefault();
     pause(false);
-    if (t == null) return;
+    if (r < 0) return;
     markScrub();
-    selection.cursor = t;
-    writeUrl('live', t);
+    selection.cursorTo(ix, r);
+    writeUrl('live', selection.cursor);
   }
   function keyUp(e: KeyboardEvent) {
     if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) writeUrl('commit', selection.cursor);

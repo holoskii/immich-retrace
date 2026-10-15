@@ -229,12 +229,16 @@ describe('Play', () => {
 
   it('starts at the cursor, or from the first photo without one or at the end', () => {
     const ix = index([[0, true], [10, true], [20, false]]);
-    expect(playStart(ix, 0, 3, null)).toBe(T0);
-    expect(playStart(ix, 0, 3, T0 + 10 * M)).toBe(T0 + 10 * M);
-    expect(playStart(ix, 0, 3, T0 + 5 * M)).toBe(T0 + 5 * M);
-    expect(playStart(ix, 0, 3, T0 + 20 * M)).toBe(T0);
-    expect(playStart(ix, 1, 3, T0 + 25 * M)).toBe(T0 + 10 * M);
-    expect(playStart(ix, 2, 2, null)).toBeNull();
+    expect(playStart(ix, 0, 3, null, -1)).toBe(0);
+    expect(playStart(ix, 0, 3, T0 + 10 * M, 1)).toBe(-1);
+    expect(playStart(ix, 0, 3, T0 + 5 * M, 0)).toBe(-1);
+    expect(playStart(ix, 0, 3, T0 + 20 * M, 2)).toBe(0);
+    expect(playStart(ix, 1, 3, T0 + 25 * M, 2)).toBe(1);
+    expect(playStart(ix, 2, 2, null, -1)).toBeNull();
+    // Two photos at the same instant: on the first, the second is still to come.
+    const dup = index([[0, true], [10, true], [10, false]]);
+    expect(playStart(dup, 0, 3, T0 + 10 * M, 1)).toBe(-1);
+    expect(playStart(dup, 0, 3, T0 + 10 * M, 2)).toBe(0);
   });
 
   it('Space toggles it outside fields and controls, without modifiers or key repeat', () => {
