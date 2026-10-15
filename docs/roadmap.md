@@ -21,8 +21,6 @@ Everything that is still open. Decisions and architecture are in [AGENTS.md](../
 4. Release:
    - Set the repo URL: `REPO_URL` in `shared/demo.ts`, `USER_AGENT` in `demo/commons.ts`, the
      clone line in the README.
-   - Decide where the demo lives in the repo (see below). It is hosted as `immich-retrace-demo`
-     (AGENTS.md → Deployment), still behind Authelia until the hardening below is done.
    - Launch video: a draft is in `brag-output/` (gitignored; `brag.mp4`, `share-copy.txt`,
      `brag-plan.md`). After the UI review, re-film and render with `brag-output/work/make.sh`
      (needs the demo viewer, `BASE` in `capture.py`). Fill the link slot (`outro.url` in
@@ -35,14 +33,6 @@ Everything that is still open. Decisions and architecture are in [AGENTS.md](../
 Hardening is done and tested; the demo is still behind Authelia until the switch-over in
 [demo-hardening.md](demo-hardening.md). Left: a visits/top-paths view (Caddy's JSON log), and a CDN
 if traffic outgrows the 50 Mbit ceiling.
-
-## Open decision: where the demo lives
-
-The owner proposed a separate `demo` branch. The alternative: keep the demo UI in main, isolated as
-it is now (`web/src/lib/demo/`, lazy chunk, `server/demo.ts`), keep the stub and its adapter tests
-in main as a dev fixture, and move only the dataset (manifest, CREDITS, Commons fetch scripts) and
-`docker-compose.demo.yml` to a separate repo or branch. A long-lived branch would conflict on most
-main changes, since the demo UI touches Overview, MapView and Lightbox.
 
 ## Shared albums
 
@@ -70,19 +60,13 @@ another user:
   `trimOutliers`' library rule (gap ≥ 1 year) would not trim Greece; albums need their own scale.
   Parked: needs design work and the owner's attention.
 
-From the map review (stage 4, Codex), not fixed yet:
-
-- Antimeridian: interpolation, lines, bounds and the inset take the long way round.
-
 Smaller known gaps:
 
-- Map inset fits every fix, so one far outlier squeezes the route.
 - An overview hover jump over 3 h snaps instead of flying.
 - Route segmentation thresholds (`ROUTE` in `route.ts`: 4 h, 400 km/h, 1.5 h + 50 km) leave much
   of a trip dashed when zoomed out.
 - Lightbox: the undecodable-video message is untested live; assets without a thumbhash aren't
   cached; the mini-map keeps the route from open time across an index refresh.
-- Index: the follow-up Codex check of the stage-2 review fixes never ran.
 - Frame times on a real GPU are unmeasured.
 
 ## Later
