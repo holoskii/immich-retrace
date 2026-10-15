@@ -7,8 +7,22 @@
 # Put a reverse proxy in front for a public deployment; the demo needs no authentication (sample data only).
 name: immich-retrace-demo
 
+# Both containers are public-facing and write nothing at run time (checked with a read-only rootfs,
+# no capabilities and these limits: both HEALTHCHECKs pass).
+x-hardening: &hardening
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  pids_limit: 64
+  mem_limit: 256m
+  cpus: 1.0
+  logging:
+    driver: json-file
+    options: {max-size: "10m", max-file: "3"}
+
 services:
   stub:
+    <<: *hardening
     build:
       context: .
       dockerfile: demo/Dockerfile
@@ -18,6 +32,7 @@ services:
     restart: unless-stopped
 
   viewer:
+    <<: *hardening
     build: .
     # Its own tag: the same image as a normal deployment, but never retags one (immich-retrace:latest).
     image: immich-retrace-demo:latest
