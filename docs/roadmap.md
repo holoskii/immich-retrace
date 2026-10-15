@@ -11,10 +11,26 @@ Everything that is still open. Decisions and architecture are in [AGENTS.md](../
 4. Release:
    - Set the repo URL: `REPO_URL` in `shared/demo.ts`, `USER_AGENT` in `demo/commons.ts`, the
      clone line in the README.
-   - Decide where the demo lives (see below), then host it.
+   - Decide where the demo lives in the repo (see below). It is hosted as `immich-viewer-demo`
+     (AGENTS.md → Deployment); the NPM proxy host is the owner's to add.
 5. Authelia: require one factor on the LAN. Guests on the home network get in through the global
    `*.example.com` LAN bypass. Add a `viewer.example.com` rule with `one_factor` for
    `<LAN subnet>` before the bypass (rules are first-match).
+
+## Demo: proper public deployment
+
+The demo is live behind NPM (host 40) with Authelia on `location /`. Drop Authelia only after the
+minimum bar in `docs/demo-hardening.md` (research branch `worktree-agent-a5c19d2da25e0e518`). Items:
+
+- Rate limiting per IP (NPM `limit_req` in the proxy host's advanced config, or in the server),
+  especially on `/api/*` thumbnails, previews and video, which stream from the stub's 950 MB of media.
+- Hardening: security headers (CSP, `X-Content-Type-Options`, `Referrer-Policy`), read-only root
+  filesystem and dropped capabilities for both containers, memory/CPU limits, stub reachable only
+  from the viewer (already true).
+- Monitoring: visit counts and top paths (NPM access log or a tiny analytics endpoint), uptime
+  check with an alert, disk/bandwidth watch.
+- Abuse: cap concurrent video streams; fail2ban or similar on the NPM log for scrapers.
+- CDN or cache in front of media if traffic grows.
 
 ## Open decision: where the demo lives
 
