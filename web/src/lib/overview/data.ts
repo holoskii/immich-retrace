@@ -170,6 +170,14 @@ export function railAlbums(albums: AlbumSummary[], keep?: (a: AlbumSummary) => b
     .sort((a, b) => a.start - b.start || a.end - b.end);
 }
 
+/** The how-to line under the timeline; the album bars are mentioned only while some are on screen. */
+export const overviewHint = (bars: boolean) =>
+  `Drag across the timeline to pick dates${bars ? ' · click a coloured bar below it to open an album' : ''}`;
+
+/** The readout without a selection; `picker` names the album button. */
+export const noSelectionHint = (bars: boolean, picker: string) =>
+  `No selection: drag on the timeline${bars ? ', click an album bar,' : ''} or pick from ${picker}`;
+
 /** Display name: drops a leading `YYYY_` / `YYYY-MM_` folder prefix. */
 export const albumLabel = (name: string) => name.replace(/^\d{4}(-\d\d)?_/, '') || name;
 

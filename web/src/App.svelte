@@ -4,7 +4,10 @@
   import Overview from './lib/overview/Overview.svelte';
   import Lightbox, {preloadLightbox} from './lib/lightbox/Lightbox.svelte';
   import {startUrlSync} from './lib/selection.svelte.ts';
+  import {config, getConfig} from './lib/config.svelte.ts';
 
+  // Before anything writes the URL: a visit without a link is where the demo lands on a trip.
+  const landing = !location.search;
   void library.load();
   // Applies ?from/to/album/at/lb once the index is there, then follows back/forward.
   startUrlSync();
@@ -14,9 +17,21 @@
   const mapView = import('./lib/map/MapView.svelte');
   const idle = (f: () => void) => 'requestIdleCallback' in window ? requestIdleCallback(f, {timeout: 5000}) : setTimeout(f, 1000);
   mapView.then(() => idle(() => void preloadLightbox().catch(() => {})), () => {});
+
+  // Demo mode (server DEMO=1) is its own chunk, fetched only then; mounted from the config store, so a
+  // config that only arrives on a later try (a first fetch failed) still brings it.
+  void getConfig();
+  let demoChunk: Promise<typeof import('./lib/demo/Demo.svelte')> | undefined;
+  const loadDemo = () => (demoChunk ??= import('./lib/demo/Demo.svelte'));
 </script>
 
 <div class="app">
+  <div>
+    {#if config.demo}
+      {@const demo = config.demo}
+      {#await loadDemo() then {default: Demo}}<Demo config={demo} {landing} />{/await}
+    {/if}
+  </div>
   <header><Overview /></header>
   <main>
     {#await mapView}
@@ -32,7 +47,8 @@
 <Lightbox />
 
 <style>
-  .app { height: 100%; display: grid; grid-template-rows: auto 1fr; }
+  /* First row: the demo banner (empty, so zero height, on a normal deployment). */
+  .app { height: 100%; display: grid; grid-template-rows: auto auto 1fr; }
   main { min-height: 0; }
   .placeholder {
     height: 100%; display: flex; gap: 12px; align-items: center; justify-content: center;

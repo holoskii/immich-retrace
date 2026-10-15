@@ -1,5 +1,5 @@
 // Every mouse and keyboard shortcut, for the `?` overlay (Help.svelte). Collected from the handlers:
-// Overview.svelte (onKey, onWindowKey, pointer + wheel), TimeStrip.svelte (key), MapView.svelte (clicks,
+// Overview.svelte (onKey, onWindowKey, pointer + wheel), TimeStrip.svelte (key, Space for Play), MapView.svelte (clicks,
 // cardActions, Esc on the visit chooser, MapLibre's own keyboard handler), LightboxView.svelte (onKey),
 // AlbumPicker.svelte. Keep this in step when one of them changes.
 
@@ -40,6 +40,7 @@ export const SHORTCUTS: ShortcutGroup[] = [
     {keys: ['←', '→'], what: 'previous / next photo (when focused)'},
     {keys: ['Home', 'End'], what: 'first / last photo'},
     {keys: ['Enter'], what: 'open the photo nearest the cursor'},
+    {keys: ['Space'], what: 'play / pause: step through the photos (anywhere but a text field or button)'},
   ]},
   {title: 'Photo viewer', items: [
     {keys: ['←', '→'], what: 'previous / next photo in the selection'},

@@ -8,7 +8,8 @@
   import 'maplibre-gl/dist/maplibre-gl.css';
   import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
   import type {FeatureCollection, Point} from 'geojson';
-  import {DEFAULT_MAP_STYLE_URL as DEFAULT_STYLE, type ViewerConfig} from '../../../../shared/api.ts';
+  import {DEFAULT_MAP_STYLE_URL as DEFAULT_STYLE} from '../../../../shared/api.ts';
+  import {config, getConfig} from '../config.svelte.ts';
   import type {LibraryIndex} from '../index/model.ts';
   import {library, phaseText} from '../index/store.svelte.ts';
   import {explainIndex, explainMedia, probeMedia, retryLibrary, type MediaFailure} from '../failure.ts';
@@ -81,15 +82,10 @@
     const onMq = () => (reduced = mq.matches);
     mq.addEventListener('change', onMq);
     let gone = false;
-    void (async () => {
-      let style = DEFAULT_STYLE;
-      try {
-        const res = await fetch('/api/config');
-        if (res.ok) style = ((await res.json()) as ViewerConfig).mapStyleUrl || style;
-      } catch { /* keep the default */ }
+    void getConfig().then(c => {
       if (gone || !el) return;
-      create(el, style);
-    })();
+      create(el, c.mapStyleUrl || DEFAULT_STYLE);
+    });
     const onVis = () => { if (!document.hidden) follower?.snap(); };
     document.addEventListener('visibilitychange', onVis);
     const release = () => { if (follower?.held) { follower.held = false; follower.kick(); } };
@@ -543,8 +539,13 @@
     {#if panel}
       <div class="state" role={panel === 'error' ? 'alert' : 'status'}>
         {#if panel === 'loading'}
-          <h2>{phaseText(library.phase, library.attempt, library.progress) || 'Loading…'}</h2>
-          <p>The first visit indexes the whole library once; later visits start from this browser's cache.</p>
+          {#if config.demo}
+            <!-- The demo keeps the indexing mechanics (month counts, the cache) out of a first impression. -->
+            <h2>Loading the demo library…</h2>
+          {:else}
+            <h2>{phaseText(library.phase, library.attempt, library.progress) || 'Loading…'}</h2>
+            <p>The first visit indexes the whole library once; later visits start from this browser's cache.</p>
+          {/if}
         {:else if panel === 'error' && failure}
           <h2>{failure.title}</h2>
           <p>{failure.next}</p>
@@ -656,7 +657,7 @@
   </div>
 
   {#if active}
-    <TimeStrip {active} {offset} />
+    <TimeStrip {active} {offset} prominentPlay={!!config.demo} />
   {/if}
 </div>
 
@@ -823,6 +824,9 @@
   :global(.maplibregl-ctrl-group) { background: rgba(11, 12, 14, .86) !important; }
   :global(.maplibregl-ctrl-group button + button) { border-top-color: var(--line) !important; }
   :global(.maplibregl-ctrl button .maplibregl-ctrl-icon) { filter: invert(.85); }
-  :global(.maplibregl-ctrl-attrib) { background: rgba(11, 12, 14, .7) !important; color: var(--muted); }
+  /* MapLibre's compact attribution sets color: #000 at a higher specificity: its plain text ("Data from")
+     rendered black on the dark pill, reading as text colliding with the links. Same for the black ⓘ icon. */
+  :global(.maplibregl-ctrl.maplibregl-ctrl-attrib) { background: rgba(11, 12, 14, .7) !important; color: var(--muted) !important; }
   :global(.maplibregl-ctrl-attrib a) { color: var(--ink2); }
+  :global(.maplibregl-ctrl-attrib .maplibregl-ctrl-attrib-button) { filter: invert(.85); background-color: transparent !important; }
 </style>

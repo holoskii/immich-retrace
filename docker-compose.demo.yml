@@ -1,0 +1,37 @@
+# Public demo (demo/README.md → "Run the demo with Docker"): the viewer in demo mode against the Immich
+# stub serving the sample dataset. Nothing here touches a real Immich. The media must exist first
+# (`node demo/fetch.ts`, ~950 MB in demo/data/media); it is mounted read-only.
+#
+#   docker compose -f docker-compose.demo.yml up -d --build      → http://127.0.0.1:8081
+#
+# Put a reverse proxy in front for a public deployment; the demo needs no authentication (sample data only).
+name: immich-viewer-demo
+
+services:
+  stub:
+    build:
+      context: .
+      dockerfile: demo/Dockerfile
+    image: immich-viewer-demo-stub:latest
+    volumes:
+      - ${DEMO_MEDIA_DIR:-./demo/data/media}:/media:ro
+    restart: unless-stopped
+
+  viewer:
+    build: .
+    # Its own tag: the same image as a normal deployment, but never retags one (immich-viewer:latest).
+    image: immich-viewer-demo:latest
+    depends_on:
+      - stub
+    environment:
+      IMMICH_URL: http://stub:2283
+      IMMICH_API_KEY: demo            # the stub takes any key
+      DEMO: "1"
+      DEMO_MANIFEST: /app/demo/manifest.json
+      # DEMO_TRIP: Alsace             # the trip a visit without a link opens (album id or part of its name)
+      # REPO_URL: https://github.com/OWNER/immich-viewer   # "Get it for your Immich" (default: shared/demo.ts)
+    volumes:
+      - ./demo/manifest.json:/app/demo/manifest.json:ro
+    ports:
+      - 127.0.0.1:${DEMO_PORT:-8081}:8080
+    restart: unless-stopped

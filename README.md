@@ -5,7 +5,8 @@ reconstructed from your photos alone (no GPS tracker needed):
 
 - an all-years **density overview** of the library: pick a period by dragging, or pick an album;
 - a **map** of the selected period: the route through the photo locations, coloured by time, with
-  clustered photo pins and a time scrubber that a follow camera tracks smoothly;
+  clustered photo pins and a time scrubber that a follow camera tracks smoothly (or press Play to step
+  through the photos);
 - a **lightbox** with photos and videos, stepping through the selection in time order.
 
 It reads Immich through its API with one API key and never writes to it. Desktop browsers only for now.
@@ -86,7 +87,8 @@ Environment variables (Docker: `.env` or `environment:`). Empty values count as 
 | `PORT` | no | `8080` | Port the server listens on (inside the container). |
 | `WEB_DIR` | no | `dist/web` | Built web app to serve (the Docker image sets it). |
 
-A missing or malformed setting stops the server with a one-line message naming it.
+A missing or malformed setting stops the server with a one-line message naming it. The public demo's
+own settings (`DEMO`, `DEMO_TRIP`, `REPO_URL`, `DEMO_MANIFEST`) are described in [demo/README.md](demo/README.md).
 
 ### Map tiles
 

@@ -1,14 +1,18 @@
 <script lang="ts">
   // M-B strip under the map: density over the selection (with / without GPS, as on the overview), with the shared time cursor.
   // Drag (or ←/→, Home/End when focused) to scrub; the URL gets the cursor when the gesture ends.
-  // Enter opens the lightbox at the asset nearest to the cursor.
+  // Enter opens the lightbox at the asset nearest to the cursor. Play (the button, or Space anywhere outside
+  // a field) steps the cursor from photo to photo (play.ts); any other move of the strip stops it.
+  import {untrack} from 'svelte';
   import type {Active} from '../selection.svelte.ts';
   import {selection, writeUrl} from '../selection.svelte.ts';
   import {densityBins, nearestRow, stepTime} from './route.ts';
   import {markScrub} from './scrub.ts';
+  import {isPlayKey, playDelay, playStart} from './play.ts';
   import {fDay, fMonthYear, fWeekday, fWhen} from './format.ts';
 
-  let {active, offset}: {active: Active; offset: number} = $props();
+  /** `prominentPlay`: a larger, labelled Play button (the demo's landing). */
+  let {active, offset, prominentPlay = false}: {active: Active; offset: number; prominentPlay?: boolean} = $props();
 
   const H = 64, BARS = 40, BIN = 3;
   const DAY = 86400e3;
@@ -101,8 +105,69 @@
     return active.t0 + Math.min(1, Math.max(0, (clientX - r.left) / r.width)) * (span - 1);
   };
 
+  // ---- Play ----
+
+  let playing = $state(false);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const reducedMq = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
+
+  // Playing moves the cursor within the current history entry, as stepping in the lightbox does: no
+  // gesture is left open for something else (the lightbox opening, a new selection) to fold into its entry.
+  // Throttled: Safari throws after ~100 history calls per 30 s.
+  let lastUrl = 0;
+  function playUrl(force = false) {
+    const now = Date.now();
+    if (!force && now - lastUrl < 1000) return;
+    lastUrl = now;
+    writeUrl('replace', selection.cursor);
+  }
+
+  function play() {
+    const {ix, lo, hi} = active, start = playStart(ix, lo, hi, cursorIn);
+    if (start == null) return;
+    playing = true;
+    // A jump back to the start is a seek (the camera snaps there), not a scrub.
+    if (start !== cursorIn) { selection.cursor = start; playUrl(true); }
+    next();
+  }
+  /** Waits on the current photo, then steps to the one after whatever the cursor is on by then. */
+  function next() {
+    clearTimeout(timer);
+    const {ix, lo, hi} = active, c = selection.cursor;
+    const t = c == null ? null : stepTime(ix, lo, hi, c, 1);
+    if (c == null || t == null) { pause(); return; }
+    timer = setTimeout(() => {
+      const c2 = selection.cursor, t2 = c2 == null ? null : stepTime(active.ix, active.lo, active.hi, c2, 1);
+      if (!playing || t2 == null) { pause(); return; }
+      markScrub(); // the follow camera flies along, as with a drag
+      selection.cursor = t2;
+      playUrl();
+      next();
+    }, playDelay(t - c, !!reducedMq?.matches));
+  }
+  /** `write`: put the final cursor in the URL (not when something else is taking it over). */
+  function pause(write = true) {
+    clearTimeout(timer);
+    if (!playing) return;
+    playing = false;
+    if (write) playUrl(true);
+  }
+  const togglePlay = () => (playing ? pause() : play());
+
+  // A new selection, or the lightbox opening, stops it (an index refresh under the same selection doesn't).
+  $effect(() => { void selection.sel; untrack(() => pause(false)); });
+  $effect(() => { if (selection.lightbox != null) untrack(() => pause(false)); });
+  $effect(() => () => clearTimeout(timer));
+
+  function onWindowKey(e: KeyboardEvent) {
+    if (!isPlayKey(e) || selection.lightbox != null) return;
+    e.preventDefault();
+    togglePlay();
+  }
+
   function down(e: PointerEvent) {
     if (e.button !== 0) return;
+    pause(false);
     cv!.setPointerCapture(e.pointerId);
     dragging = true;
     markScrub();
@@ -137,6 +202,7 @@
     else if (e.key === 'End') t = hi > lo ? ix.t[hi - 1] : null;
     else return;
     e.preventDefault();
+    pause(false);
     if (t == null) return;
     markScrub();
     selection.cursor = t;
@@ -147,7 +213,13 @@
   }
 </script>
 
-<div class="strip"><div bind:clientWidth={width}>
+<svelte:window onkeydown={onWindowKey} />
+<div class="strip"><div class="row">
+  <button class="play" class:big={prominentPlay} class:on={playing} onclick={togglePlay} aria-pressed={playing}
+    title={playing ? 'Pause (Space)' : 'Play: step through the photos one by one, the map following (Space)'}>
+    {#if playing}<span class="ic" aria-hidden="true">❚❚</span> Pause{:else}<span class="ic" aria-hidden="true">▶</span> Play{/if}
+  </button>
+  <div class="track" bind:clientWidth={width}>
   <canvas
     bind:this={cv}
     style:height="{H}px"
@@ -165,12 +237,30 @@
     onkeydown={key}
     onkeyup={keyUp}
   ></canvas>
+  </div>
+</div>
   <!-- The slider's aria-label, visible: scrubbing isn't discoverable from the bars alone. -->
-  <p class="hint" aria-hidden="true">Drag along the strip to move through time · <kbd>←</kbd> <kbd>→</kbd> step photo by photo · <kbd>Enter</kbd> opens the photo</p>
-</div></div>
+  <p class="hint" aria-hidden="true">Drag along the strip to move through time · <kbd>←</kbd> <kbd>→</kbd> step photo by photo · <kbd>Enter</kbd> opens the photo · <kbd>Space</kbd> play / pause</p>
+</div>
 
 <style>
   .strip { padding: 6px 12px 2px; background: var(--surface); border-top: 1px solid var(--line); }
+  .row { display: flex; gap: 10px; align-items: flex-start; }
+  .track { flex: 1; min-width: 0; }
+  .play {
+    flex: none; margin-top: 8px; display: inline-flex; gap: 6px; align-items: center; justify-content: center; cursor: pointer;
+    min-width: 78px; /* Play and Pause alike: the strip beside it must not shift */
+    background: var(--raised); border: 1px solid var(--line); border-radius: 4px; color: var(--ink2);
+    font: 500 12px var(--f-body); padding: 4px 10px; white-space: nowrap;
+  }
+  .play:hover { color: var(--ink); border-color: var(--muted); }
+  .play:focus-visible { outline: 2px solid var(--photo-hi); outline-offset: 2px; }
+  .play .ic { font-size: 10px; width: 12px; text-align: center; }
+  .play.on { color: var(--ink); border-color: var(--photo); background: rgba(232, 166, 78, .14); }
+  /* The demo's landing: the first thing to press. */
+  .play.big { min-width: 104px; margin-top: 2px; padding: 8px 16px; font-size: 14px; color: #17130C; background: var(--photo-hi); border-color: var(--photo-hi); }
+  .play.big:hover { background: #F2B862; color: #17130C; }
+  .play.big.on { background: var(--raised); color: var(--ink); border-color: var(--photo-hi); }
   canvas { display: block; width: 100%; cursor: ew-resize; touch-action: none; }
   canvas:focus-visible { outline: 2px solid var(--photo-hi); outline-offset: 2px; }
   .hint { margin: 1px 0 3px; font-size: 11px; line-height: 1.4; color: var(--muted); }

@@ -12,6 +12,7 @@ library is never involved.
 | `config.ts` | Curation: licence filter, GPS removal, clip sources, albums, offline place table. |
 | `fetch.ts`, `commons.ts` | Builds the dataset from the Commons API and downloads the media. |
 | `stub.ts` | The Immich stub. |
+| `Dockerfile` | The stub's image (`docker-compose.demo.yml` in the project root runs it with the viewer). |
 | `data/` | API cache and media (`data/media/<asset id>/thumbnail.jpg`, `preview.jpg`, `video.mp4`). Gitignored, rebuilt by `fetch.ts`. |
 
 ## Rebuild the media
@@ -47,9 +48,73 @@ What the builder does:
 ## Run the demo locally
 
 ```bash
-node demo/stub.ts                                   # Immich stub on :2283 (STUB_PORT=…)
-IMMICH_URL=http://localhost:2283 IMMICH_API_KEY=demo PORT=8091 node server/main.ts
+npm run build                                       # the web app, once
+node demo/stub.ts                                   # Immich stub on :2283 (STUB_PORT=…, DEMO_MEDIA=…)
+DEMO=1 IMMICH_URL=http://localhost:2283 IMMICH_API_KEY=demo PORT=8091 node server/main.ts
 ```
+
+Without `DEMO=1` the same pair is a plain viewer on sample data (no banner, no landing), which is
+how the stub is used in development.
+
+## Run the demo with Docker
+
+`docker-compose.demo.yml` (project root) runs two containers: the stub (`demo/Dockerfile`, the
+manifest baked in, `demo/data/media` mounted read-only) and the normal viewer image with `DEMO=1`
+(`demo/manifest.json` mounted read-only, for the credits). The media has to exist first.
+
+```bash
+node demo/fetch.ts                                  # once: ~950 MB into demo/data/media
+docker compose -f docker-compose.demo.yml up -d --build   # → http://127.0.0.1:8081
+docker compose -f docker-compose.demo.yml down
+```
+
+`DEMO_PORT` changes the host port, `DEMO_MEDIA_DIR` points at media elsewhere. The images are tagged
+`immich-viewer-demo` and `immich-viewer-demo-stub`, so building the demo never retags a real
+deployment's `immich-viewer:latest`. The app image's build context leaves `demo/` out
+(`.dockerignore`); the stub's has its own ignore file (`demo/Dockerfile.dockerignore`). For a public
+host, put a reverse proxy with TLS in front (the demo needs no login: sample data only).
+
+## Demo mode (`DEMO=1`)
+
+Settings, read by `server/demo.ts` (a normal deployment never reads them):
+
+| Variable | Default | What |
+|---|---|---|
+| `DEMO` | off | `1` turns demo mode on. Anything but 1/0/true/false/yes/no/on/off stops the server. |
+| `DEMO_TRIP` | `San Sebastián to Huesca` | The trip a visit without a link opens: an album id, or part of its name (case and accents ignored). No match: the album with the most items. |
+| `REPO_URL` | `REPO_URL` in `shared/demo.ts` (a placeholder, `https://github.com/OWNER/immich-viewer`) | Where "Get it for your Immich" and the About panel link to. Set the constant once the repository is public. |
+| `DEMO_MANIFEST` | `demo/manifest.json` | The dataset manifest, for the credits. Read at startup; a missing file stops the server. |
+
+What changes (everything else is the normal app):
+- **Landing.** A visit without a query opens `DEMO_TRIP` like a click on its album bar, with the
+  cursor on a landscape photo with GPS near the middle of the trip, Follow on, route, strip and photo
+  card visible (`web/src/lib/demo/landing.ts`). Nothing plays until Play is pressed. A link with a
+  query opens what it says.
+- **Banner**: "Demo · sample data", the pitch line, the dataset credit with "About & credits", and
+  "Get it for your Immich →".
+- **Coach mark**: three steps (timeline → time strip → photo card), once per visitor
+  (`localStorage` key `immich-viewer.demo.tour-seen`; blocked storage just shows it again). Esc,
+  "Skip tour" or "Done" end it; the `?` overlay has "Show the 3-step tour again" and "About this demo".
+- **About & credits** panel: what the app is, MIT licence, the dataset credit and licences, what the
+  demo changed, no endorsement, as-is; links to `/credits`, a page generated from the manifest with
+  every file, its licence, Commons page and modifications.
+- **Lightbox**: per-photo credit (author, licence link, Commons file page, the asset's
+  `modifications`) from `GET /api/demo/credits/:id`.
+- **Hidden**: the ⋯ menu (clear cache, refresh state), month counters while loading, "Open in
+  Immich" (`immichPublicUrl` is forced to null).
+- The album picker reads "Try another trip ▾". Play is a normal feature of the time strip (also
+  `Space`); the demo only makes its button prominent.
+
+Code layout, so the demo can move out later: demo-only UI is in `web/src/lib/demo/` and loads as its
+own chunk only when `/api/config` says `demo` (`App.svelte`); it plugs into the app through
+`web/src/lib/hooks.svelte.ts` (the `?` overlay's extra buttons, a lightbox panel slot, the album
+picker's label) and `selection.albumRequest` (open an album as a bar click would). The server side is
+`server/demo.ts`, wired by one call in `server/main.ts`; its types are in `shared/demo.ts`.
+
+First load, measured against the stub (headless Chromium, cold profile, 1440×900): the overview is
+painted in 0.24 s unthrottled and 1.09 s at 5 Mbit/s (40 ms latency); the landing's photo card is up
+in 1.35 s and 4.5 s (MapLibre's chunk and worker plus OpenFreeMap's style and tiles). The index is
+33 month requests, ~250 kB of JSON in all, so the "compact demo index" from the plan wasn't needed.
 
 The stub accepts any non-empty API key. It implements only what `server/immich.ts` and
 `server/adapter.ts` call, with Immich v3.1.0 shapes:
@@ -98,7 +163,7 @@ files and is offered under the same per-file terms.
 
 ### Attribution requirements for the hosted demo
 
-These follow CC BY 4.0 / CC BY-SA 4.0 §3 and are planned in docs/oss-plan.md (item E11):
+These follow CC BY 4.0 / CC BY-SA 4.0 §3; demo mode (above) does all of them (docs/oss-plan.md item E11):
 
 - **Per asset, wherever it is shown large** (lightbox info panel): "Photo: Kent Wang, CC BY 4.0
   (or CC BY-SA 4.0, linked to the licence), via Wikimedia Commons" with a link to the file page

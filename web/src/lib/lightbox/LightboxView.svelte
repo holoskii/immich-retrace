@@ -10,6 +10,7 @@
   import {explainMedia, probeMedia, type MediaFailure} from '../failure.ts';
   import {bins, fClock, fCoords, fLongDate, fOffset, fPlace, fPosition, neighbours, step} from './model.ts';
   import MiniMap from './MiniMap.svelte';
+  import {hooks} from '../hooks.svelte.ts';
 
   let {a, row}: {a: Active; row: number} = $props();
 
@@ -173,6 +174,7 @@
       <div class="label">position in range</div>
       <div class="strip" bind:clientWidth={stripW}><canvas bind:this={strip} style:height="{STRIP_H}px"></canvas></div>
 
+      {#if hooks.lightboxPanel}<hooks.lightboxPanel {id} video={isVideo} />{/if}
       {#if link}
         <a class="immich" href={link} target="_blank" rel="noopener noreferrer">Open in Immich ↗</a>
       {/if}

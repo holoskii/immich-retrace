@@ -3,6 +3,7 @@
   // A native modal <dialog>: it traps focus, Esc closes it, and focus returns to where it was.
   import {selection} from './selection.svelte.ts';
   import {isHelpKey, keyParts, SHORTCUTS} from './shortcuts.ts';
+  import {hooks} from './hooks.svelte.ts';
 
   let dlg = $state<HTMLDialogElement>();
 
@@ -29,6 +30,13 @@
       <h2 id="help-title">Shortcuts</h2>
       <button class="x" onclick={() => dlg?.close()} aria-label="Close">Esc</button>
     </header>
+    {#if hooks.helpActions.length}
+      <div class="extra">
+        {#each hooks.helpActions as act (act.label)}
+          <button onclick={() => { dlg?.close(); act.run(); }}>{act.label}</button>
+        {/each}
+      </div>
+    {/if}
     <div class="groups">
       {#each SHORTCUTS as g (g.title)}
         <section>
@@ -73,6 +81,12 @@
     background: var(--raised); border: 1px solid var(--line); border-radius: 4px; color: var(--ink2);
     font: 500 11px var(--f-mono); padding: 2px 8px; cursor: pointer;
   }
+  .extra { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .extra button {
+    background: var(--raised); border: 1px solid var(--photo); border-radius: 999px; color: var(--ink);
+    font: 500 12px var(--f-body); padding: 3px 12px; cursor: pointer;
+  }
+  .extra button:focus-visible { outline: 2px solid var(--photo-hi); outline-offset: 2px; }
   .groups { columns: 2 340px; column-gap: 28px; }
   section { break-inside: avoid; margin-bottom: 14px; }
   h3 { margin: 0 0 5px; color: var(--photo-hi); font: 500 12px var(--f-body); }

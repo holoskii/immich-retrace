@@ -4,13 +4,15 @@
   import {untrack} from 'svelte';
   import {headerStatus, library} from '../index/store.svelte.ts';
   import {explainAlbums, retryLibrary} from '../failure.ts';
-  import {lowerBound, offsetNear, selection, writeUrl, type Selection} from '../selection.svelte.ts';
+  import {lowerBound, offsetNear, selection, writeUrl, type AlbumRequest, type Selection} from '../selection.svelte.ts';
+  import {config} from '../config.svelte.ts';
+  import {hooks} from '../hooks.svelte.ts';
   import {selName} from '../nav.ts';
   import AlbumPicker from './AlbumPicker.svelte';
   import {tripsOf} from './trips.ts';
   import Help from '../Help.svelte';
   import {
-    clamp, countRows, albumLabel, fLength, DAY, daysFromIndex, daysFromMonths, defaultView, dragTo, fDay, fNum, hitGrip, railAlbums,
+    clamp, countRows, albumLabel, fLength, DAY, daysFromIndex, daysFromMonths, defaultView, dragTo, fDay, fNum, hitGrip, noSelectionHint, overviewHint, railAlbums,
     snapDay, viewAround, viewToShow, zoomAt, type Grip, type RailAlbum, type Span,
   } from './data.ts';
   import {CTX, drawContext, drawMain, MAIN, type RailHit} from './draw.ts';
@@ -26,6 +28,10 @@
   /** Final view of a running animation; null when idle. */
   let goal: Span | null = null;
   let hits: RailHit[] = [];
+  /** Album bars on screen under the wave (the hints mention clicking them only then). */
+  let barsShown = $state(false);
+  /** The public demo: no cache housekeeping or month counters in the bar. */
+  const demo = $derived(!!config.demo);
 
   // Histogram once per index (or per manifest while the first index builds).
   const days = $derived(library.index ? daysFromIndex(library.index) : library.provisional ? daysFromMonths(library.provisional) : null);
@@ -114,6 +120,7 @@
     raf = requestAnimationFrame(() => {
       drawContext(c, st.days, ext, v, st.sel);
       hits = drawMain(m, {...st, view: v});
+      barsShown = hits.length > 0;
     });
   });
 
@@ -227,7 +234,8 @@
     if (selection.back()) writeUrl('commit', selection.cursor);
   }
 
-  function pickAlbum(a: RailAlbum) {
+  /** `req`: an album opened from outside (selection.albumRequest), with its own cursor and history choice. */
+  function pickAlbum(a: RailAlbum, req?: AlbumRequest) {
     selection.resetZoom();
     if (dom) animateView(viewAround(a.start, a.end + 1, dom[0], dom[1]));
     const sel: Selection = {kind: 'album', albumId: a.id, mode: 'members', t0: a.start, t1: a.end + 1};
@@ -236,11 +244,19 @@
     selection.select(sel).then(() => {
       const act = selection.active;
       if (selection.sel !== sel || !act || act.hi <= act.lo || selection.cursor != null) return;
-      selection.cursor = act.ix.t[act.lo];
+      const r = req?.cursor?.(act) ?? act.lo;
+      selection.cursor = act.ix.t[r >= act.lo && r < act.hi ? r : act.lo];
       writeUrl('replace', selection.cursor);
     }).catch(e => console.warn('album members:', e));
-    writeUrl('commit', null);
+    writeUrl(req?.history ?? 'commit', null);
   }
+
+  // An album opened from outside the overview (the demo landing): as a click on its bar, once the album is known.
+  $effect(() => {
+    const req = selection.albumRequest, a = req && railAlbums(library.albums).find(x => x.id === req.albumId);
+    if (!req || !a || !dom) return;
+    untrack(() => { selection.albumRequest = null; pickAlbum(a, req); });
+  });
 
   function setMode(mode: 'members' | 'range') {
     const s = selection.sel;
@@ -370,7 +386,7 @@
 
   const status = $derived(headerStatus({
     status: library.status, phase: library.phase, attempt: library.attempt, progress: library.progress,
-    items: library.index ? `${fNum(library.index.n)} items` : '', error: library.error,
+    items: library.index ? `${fNum(library.index.n)} items` : '', error: library.error, quiet: demo,
   }));
 
   // ⋯ menu: background refresh state and cache housekeeping, out of the bar.
@@ -394,8 +410,9 @@
       {#if parent}
         <button class="btn back" onclick={back} title="Back (Backspace)">← {selName(parent.sel, parent.label)}</button>
       {/if}
-      <AlbumPicker albums={library.albums} {trips} current={album?.id ?? null} onpick={pickAlbum}
-        error={library.albumsError ? explainAlbums(library.albumsError) : null} loaded={library.albumsLoaded} />
+      <AlbumPicker albums={library.albums} {trips} current={album?.id ?? null} onpick={a => pickAlbum(a)}
+        error={library.albumsError ? explainAlbums(library.albumsError) : null} loaded={library.albumsLoaded}
+        label={hooks.albumPickerLabel ?? 'Albums'} prominent={!!hooks.albumPickerLabel} />
       {#if album}
         <button class="btn icon" disabled={!neighbors.prev} onclick={() => neighbors.prev && pickAlbum(neighbors.prev)}
           title={neighbors.prev ? `Previous album: ${neighbors.prev.name}` : 'No earlier album'} aria-label="Previous album">‹</button>
@@ -413,7 +430,7 @@
         {:else if readout.gps == null}<span class="ink2">{selection.sel?.kind === 'album' && selection.sel.mode === 'members' ? 'loading members…' : '…'}</span>
         {:else}<i class="sw gps"></i>{readout.gps} with location · <i class="sw nogps"></i>{readout.nogps} without{/if}
       {:else}
-        <span class="muted">No selection: drag on the timeline, click an album bar, or pick from Albums</span>
+        <span class="muted">{noSelectionHint(barsShown, hooks.albumPickerLabel ? `“${hooks.albumPickerLabel}”` : 'Albums')}</span>
       {/if}
     </div>
     {#if selection.sel}
@@ -437,6 +454,8 @@
     </div>
     <div class="tools">
       <Help />
+      <!-- The demo has no cache housekeeping or refresh chatter to show: no ⋯ menu. -->
+      {#if !demo}
       <!-- svelte-ignore a11y_no_static_element_interactions (Esc inside the menu closes it) -->
       <div class="morewrap" bind:this={moreEl} onkeydown={onMoreKey}>
         <button class="more" class:busy={status.busy} aria-haspopup="true" aria-expanded={more} onclick={() => (more = !more)}
@@ -449,6 +468,7 @@
           </div>
         {/if}
       </div>
+      {/if}
     </div>
   </div>
 
@@ -474,7 +494,7 @@
       {#if days?.provisional}<i class="sw pending"></i>counting (location not known yet)
       {:else}<i class="sw gps"></i>with location <i class="sw nogps"></i>without location{/if}
     </span>
-    <span class="plain">Drag across the timeline to pick dates · click a coloured bar below it to open an album · scroll to zoom · <kbd>?</kbd> all shortcuts</span>
+    <span class="plain">{overviewHint(barsShown)} · scroll to zoom · <kbd>?</kbd> all shortcuts</span>
   </div>
 
   {#if tip}

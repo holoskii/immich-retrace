@@ -22,6 +22,12 @@ export const sameSelection = (a: Selection | null, b: Selection | null) =>
 /** The selected assets: rows lo..hi-1 of `ix`, which is sorted by t. */
 export interface Active { ix: LibraryIndex; lo: number; hi: number; t0: number; t1: number }
 
+/**
+ * An album to open from outside the overview. `cursor`: the row of the album's members to put the cursor on
+ * (default: the first). `history`: 'replace' keeps the opening out of the back/forward stack (a landing).
+ */
+export interface AlbumRequest { albumId: string; cursor?: (a: Active) => number; history?: 'commit' | 'replace' }
+
 /** First row with t >= x. */
 export function lowerBound(t: Float64Array, x: number, lo = 0, hi = t.length) {
   while (lo < hi) { const m = (lo + hi) >>> 1; if (t[m] < x) lo = m + 1; else hi = m; }
@@ -45,6 +51,16 @@ class SelectionStore {
   members = $state.raw<{albumId: string; version: string; ix: LibraryIndex} | null>(null);
   /** The members of the selected album (members mode) being fetched, or why they couldn't be. */
   membersLoad = $state.raw<{albumId: string; error: unknown} | null>(null);
+
+  /** startUrlSync has applied the page's URL (a landing that opens something must not race it). */
+  urlApplied = $state(false);
+  /** Something has been selected since the page loaded, even if cleared again (a landing must not override that). */
+  touched = $state(false);
+  /**
+   * Asks the overview to open an album as a click on its bar would (the timeline frames it too). The overview
+   * takes the request and clears it.
+   */
+  albumRequest = $state.raw<AlbumRequest | null>(null);
 
   /** Open lightbox: a row of `active.ix` (←/→ walks active.lo..hi-1). Stage 5 owns the UI; the map card opens it. */
   lightbox = $state<number | null>(null);
@@ -70,6 +86,7 @@ class SelectionStore {
   /** Rejects when an album's members can't be loaded; `membersLoad` keeps the error for the UI either way. */
   async select(s: Selection | null) {
     this.sel = s;
+    if (s) this.touched = true;
     this.membersLoad = null;
     if (s?.kind !== 'album' || s.mode !== 'members') return;
     // Keyed by version too: an album edited in Immich must not keep its old member list.
@@ -273,6 +290,7 @@ export function startUrlSync() {
       if (applied || !urlReady(new URLSearchParams(location.search), !!library.index, library.albums, library.albumsLoaded)) return;
       applied = true;
       applyUrl(library.albums);
+      selection.urlApplied = true;
     });
   });
   return () => { removeEventListener('popstate', onPop); stop(); };

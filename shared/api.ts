@@ -1,5 +1,7 @@
 // The viewer's own API between backend (server/) and browser (web/). Immich's internal timeline
-// shapes never reach the browser: server/adapter.ts normalizes them into these.
+// shapes never reach the browser: server/adapter.ts normalizes them into these. The demo's own types: shared/demo.ts.
+
+import type {DemoConfig} from './demo.ts';
 
 /** Bump when any shape below changes; the browser drops caches with another version. */
 export const SCHEMA_VERSION = 2;
@@ -90,6 +92,8 @@ export const DEFAULT_MAP_STYLE_URL = 'https://tiles.openfreemap.org/styles/dark'
 export interface ViewerConfig {
   /** MapLibre style JSON URL. */
   mapStyleUrl: string;
-  /** Immich's public base URL for "Open in Immich" links; null when not configured. */
+  /** Immich's public base URL for "Open in Immich" links; null when not configured (always null in demo mode). */
   immichPublicUrl: string | null;
+  /** Public demo mode (DEMO=1, server/demo.ts); null on a normal deployment, which then looks and behaves as without it. */
+  demo: DemoConfig | null;
 }

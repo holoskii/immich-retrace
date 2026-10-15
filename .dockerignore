@@ -3,3 +3,5 @@ dist
 .env
 .venv-shots
 shots
+# The demo (stub, dataset, media) is not part of the app image; demo/Dockerfile has its own ignore file.
+demo

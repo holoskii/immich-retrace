@@ -25,10 +25,11 @@ export function phaseText(phase: Phase | null, attempt: number, progress: {done:
  * The header's status, split in two. `shown` stays in the bar: the first build's load phases, waiting for
  * Immich, errors, else the item count. `detail` goes in the ⋯ menu: background refresh chatter (cached,
  * checking for changes, month counts). `busy`: a background refresh is running (a dot on the ⋯ button).
- * `items`: the formatted item count ("1 688 items"), empty before there is an index.
+ * `items`: the formatted item count ("1 688 items"), empty before there is an index. `quiet` (the demo): no
+ * month counters, just "Loading…".
  */
-export function headerStatus(s: {status: Status; phase: Phase | null; attempt: number; progress: {done: number; total: number}; items: string; error: string | null}) {
-  const phase = phaseText(s.phase, s.attempt, s.progress), items = s.items;
+export function headerStatus(s: {status: Status; phase: Phase | null; attempt: number; progress: {done: number; total: number}; items: string; error: string | null; quiet?: boolean}) {
+  const phase = s.quiet && s.phase === 'loading' ? 'Loading…' : phaseText(s.phase, s.attempt, s.progress), items = s.items;
   switch (s.status) {
     case 'building': return {shown: phase || 'building index', detail: phase || 'Building the index', busy: false};
     case 'refreshing':

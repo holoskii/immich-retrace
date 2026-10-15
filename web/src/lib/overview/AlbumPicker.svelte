@@ -5,9 +5,13 @@
   import {albumLabel, DAY, fDay, fNum, railAlbums, type RailAlbum} from './data.ts';
   import {AWAY_KM, TRIP_DAYS, tripReason, type Trips} from './trips.ts';
 
-  /** `error`: why the album list couldn't be (re)loaded; `loaded`: the list is final (not still on its way). */
-  let {albums, trips, current, onpick, error = null, loaded = true}: {
+  /**
+   * `error`: why the album list couldn't be (re)loaded; `loaded`: the list is final (not still on its way).
+   * `label`, `prominent`: the button's text and emphasis (the demo calls it "Try another trip").
+   */
+  let {albums, trips, current, onpick, error = null, loaded = true, label = 'Albums', prominent = false}: {
     albums: AlbumSummary[]; trips: Trips; current: string | null; onpick: (a: RailAlbum) => void; error?: string | null; loaded?: boolean;
+    label?: string; prominent?: boolean;
   } = $props();
 
   const tab = $derived(trips.confident ? 'trips' : 'albums');
@@ -74,7 +78,7 @@
 </script>
 
 <div class="picker" bind:this={root}>
-  <button class="btn" bind:this={btn} aria-haspopup="dialog" aria-expanded={open} onclick={toggle} title="Choose an album">Albums ▾</button>
+  <button class="btn" bind:this={btn} aria-haspopup="dialog" aria-expanded={open} onclick={toggle} title="Choose an album" class:prominent>{label} ▾</button>
   {#if open}
     <div class="pop" role="dialog" aria-label="Albums" tabindex="-1"
       onkeydown={e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); } }}>
@@ -111,6 +115,7 @@
   .picker { position: relative; }
   .btn { background: var(--raised); border: 1px solid var(--line); border-radius: 4px; color: var(--ink); font: 500 12px var(--f-body); padding: 3px 10px; cursor: pointer; }
   .btn:hover { border-color: var(--muted); }
+  .btn.prominent { border-color: var(--photo); color: var(--photo-hi); }
   .btn:focus-visible, input:focus-visible, .seg button:focus-visible { outline: 2px solid var(--photo-hi); outline-offset: 2px; }
   .pop {
     position: absolute; left: 0; top: calc(100% + 6px); z-index: 20; width: 380px; max-width: calc(100vw - 32px);

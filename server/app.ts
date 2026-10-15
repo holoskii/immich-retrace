@@ -39,7 +39,8 @@ async function relay(res: Response, cacheControl = 'no-store') {
 
 const badRequest = (c: Context, error: string) => c.json({error, code: 'invalid'} satisfies ApiError, 400);
 
-export function createApp(immich: ImmichClient, config: ViewerConfig = configFromEnv({})) {
+/** `extend`: registers extra routes ahead of the /api catch-all (demo mode: server/demo.ts). */
+export function createApp(immich: ImmichClient, config: ViewerConfig = configFromEnv({}), extend?: (app: Hono) => void) {
   const app = new Hono();
 
   app.onError((err, c) => {
@@ -105,6 +106,8 @@ export function createApp(immich: ImmichClient, config: ViewerConfig = configFro
     c.header('cache-control', 'no-store');
     return c.json(await fetchAlbumMembers(immich, id, c.req.raw.signal));
   });
+
+  extend?.(app);
 
   app.all('/api/*', c => c.json({error: 'Unknown endpoint.'} satisfies ApiError, 404));
   return app;

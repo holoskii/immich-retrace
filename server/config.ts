@@ -52,15 +52,18 @@ export function parseImmichUrl(raw: string): string {
   return u.origin + path;
 }
 
-/** Browser-facing settings from the environment; empty values count as unset. */
+/** An optional http(s) URL setting: null when unset or empty. */
+export function urlSetting(env: Record<string, string | undefined>, name: string): string | null {
+  const v = env[name]?.trim() || null;
+  if (v !== null && !/^https?:\/\//.test(v)) throw new ConfigError(`${name} must be an http(s) URL (got "${v}")`);
+  return v;
+}
+
+/** Browser-facing settings from the environment; empty values count as unset. Demo mode adds its part in server/demo.ts. */
 export function configFromEnv(env: Record<string, string | undefined>): ViewerConfig {
-  const opt = (name: string) => env[name]?.trim() || null;
-  const url = (name: string, v: string | null) => {
-    if (v !== null && !/^https?:\/\//.test(v)) throw new ConfigError(`${name} must be an http(s) URL (got "${v}")`);
-    return v;
-  };
   return {
-    mapStyleUrl: url('MAP_STYLE_URL', opt('MAP_STYLE_URL')) ?? DEFAULT_MAP_STYLE_URL,
-    immichPublicUrl: url('IMMICH_PUBLIC_URL', opt('IMMICH_PUBLIC_URL'))?.replace(/\/+$/, '') ?? null,
+    mapStyleUrl: urlSetting(env, 'MAP_STYLE_URL') ?? DEFAULT_MAP_STYLE_URL,
+    immichPublicUrl: urlSetting(env, 'IMMICH_PUBLIC_URL')?.replace(/\/+$/, '') ?? null,
+    demo: null,
   };
 }

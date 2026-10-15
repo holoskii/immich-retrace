@@ -16,13 +16,13 @@ function fakeImmich() {
 
 describe('configFromEnv', () => {
   it('defaults to OpenFreeMap\'s dark style and no public URL', () => {
-    expect(configFromEnv({})).toEqual({mapStyleUrl: DEFAULT_MAP_STYLE_URL, immichPublicUrl: null});
-    expect(configFromEnv({MAP_STYLE_URL: '  ', IMMICH_PUBLIC_URL: ''})).toEqual({mapStyleUrl: DEFAULT_MAP_STYLE_URL, immichPublicUrl: null});
+    expect(configFromEnv({})).toEqual({mapStyleUrl: DEFAULT_MAP_STYLE_URL, immichPublicUrl: null, demo: null});
+    expect(configFromEnv({MAP_STYLE_URL: '  ', IMMICH_PUBLIC_URL: ''})).toEqual({mapStyleUrl: DEFAULT_MAP_STYLE_URL, immichPublicUrl: null, demo: null});
   });
 
   it('takes both from the environment, trimming a trailing slash off the Immich URL', () => {
     expect(configFromEnv({MAP_STYLE_URL: 'https://tiles.openfreemap.org/styles/dark', IMMICH_PUBLIC_URL: 'https://photos.example.com/'}))
-      .toEqual({mapStyleUrl: 'https://tiles.openfreemap.org/styles/dark', immichPublicUrl: 'https://photos.example.com'});
+      .toEqual({mapStyleUrl: 'https://tiles.openfreemap.org/styles/dark', immichPublicUrl: 'https://photos.example.com', demo: null});
   });
 
   it('rejects values that are not http(s) URLs', () => {
@@ -34,7 +34,7 @@ describe('configFromEnv', () => {
 describe('GET /api/config', () => {
   it('returns the configured values, uncached, without calling Immich', async () => {
     const {immich, calls} = fakeImmich();
-    const config: ViewerConfig = {mapStyleUrl: 'https://example.com/style.json', immichPublicUrl: 'https://photos.example.com'};
+    const config: ViewerConfig = {mapStyleUrl: 'https://example.com/style.json', immichPublicUrl: 'https://photos.example.com', demo: null};
     const res = await createApp(immich, config).request('/api/config');
     expect(res.status).toBe(200);
     expect(res.headers.get('cache-control')).toBe('no-store');
@@ -44,6 +44,6 @@ describe('GET /api/config', () => {
 
   it('falls back to the defaults when the app gets no config', async () => {
     const res = await createApp(fakeImmich().immich).request('/api/config');
-    expect(await res.json()).toEqual({mapStyleUrl: DEFAULT_MAP_STYLE_URL, immichPublicUrl: null});
+    expect(await res.json()).toEqual({mapStyleUrl: DEFAULT_MAP_STYLE_URL, immichPublicUrl: null, demo: null});
   });
 });
