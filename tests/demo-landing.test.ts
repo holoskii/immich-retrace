@@ -1,7 +1,7 @@
 // Demo mode (plan E11): the server flag and credits endpoints, the landing's trip and photo, the tour,
 // Play's timing, and the hints that depend on what is on screen.
 import {describe, expect, it} from 'vitest';
-import {mkdtempSync, writeFileSync} from 'node:fs';
+import {mkdtempSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import type {AlbumSummary, AssetColumns} from '../shared/api.ts';
@@ -143,9 +143,14 @@ describe('demo credits (server)', () => {
 
   it('stops at startup when the manifest is missing or broken', () => {
     expect(() => loadDemoCredits('/nonexistent/manifest.json')).toThrow(ConfigError);
-    const bad = join(mkdtempSync(join(tmpdir(), 'demo-credits-')), 'manifest.json');
-    writeFileSync(bad, '{"assets": 3}');
-    expect(() => loadDemoCredits(bad)).toThrow(/DEMO_MANIFEST/);
+    const dir = mkdtempSync(join(tmpdir(), 'demo-credits-'));
+    try {
+      const bad = join(dir, 'manifest.json');
+      writeFileSync(bad, '{"assets": 3}');
+      expect(() => loadDemoCredits(bad)).toThrow(/DEMO_MANIFEST/);
+    } finally {
+      rmSync(dir, {recursive: true, force: true});
+    }
   });
 });
 
