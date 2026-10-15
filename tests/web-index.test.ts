@@ -244,6 +244,29 @@ describe('refreshIndex', () => {
     expect(rb.index.id).toEqual(ra.index.id);
   });
 
+  it('tells another tab\'s snapshot from its own previous one without the clock (frozen clock)', async () => {
+    // Every swap waits until both concurrent runs below have read their baseline (onManifest comes after).
+    let manifests = 0;
+    const {kv} = spyKV(await freshKV(), put => vi.waitFor(() => { if ('lib-a/snapshot' in put && manifests < 2) throw new Error('hold'); }, {interval: 1})),
+      frozen = {now: () => 1_000}, cache = libraryCache(kv);
+    manifests = 2;
+    await refreshIndex(ctx(kv, fakeApi(), frozen));
+    const again = fakeApi();
+    await refreshIndex(ctx(kv, again, frozen));
+    expect(again.monthCalls().length).toBe(7);
+    // A snapshot from before `gen` existed is never taken for another tab's.
+    const {gen: _, ...legacy} = (await cache.snapshot('lib-a'))!;
+    await kv.write({'lib-a/snapshot': legacy}, ['lib-a/gen']);
+    const old = fakeApi();
+    await refreshIndex(ctx(kv, old, frozen));
+    expect(old.monthCalls().length).toBe(7);
+    manifests = 0;
+    const a = fakeApi(), b = fakeApi(), hooks = {onManifest: () => { manifests++; }};
+    const [ra, rb] = await Promise.all([refreshIndex(ctx(kv, a, frozen), hooks), refreshIndex(ctx(kv, b, frozen), hooks)]);
+    expect(a.monthCalls().length + b.monthCalls().length).toBe(7);
+    expect(rb.index.id).toEqual(ra.index.id);
+  });
+
   it('after a swap, drops other libraries and members of albums that are gone', async () => {
     const kv = await freshKV(), cache = libraryCache(kv);
     await kv.write({'old-lib/snapshot': 1, 'old-lib/albums': [], 'lib-a/members/gone': 1});

@@ -18,7 +18,8 @@ export class ApiFailure extends Error {
   }
 }
 
-export interface Snapshot { manifest: IndexManifest; cols: IndexColumns; savedAt: number }
+/** `gen` is unique per swap and also stored alone under `${lib}/gen`, a cheap read. */
+export interface Snapshot { manifest: IndexManifest; cols: IndexColumns; savedAt: number; gen: string }
 /** One month of an unfinished first build; `count` is the manifest's count when it was fetched. */
 export interface Staged { refreshId: string; startedAt: number; count: number; cols: MonthColumns }
 
@@ -29,13 +30,15 @@ export function libraryCache(kv: KV) {
   return {
     last: () => safe(() => kv.get<string>('last')),
     snapshot: (lib: string) => safe(() => kv.get<Snapshot>(`${lib}/snapshot`)),
+    /** The current snapshot's `gen`: null if there is none, undefined if the read failed. */
+    gen: (lib: string) => safe(async () => (await kv.get<string>(`${lib}/gen`)) ?? null),
     staged: async (lib: string) => (await safe(() => kv.list<Staged>(`${lib}/staging/`))) ?? [],
     albums: (lib: string) => safe(() => kv.get<AlbumSummary[]>(`${lib}/albums`)),
     members: (lib: string, album: string) => safe(() => kv.get<AlbumMembers>(`${lib}/members/${album}`)),
     setLast: (lib: string) => safe(() => kv.write({last: lib})),
     stage: (lib: string, s: Staged) => safe(() => kv.write({[`${lib}/staging/${s.cols.month}`]: s})),
     /** Atomic: readers see either the old snapshot with its staging, or the new one without. */
-    swap: (lib: string, snap: Snapshot) => safe(() => kv.write({[`${lib}/snapshot`]: snap, last: lib}, [`${lib}/staging/`])),
+    swap: (lib: string, snap: Snapshot) => safe(() => kv.write({[`${lib}/snapshot`]: snap, [`${lib}/gen`]: snap.gen, last: lib}, [`${lib}/staging/`])),
     /** Also drops cached members of albums that are gone. */
     setAlbums: (lib: string, a: AlbumSummary[]) => safe(async () => {
       const keep = new Set(a.map(x => `${lib}/members/${x.id}`));
@@ -156,6 +159,12 @@ export async function refreshIndex(ctx: Ctx, hooks: RefreshHooks = {}): Promise<
     if (manifest.schema !== SCHEMA_VERSION) throw new ApiFailure(0, 'The viewer was updated; reload the page.', 'outdated');
     const lib = manifest.library, startedAt = now();
     signal.throwIfAborted();
+    // Which snapshot this run set out to replace, read first thing after the manifest (a later read,
+    // e.g. queued behind other tabs' writes, could adopt a newer build as the baseline and overwrite
+    // it with this older manifest). Not a timestamp: a run starting in the same clock tick as the
+    // previous swap (or after the clock stepped back) would take that stale snapshot.
+    const seen = await cache.gen(lib);
+    signal.throwIfAborted();
     await cache.setLast(lib);
     signal.throwIfAborted();
     hooks.onManifest?.(manifest);
@@ -172,7 +181,7 @@ export async function refreshIndex(ctx: Ctx, hooks: RefreshHooks = {}): Promise<
     const index = locked(ctx, lib, signal, async (): Promise<LibraryIndex> => {
       const prev = await cache.snapshot(lib);
       // Another tab swapped in a snapshot while we waited for the lock: take it instead of refetching.
-      if (prev && prev.savedAt >= startedAt) return withLookup(prev.cols);
+      if (prev && seen !== undefined && prev.gen !== undefined && prev.gen !== seen) return withLookup(prev.cols);
       const want = new Map(manifest.months.map(m => [m.month, m.count]));
       const got = new Map<string, MonthColumns>(), refreshId = Math.random().toString(36).slice(2);
       // Staging only resumes an interrupted *first* build, reusing months whose count is unchanged
@@ -191,7 +200,7 @@ export async function refreshIndex(ctx: Ctx, hooks: RefreshHooks = {}): Promise<
       });
       const index = buildIndex(manifest.months.map(m => got.get(m.month)!));
       signal.throwIfAborted();
-      await cache.swap(lib, {manifest, cols: columnsOf(index), savedAt: now()});
+      await cache.swap(lib, {manifest, cols: columnsOf(index), savedAt: now(), gen: Math.random().toString(36).slice(2)});
       return index;
     });
     // The albums settle before this returns or throws (they never reject): no album write can land
