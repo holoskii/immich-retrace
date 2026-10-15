@@ -33,7 +33,7 @@ Everything that is still open. Decisions and architecture are in [AGENTS.md](../
    - Remove the old images `immich-viewer:latest`, `immich-viewer-demo:latest`,
      `immich-viewer-demo-stub:latest`.
    - Browsers drop the old `immich-viewer-v*` IndexedDB cache on first load and rebuild the index.
-3. ~~Delete the NPM backups~~: moot, NPM is retired and its volumes go at decommission (`plan-caddy-migration.md` step 7).
+3. ~~Delete the NPM backups~~: moot, NPM is retired and its volumes go at decommission (`docs/TODO.md` → Caddy migration).
 4. Verify shared albums end to end (see below).
 5. Release:
    - Set the repo URL: `REPO_URL` in `shared/demo.ts`, `USER_AGENT` in `demo/commons.ts`, the
@@ -52,11 +52,11 @@ Everything that is still open. Decisions and architecture are in [AGENTS.md](../
 
 ## Demo: proper public deployment
 
-The demo is live behind Caddy with Authelia (NPM was replaced 2026-10-14). Going public is step 5 of
-`plan-caddy-migration.md`, which translates the limits below into Caddy. Drop Authelia only after the
+The demo is live behind Caddy with Authelia (NPM was replaced 2026-10-14). Going public is spec'd in
+`apps/caddy/AGENTS.md` → Going public, which translates the limits below into Caddy. Drop Authelia only after the
 minimum bar in [demo-hardening.md](demo-hardening.md). Items:
 
-- Rate limiting per IP (Caddy `rate_limit`, see `plan-caddy-migration.md` step 5),
+- Rate limiting per IP (Caddy `rate_limit`, see `apps/caddy/AGENTS.md` → Going public),
   especially on `/api/*` thumbnails, previews and video, which stream from the stub's 950 MB of media.
 - Hardening: security headers (CSP, `X-Content-Type-Options`, `Referrer-Policy`), read-only root
   filesystem and dropped capabilities for both containers, memory/CPU limits, stub reachable only
