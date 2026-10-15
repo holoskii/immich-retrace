@@ -20,7 +20,8 @@ const settings = startup(() => settingsFromEnv(process.env));
 // The public demo (DEMO=1) only; null otherwise. Everything it changes is in server/demo.ts.
 const demo = startup(() => demoFromEnv(process.env));
 
-const immich = new ImmichClient({baseUrl: settings.immichUrl, apiKey: settings.apiKey});
+// The demo's errors name no internal address (the stub's compose name).
+const immich = new ImmichClient({baseUrl: settings.immichUrl, apiKey: settings.apiKey, publicName: demo ? 'the demo backend' : undefined});
 const app = createApp(immich, demo ? demo.viewer(settings.viewer) : settings.viewer, demo?.routes);
 app.use('/*', staticFiles(settings.webDir));
 

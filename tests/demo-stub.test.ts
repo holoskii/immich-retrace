@@ -217,6 +217,16 @@ describe('demo stub media through the viewer relay', () => {
     const suffix = await get(`/api/assets/${video.id}/video/playback`, {'x-api-key': 'k', range: 'bytes=-3'});
     expect(await suffix.text()).toBe('def');
     expect((await get(`/api/assets/${video.id}/video/playback`, {'x-api-key': 'k', range: 'bytes=99-'})).status).toBe(404);
+    const one = await get(`/api/assets/${video.id}/video/playback`, {'x-api-key': 'k', range: 'bytes=0-0'});
+    expect(one.status).toBe(206);
+    expect(one.headers.get('content-length')).toBe('1');
+    expect(await one.text()).toBe('0');
+    const tail = await get(`/api/assets/${video.id}/video/playback`, {'x-api-key': 'k', range: 'bytes=15-'});
+    expect(await tail.text()).toBe('f');
+    // 16 digits: not a range the stub honours, so the whole file comes back.
+    const absurd = await get(`/api/assets/${video.id}/video/playback`, {'x-api-key': 'k', range: 'bytes=0-9999999999999999'});
+    expect(absurd.status).toBe(200);
+    expect(Buffer.from(await absurd.arrayBuffer()).equals(VIDEO_BYTES)).toBe(true);
   });
 
   it('has no video for a photo and nothing for unknown ids', async () => {

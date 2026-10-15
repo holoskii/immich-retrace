@@ -35,9 +35,12 @@ export interface DemoMode {
 /**
  * Demo mode from the environment: null unless DEMO is on. DEMO_TRIP (album id or part of a name),
  * REPO_URL, DEMO_MANIFEST (default demo/manifest.json, read now: a missing file stops the server).
+ * Fails closed: the demo is served without auth, so it only starts against the stub's key `demo`.
+ * A real .env pasted into the demo compose would otherwise publish a real library.
  */
 export function demoFromEnv(env: Record<string, string | undefined>, load = loadDemoCredits): DemoMode | null {
   if (!demoFlag(env.DEMO)) return null;
+  if (env.IMMICH_API_KEY?.trim() !== 'demo') throw new ConfigError('DEMO=1 needs IMMICH_API_KEY=demo: the demo is public, so it only runs against the demo stub');
   const config: DemoConfig = {trip: env.DEMO_TRIP?.trim() || DEFAULT_DEMO_TRIP, repoUrl: urlSetting(env, 'REPO_URL') ?? REPO_URL};
   const credits = load(env.DEMO_MANIFEST?.trim() || 'demo/manifest.json');
   return {

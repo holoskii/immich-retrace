@@ -80,7 +80,7 @@ Settings, read by `server/demo.ts` (a normal deployment never reads them):
 
 | Variable | Default | What |
 |---|---|---|
-| `DEMO` | off | `1` turns demo mode on. Anything but 1/0/true/false/yes/no/on/off stops the server. |
+| `DEMO` | off | `1` turns demo mode on. Anything but 1/0/true/false/yes/no/on/off stops the server. Demo mode also requires `IMMICH_API_KEY=demo` (the stub), so a real `.env` can't end up public. |
 | `DEMO_TRIP` | `San Sebastián to Huesca` | The trip a visit without a link opens: an album id, or part of its name (case and accents ignored). No match: the album with the most items. |
 | `REPO_URL` | `REPO_URL` in `shared/demo.ts` (a placeholder, `https://github.com/OWNER/immich-retrace`) | Where "Get it for your Immich" and the About panel link to. Set the constant once the repository is public. |
 | `DEMO_MANIFEST` | `demo/manifest.json` | The dataset manifest, for the credits. Read at startup; a missing file stops the server. |

@@ -17,7 +17,7 @@ const PASS = ['content-type', 'content-length', 'content-range', 'accept-ranges'
 
 /** A single byte range is forwarded; anything else is ignored (RFC 9110 allows that) → full 200. */
 function singleRange(h: string | undefined) {
-  const m = h?.match(/^bytes=(\d*)-(\d*)$/);
+  const m = h?.match(/^bytes=(\d{0,15})-(\d{0,15})$/);
   if (!m || (!m[1] && !m[2]) || (m[1] && m[2] && Number(m[1]) > Number(m[2]))) return undefined;
   return h;
 }

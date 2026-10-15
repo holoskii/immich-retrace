@@ -6,9 +6,10 @@
 //
 // Any non-empty x-api-key is accepted. Nothing is ever written.
 
-import {readFile, stat} from 'node:fs/promises';
-import {readFileSync} from 'node:fs';
+import {stat} from 'node:fs/promises';
+import {createReadStream, readFileSync} from 'node:fs';
 import {join} from 'node:path';
+import {Readable} from 'node:stream';
 // Two demo users: 'me' is whoever the API key belongs to; 'friend' shares an album with them.
 import {USERS} from './config.ts';
 import {albumMembers, type DemoAlbum, type DemoAsset, type DemoManifest, type DemoUser} from './manifest.ts';
@@ -120,11 +121,16 @@ export function createStub({manifest, mediaDir}: StubOptions): (req: Request) =>
     return json(body);
   }
 
+  /** Streams [start, end] (inclusive) of a file: memory per request stays a read buffer, not the file. */
+  const body = (path: string, start?: number, end?: number) =>
+    Readable.toWeb(createReadStream(path, {start, end})) as ReadableStream<Uint8Array>;
+
   async function file(path: string, type: string, head: boolean, range: string | null): Promise<Response> {
     let size: number;
     try { size = (await stat(path)).size; } catch { return fail(404, 'Asset media not found'); }
     const headers = {'content-type': type, 'accept-ranges': 'bytes', 'cache-control': 'private, max-age=86400, no-transform'};
-    const m = range?.match(/^bytes=(\d*)-(\d*)$/);
+    // At most 15 digits: larger values can't be a real offset (and would lose precision as numbers).
+    const m = range?.match(/^bytes=(\d{0,15})-(\d{0,15})$/);
     if (range && m && (m[1] || m[2])) {
       // "a-b", "a-" or the suffix form "-n" (last n bytes).
       const start = m[1] ? Number(m[1]) : Math.max(0, size - Number(m[2]));
@@ -132,12 +138,10 @@ export function createStub({manifest, mediaDir}: StubOptions): (req: Request) =>
       // Immich answers an unsatisfiable range with 404, not 416.
       if (start >= size || start > end) return fail(404, 'Range not satisfiable');
       const h = {...headers, 'content-range': `bytes ${start}-${end}/${size}`, 'content-length': String(end - start + 1)};
-      if (head) return new Response(null, {status: 206, headers: h});
-      const buf = await readFile(path);
-      return new Response(buf.subarray(start, end + 1), {status: 206, headers: h});
+      return new Response(head ? null : body(path, start, end), {status: 206, headers: h});
     }
     const h = {...headers, 'content-length': String(size)};
-    return new Response(head ? null : await readFile(path), {status: 200, headers: h});
+    return new Response(head ? null : body(path), {status: 200, headers: h});
   }
 
   return async function handle(req: Request): Promise<Response> {

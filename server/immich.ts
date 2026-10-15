@@ -64,6 +64,8 @@ export interface ImmichOptions {
    * takes); JSON requests are bounded until the body is parsed.
    */
   requestTimeoutMs?: number;
+  /** Names the upstream in client-facing errors instead of `IMMICH_URL=<url>` (the public demo). */
+  publicName?: string;
 }
 
 // While Immich starts, the gate answers every request with its loading page: 200 text/html.
@@ -103,6 +105,10 @@ export class ImmichClient {
     this.library = createHash('sha256').update(`${opts.baseUrl}\n${opts.apiKey}`).digest('hex').slice(0, 16);
   }
 
+  private get where() {
+    return this.opts.publicName ?? `IMMICH_URL=${this.baseUrl}`;
+  }
+
   private url(path: string, query?: Record<string, string>) {
     const u = new URL(this.baseUrl + '/api' + path);
     for (const [k, v] of Object.entries(query ?? {})) u.searchParams.set(k, v);
@@ -110,11 +116,11 @@ export class ImmichClient {
   }
 
   private unreachable(err: unknown) {
-    return new HttpError(502, `Cannot reach Immich at IMMICH_URL=${this.baseUrl}: ${connectFailure(err)}.`, 'unreachable');
+    return new HttpError(502, `Cannot reach Immich at ${this.where}: ${connectFailure(err)}.`, 'unreachable');
   }
 
   webAppNotApi() {
-    return new HttpError(502, `IMMICH_URL=${this.baseUrl} answers with Immich's web page instead of its API: drop the extra path, IMMICH_URL is the address Immich's web UI opens at (e.g. http://immich-server:2283).`, 'upstream');
+    return new HttpError(502, `${this.where} answers with Immich's web page instead of its API: drop the extra path, IMMICH_URL is the address Immich's web UI opens at (e.g. http://immich-server:2283).`, 'upstream');
   }
 
   /** 503 like a sleeping Immich: the client retries it. */
@@ -189,7 +195,7 @@ export class ImmichClient {
       if (pong) { this.state = 'up'; return; }
       if (!res.bodyUsed) await res.body?.cancel();
       this.state = 'down';
-      throw new HttpError(502, `IMMICH_URL=${this.baseUrl} does not look like Immich: /api/server/ping answered HTTP ${res.status}${res.ok ? ' without a pong' : ''}. It should be Immich's base URL, without /api.`, 'upstream');
+      throw new HttpError(502, `${this.where} does not look like Immich: /api/server/ping answered HTTP ${res.status}${res.ok ? ' without a pong' : ''}. It should be Immich's base URL, without /api.`, 'upstream');
     }
     this.state = 'down';
     throw unavailable();

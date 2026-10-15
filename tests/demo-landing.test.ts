@@ -25,7 +25,7 @@ const DAY = 86400e3, M = 60e3, T0 = Date.UTC(2024, 8, 6);
 /** demoFromEnv with a recorded manifest path instead of reading the file. */
 function demoWith(env: Record<string, string>, assets: ManifestAsset[] = []) {
   const paths: string[] = [];
-  return {demo: demoFromEnv(env, p => { paths.push(p); return demoCredits(assets); }), paths};
+  return {demo: demoFromEnv({IMMICH_API_KEY: 'demo', ...env}, p => { paths.push(p); return demoCredits(assets); }), paths};
 }
 
 describe('demo config (server/demo.ts)', () => {
@@ -48,6 +48,22 @@ describe('demo config (server/demo.ts)', () => {
     expect(custom.demo!.config).toEqual({trip: 'Alsace', repoUrl: 'https://example.org/iv'});
     expect(custom.paths).toEqual(['/data/manifest.json']);
     expect(() => demoWith({DEMO: '1', REPO_URL: 'example.org'})).toThrow(/REPO_URL/);
+  });
+
+  it('refuses to start against anything but the stub\'s key (a real .env must not go public)', () => {
+    for (const key of ['', 'real-immich-key']) expect(() => demoWith({DEMO: '1', IMMICH_API_KEY: key})).toThrow(/IMMICH_API_KEY=demo/);
+    expect(() => demoFromEnv({DEMO: '1'}, () => demoCredits([]))).toThrow(ConfigError);
+    expect(demoWith({DEMO: '0', IMMICH_API_KEY: 'real-immich-key'}).demo).toBeNull();
+  });
+
+  it('names no internal address in upstream errors', async () => {
+    const down = (async () => { throw new TypeError('fetch failed', {cause: {code: 'ECONNREFUSED'}}); }) as typeof fetch;
+    const client = new ImmichClient({baseUrl: 'http://stub:2283', apiKey: 'demo', fetch: down, publicName: 'the demo backend', pollMs: 1, wakeTimeoutMs: 10});
+    const res = await createApp(client).request('/api/index');
+    expect(res.status).toBe(502);
+    const body = await res.text();
+    expect(body).toContain('the demo backend');
+    expect(body).not.toContain('stub');
   });
 });
 
