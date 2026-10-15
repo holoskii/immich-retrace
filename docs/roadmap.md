@@ -20,7 +20,7 @@ Everything that is still open. Decisions and architecture are in [AGENTS.md](../
 ## Demo: proper public deployment
 
 The demo is live behind NPM (host 40) with Authelia on `location /`. Drop Authelia only after the
-minimum bar in `docs/demo-hardening.md` (research branch `worktree-agent-a5c19d2da25e0e518`). Items:
+minimum bar in [demo-hardening.md](demo-hardening.md). Items:
 
 - Rate limiting per IP (NPM `limit_req` in the proxy host's advanced config, or in the server),
   especially on `/api/*` thumbnails, previews and video, which stream from the stub's 950 MB of media.
