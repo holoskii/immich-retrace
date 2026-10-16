@@ -5,7 +5,8 @@
   import {untrack} from 'svelte';
   import {headerStatus, library} from '../index/store.svelte.ts';
   import {explainAlbums, retryLibrary} from '../failure.ts';
-  import {albumSpan, fromLocal, lowerBound, selection, toLocal, writeUrl, type AlbumRequest, type Selection} from '../selection.svelte.ts';
+  import {fromLocal, lowerBound, selection, toLocal, writeUrl} from '../selection.svelte.ts';
+  import {back, clearSelection as clear, onAlbumPick, pickAlbum, setMode} from '../actions.ts';
   import {config} from '../config.svelte.ts';
   import {hooks} from '../hooks.svelte.ts';
   import {selName} from '../nav.ts';
@@ -14,7 +15,7 @@
   import Help from '../Help.svelte';
   import {
     clamp, countRows, albumLabel, fLength, DAY, daysFromIndex, daysFromMonths, defaultView, dragTo, fDay, fNum, hitGrip, noSelectionHint, overviewHint, railAlbums,
-    snapDay, viewAround, viewToShow, zoomAt, type Grip, type RailAlbum, type Span,
+    snapDay, viewAround, viewToShow, zoomAt, type Grip, type Span,
   } from './data.ts';
   import {CTX, drawContext, drawMain, MAIN, type RailHit} from './draw.ts';
 
@@ -238,48 +239,12 @@
 
   function clearSelection() {
     clearTimeout(draftTimer); draft = null;
-    selection.resetZoom();
-    void selection.select(null);
-    writeUrl('commit');
+    clear();
   }
 
-  function back() {
-    if (selection.back()) writeUrl('commit', selection.cursor);
-  }
-
-  /** `req`: an album opened from outside (selection.albumRequest), with its own cursor and history choice. */
-  function pickAlbum(a: RailAlbum, req?: AlbumRequest) {
-    selection.resetZoom();
-    // Album dates are local calendar days, as on the axis: the bar ends with its last day.
-    if (dom) animateView(viewAround(a.start, a.end + DAY, dom[0], dom[1]));
-    const [t0, t1] = albumSpan(a);
-    const sel: Selection = {kind: 'album', albumId: a.id, mode: 'members', t0, t1};
-    selection.cursor = null;
-    // Start at the album's first photo, so the map opens with a position and a photo card.
-    selection.select(sel).then(() => {
-      const act = selection.active;
-      if (selection.sel !== sel || !act || act.hi <= act.lo || selection.cursor != null) return;
-      const r = req?.cursor?.(act) ?? act.lo;
-      selection.cursorTo(act.ix, r >= act.lo && r < act.hi ? r : act.lo);
-      writeUrl('replace', selection.cursor);
-    }).catch(e => console.warn('album members:', e));
-    writeUrl(req?.history ?? 'commit', null);
-  }
-
-  // An album opened from outside the overview (the demo landing): as a click on its bar, once the album is known.
-  $effect(() => {
-    const req = selection.albumRequest, a = req && railAlbums(library.albums).find(x => x.id === req.albumId);
-    if (!req || !a || !dom) return;
-    untrack(() => { selection.albumRequest = null; pickAlbum(a, req); });
-  });
-
-  function setMode(mode: 'members' | 'range') {
-    const s = selection.sel;
-    if (s?.kind !== 'album' || s.mode === mode) return;
-    // The other mode of the same zoom level: the stack stays (Back returns to where the zoom came from).
-    selection.select({...s, mode}).catch(e => console.warn('album members:', e));
-    writeUrl('commit');
-  }
+  // Any album pick (a bar, the picker, ‹ ›, the demo landing) frames the album on the timeline. Album dates are
+  // local calendar days, as on the axis: the bar ends with its last day.
+  $effect(() => onAlbumPick(a => { if (dom) animateView(viewAround(a.start, a.end + DAY, dom[0], dom[1])); }));
 
   function onWheel(ev: WheelEvent, cv: HTMLCanvasElement, overall: boolean) {
     if (!view || !dom) return;

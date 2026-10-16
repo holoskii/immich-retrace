@@ -2,6 +2,7 @@
   {
     "id": "c0000000-0000-4000-8000-000000000001",
     "albumName": "Fake Trip",
+    "albumThumbnailAssetId": "b0000000-0000-4000-8000-000000000002",
     "shared": false,
     "startDate": "2026-07-10T09:00:00.000Z",
     "endDate": "2026-08-06T22:45:30.250Z",

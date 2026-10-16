@@ -185,7 +185,7 @@ describe('countRows', () => {
 });
 
 describe('album rail', () => {
-  const al = (id: string, s: string, e: string, name = id): AlbumSummary => ({id, name, start: D(s), end: D(e), count: 5, shared: false, version: 'v'});
+  const al = (id: string, s: string, e: string, name = id): AlbumSummary => ({id, name, start: D(s), end: D(e), count: 5, shared: false, cover: null, version: 'v'});
   const albums = [al('long', '2023-01-01', '2023-12-31'), al('trip', '2023-06-01', '2023-06-10'), {...al('empty', '2023-01-01', '2023-01-01'), start: null, end: null, count: 0}, al('a', '2023-02-01', '2023-03-17')];
   it('filtered on request (here: ≤45 d), else all, oldest first, empties never', () => {
     expect(railAlbums(albums, shortAlbum).map(a => a.id)).toEqual(['a', 'trip']);

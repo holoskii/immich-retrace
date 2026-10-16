@@ -2,7 +2,7 @@
 // springs, one `jumpTo` per animation frame, and moves the position marker on its own faster
 // spring. The loop runs only while something moves and stops once settled.
 import type {Map as MlMap} from 'maplibre-gl';
-import {farZoomCap, latOf, lonOf, mercX, mercY, spring, TILE, trackAt, unitsPerKm, zoomFor, CAMERA, type Track} from './camera.ts';
+import {farZoomCap, insetShift, latOf, lonOf, mercX, mercY, spring, TILE, trackAt, uniformInsets, unitsPerKm, zoomFor, CAMERA, type Insets, type Track} from './camera.ts';
 
 /** follow: the camera follows the cursor along the track; whole: the whole selection; manual: hands off. */
 export type CamMode = 'follow' | 'whole' | 'manual';
@@ -31,7 +31,7 @@ export function camNext(s: CamState, ev: CamEvent): CamState {
 export const FOLLOW = {
   /** Spring stiffness (ω, 1/s): pan, zoom (log2 scale), marker. */
   pan: 5, zoom: 3.5, marker: 14,
-  /** Viewport padding (px) around the target frame, following / whole selection. */
+  /** Viewport padding (px) around the target frame, following / whole selection (the default insets). */
   pad: 70, wholePad: 60,
   minZoom: 1, maxZoom: 17,
   /** A cursor jump larger than this that doesn't come from scrubbing the strip snaps instead of flying. */
@@ -49,12 +49,20 @@ export class Follower {
   reduced = false;
   /** Pointer held on the map: no jumpTo now, it would reset the gesture that may be starting. */
   held = false;
+  /** The map can't draw (its WebGL context is lost): no frames until this is cleared and the loop kicked again. */
+  stopped = false;
   /** Marker position as drawn (spring state). */
   mk: XY | null = null;
-  /** Where the camera is heading (for the inset), or null when hands off. */
+  /** Where the camera is heading (the map's center and zoom there, for the inset), or null when hands off. */
   goal: View | null = null;
+  /** Space kept clear around the frame while following / framing the whole selection (camera.ts Insets). */
+  insets: Insets = uniformInsets(FOLLOW.pad);
+  wholeInsets: Insets = uniformInsets(FOLLOW.wholePad);
 
+  /** The frame's center and zoom (the center of the area the insets leave, not the map's), spring state. */
   private cam: View | null = null;
+  /** The insets of the current target. */
+  private ins: Insets = this.insets;
   private vel = {x: 0, y: 0, z: 0};
   private mkv = {x: 0, y: 0};
   private raf = 0;
@@ -84,10 +92,12 @@ export class Follower {
     let v: View | null = null;
     if (this.following) {
       const T = trackAt(this.track!, this.cursor!);
-      v = {x: T.x, y: T.y, z: zoomFor(T.hx, T.hy, w, h, FOLLOW.pad)};
+      this.ins = this.insets;
+      v = {x: T.x, y: T.y, z: zoomFor(T.hx, T.hy, w, h, this.ins)};
     } else if (this.box) {
       const [x0, y0, x1, y1] = this.box, y = (y0 + y1) / 2, floor = CAMERA.minHalfKm * unitsPerKm(y);
-      v = {x: (x0 + x1) / 2, y, z: zoomFor(Math.max((x1 - x0) / 2, floor), Math.max((y1 - y0) / 2, floor), w, h, FOLLOW.wholePad)};
+      this.ins = this.wholeInsets;
+      v = {x: (x0 + x1) / 2, y, z: zoomFor(Math.max((x1 - x0) / 2, floor), Math.max((y1 - y0) / 2, floor), w, h, this.ins)};
     }
     if (v) v.z = Math.min(FOLLOW.maxZoom, Math.max(FOLLOW.minZoom, v.z));
     return v;
@@ -96,19 +106,19 @@ export class Follower {
   private step = (now: number) => {
     this.raf = 0;
     const m = this.map, c = m.getContainer(), w = c.clientWidth, h = c.clientHeight;
-    if (!w || !h) return;
+    if (!w || !h || this.stopped) return;
     const dt = this.last ? Math.min(1 / 30, (now - this.last) / 1000) : 1 / 60;
     this.last = now;
     const snap = this.snapNext || this.reduced;
     this.snapNext = false;
     let settled = true;
 
-    const tg = this.target(w, h);
-    this.goal = tg;
+    const tg = this.target(w, h), ins = this.ins;
+    if (tg) { const g = insetShift(ins, tg.z); this.goal = {x: tg.x + g.dx, y: tg.y + g.dy, z: tg.z}; } else this.goal = null;
     if (tg && !this.held) {
       if (!this.cam) {
-        const ctr = m.getCenter();
-        this.cam = {x: mercX(ctr.lng), y: mercY(ctr.lat), z: m.getZoom()};
+        const ctr = m.getCenter(), z = m.getZoom(), g = insetShift(ins, z);
+        this.cam = {x: mercX(ctr.lng) - g.dx, y: mercY(ctr.lat) - g.dy, z};
         this.vel = {x: 0, y: 0, z: 0};
       }
       const cam = this.cam, V = this.vel;
@@ -123,7 +133,8 @@ export class Follower {
         [cam.y, V.y] = spring(cam.y, V.y, tg.y, FOLLOW.pan, dt);
         [cam.z, V.z] = spring(cam.z, V.z, z, FOLLOW.zoom, dt);
       }
-      m.jumpTo({center: [lonOf(cam.x), latOf(cam.y)], zoom: cam.z});
+      const g = insetShift(ins, cam.z);
+      m.jumpTo({center: [lonOf(cam.x + g.dx), latOf(cam.y + g.dy)], zoom: cam.z});
       const px = TILE * 2 ** cam.z;
       settled = Math.hypot(tg.x - cam.x, tg.y - cam.y) * px < 0.3 && Math.abs(cam.z - z) < 0.002
         && Math.hypot(V.x, V.y) * px < 1 && Math.abs(V.z) < 0.01;

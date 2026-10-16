@@ -7,6 +7,7 @@
   import {hooks} from '../hooks.svelte.ts';
   import {library} from '../index/store.svelte.ts';
   import {selection} from '../selection.svelte.ts';
+  import {pickAlbum} from '../actions.ts';
   import {railAlbums} from '../overview/data.ts';
   import {findTrip, representativeRow} from './landing.ts';
   import {TOUR, tourSeen} from './tour.ts';
@@ -26,7 +27,7 @@
     untrack(() => {
       if (selection.touched) return; // the visitor was quicker (even if they cleared it again)
       const a = findTrip(railAlbums(library.albums), config.trip);
-      if (a) selection.albumRequest = {albumId: a.id, history: 'replace', cursor: act => representativeRow(act.ix, act.lo, act.hi)};
+      if (a) pickAlbum(a, {history: 'replace', cursor: act => representativeRow(act.ix, act.lo, act.hi)});
     });
   });
 

@@ -139,6 +139,10 @@ describe('demo stub through the viewer adapter', () => {
       expect(a.start).toBe(Math.min(...days));
       expect(a.end).toBe(Math.max(...days));
       expect(a.shared).toBe(a.id === sharedAlbum.id);
+      // The cover is one of the album's photos, with GPS when it has any.
+      const cover = members.find(m => m.id === a.cover);
+      expect(cover?.kind).toBe('photo');
+      expect(cover?.lat).not.toBeNull();
     }
   });
 

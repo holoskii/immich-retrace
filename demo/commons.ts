@@ -109,8 +109,3 @@ export function cleanUrl(u: string): string {
   for (const k of [...url.searchParams.keys()]) if (k.startsWith('utm_')) url.searchParams.delete(k);
   return url.toString();
 }
-
-/** The 1280 px scaler URL with another standard width (Commons thumb paths end in /<w>px-<name>). */
-export function thumbWidth(u: string, w: number): string {
-  return u.replace(/\/\d+px-([^/]+)$/, `/${w}px-$1`);
-}

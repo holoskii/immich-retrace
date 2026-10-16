@@ -31,6 +31,7 @@ interface ImmichAlbum {
   assetCount: number;
   updatedAt: string;
   lastModifiedAssetTimestamp?: string;
+  albumThumbnailAssetId?: string | null;
 }
 
 const badResponse = () => new HttpError(502, 'Unexpected response from Immich');
@@ -126,6 +127,8 @@ export function parseAlbums(owned: unknown, shared: unknown): AlbumSummary[] {
     end: date(a.endDate),
     count: a.assetCount,
     shared: a.shared,
+    // Only a well-formed id goes into a thumbnail URL; anything else is no cover rather than a bad response.
+    cover: isUuid(a.albumThumbnailAssetId) ? a.albumThumbnailAssetId : null,
     version: albumVersion(a),
   }));
   list.sort((a, b) => (a.start === null ? 1 : 0) - (b.start === null ? 1 : 0) || (a.start ?? 0) - (b.start ?? 0));

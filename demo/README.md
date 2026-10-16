@@ -23,9 +23,11 @@ The manifest is in git; the images are not. To recreate them:
 node demo/fetch.ts
 ```
 
-This downloads two resized copies of every photo from the Commons image scaler, about 250 px and
-1280 px wide, one request at a time (slow; needs about 1 GB of disk). It then renders the clips
-with ffmpeg (needs `ffmpeg` with libx264). Files that already exist are skipped. It makes no API
+This downloads a resized copy of every photo from the Commons image scaler, 1280 px wide, one
+request at a time (slow; needs about 1 GB of disk), and makes the 480 px wide thumbnail from it
+locally (480 is not a standard Commons scaler width). It then renders the clips with ffmpeg (needs
+`ffmpeg` with libx264). Files that already exist are skipped, so delete `thumbnail.jpg` files to
+remake them at another `THUMB_WIDTH` (`config.ts`). It makes no API
 calls and leaves the manifest as it is. If a file has been deleted from Commons since the freeze,
 the run fails with its title.
 
@@ -39,7 +41,7 @@ What the builder does:
 - It keeps uploads since 2023 that have an EXIF `DateTimeOriginal` and a CC BY 4.0 or CC BY-SA 4.0 licence (checked per file). Captures before 2023 are dropped.
 - Offset = EXIF local time − GPS UTC time (`GPSDateStamp` + `GPSTimeStamp`), rounded to 15 minutes. If a file has no usable GPS stamp, the offset comes from the nearest photo in time (within 36 h), else from the CET/CEST rule. Each file records which source was used (`offsetSource`).
 - City and country come from the nearest entry in a small place table in `config.ts`. Nothing is sent to a geocoder.
-- The thumbhash is computed locally from the 250 px copy (ffmpeg decode + the `thumbhash` package).
+- The thumbhash is computed locally from the 480 px thumbnail (ffmpeg decode + the `thumbhash` package).
 - Demo modifications are deterministic and recorded in each asset's `modifications`:
   - The Núria photos are presented as another user's, shared through an album (see below).
   - GPS is removed from whole trips, from the Lyon leg of the May 2025 album, and from a small share of single shots (picked by a hash of the title); the lists are in `config.ts`.

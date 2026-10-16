@@ -14,8 +14,8 @@ export default defineConfig({
   }],
   build: {
     outDir, emptyOutDir: true,
-    // MapLibre is one lazy chunk shared by MapView and the lightbox mini-map (App.svelte loads it
-    // after the overview); named, rather than after whichever module rolldown picks first.
+    // MapLibre is one lazy chunk shared by MapView and the lightbox mini-map (main.ts starts it at
+    // boot, map/load.ts); named, rather than after whichever module rolldown picks first.
     rolldownOptions: {output: {codeSplitting: {groups: [{name: 'maplibre', test: /node_modules[\\/]maplibre-gl[\\/]/}]}}},
     chunkSizeWarningLimit: 1100,
   },

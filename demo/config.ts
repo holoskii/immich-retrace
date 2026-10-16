@@ -12,8 +12,11 @@ export const LICENSES = {
   'CC BY-SA 4.0': 'https://creativecommons.org/licenses/by-sa/4.0/',
 } as const;
 
-/** Standard Commons scaler widths: thumbnail and preview copies. Originals are never downloaded. */
-export const THUMB_WIDTH = 250;
+/**
+ * Copy widths. The preview is downloaded from the Commons scaler (a standard width); the thumbnail is
+ * made locally from it (480 px is sharp enough for phone tiles at DPR 3). Originals are never downloaded.
+ */
+export const THUMB_WIDTH = 480;
 export const PREVIEW_WIDTH = 1280;
 
 export interface Range {from: string; to: string; why: string}

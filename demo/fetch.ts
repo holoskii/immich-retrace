@@ -1,7 +1,8 @@
 // Builds the demo dataset. See demo/README.md.
 //
-//   node demo/fetch.ts            media only: download the copies listed in demo/manifest.json and
-//                                 render the clips (no Commons API calls); the manifest is not changed
+//   node demo/fetch.ts            media only: download the previews listed in demo/manifest.json, make
+//                                 the thumbnails and render the clips (no Commons API calls); the
+//                                 manifest is not changed
 //   node demo/fetch.ts --refresh  list the uploads via the Commons API (cached in demo/data/cache),
 //                                 rebuild demo/manifest.json and demo/CREDITS.md, then the media
 //
@@ -11,7 +12,7 @@ import {execFileSync} from 'node:child_process';
 import {existsSync, mkdirSync, readFileSync, renameSync, writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {rgbaToThumbHash} from 'thumbhash';
-import {cleanUrl, download, listUploads, thumbWidth, type CommonsPage} from './commons.ts';
+import {cleanUrl, download, listUploads, type CommonsPage} from './commons.ts';
 import * as cfg from './config.ts';
 import {exifWallMs, gpsUtcMs, hashUnit, nameUuid, offsetFromGps, type DemoAlbum, type DemoAsset, type DemoManifest} from './manifest.ts';
 
@@ -21,7 +22,7 @@ const CREDITS = join(DEMO, 'CREDITS.md');
 const CACHE = join(DEMO, 'data/cache/api');
 export const MEDIA = join(DEMO, 'data/media');
 
-const RESIZED = `Resized copies (${cfg.THUMB_WIDTH} px and ${cfg.PREVIEW_WIDTH} px wide) of the Commons file; original not redistributed.`;
+export const RESIZED = `Resized copies (${cfg.THUMB_WIDTH} px and ${cfg.PREVIEW_WIDTH} px wide) of the Commons file; original not redistributed.`;
 
 // ---------------------------------------------------------------------------------- images
 
@@ -38,7 +39,7 @@ function rgba(file: string, max = 100): {w: number; h: number; data: Uint8Array}
   return {w, h, data: new Uint8Array(data)};
 }
 
-function thumbhashOf(file: string): {hash: string; ratio: number} {
+export function thumbhashOf(file: string): {hash: string; ratio: number} {
   const {w, h, data} = rgba(file);
   return {hash: Buffer.from(rgbaToThumbHash(w, h, data)).toString('base64'), ratio: w / h};
 }
@@ -47,6 +48,14 @@ function ffmpeg(args: string[], out: string) {
   const tmp = out.replace(/(\.\w+)$/, '.part$1');
   execFileSync('ffmpeg', ['-v', 'error', '-y', ...args, tmp], {stdio: ['ignore', 'inherit', 'inherit']});
   renameSync(tmp, out);
+}
+
+/**
+ * The thumbnail: first frame of `src` (preview copy or clip) scaled to THUMB_WIDTH wide, never up.
+ * Made locally because THUMB_WIDTH is not a standard Commons scaler width.
+ */
+export function makeThumbnail(src: string, out: string) {
+  ffmpeg(['-i', src, '-frames:v', '1', '-vf', `scale='min(${cfg.THUMB_WIDTH},iw)':-2`, '-q:v', '4'], out);
 }
 
 // ---------------------------------------------------------------------------------- places
@@ -131,7 +140,7 @@ function buildPhotos(pages: CommonsPage[]): {assets: DemoAsset[]; skipped: Recor
       license: c.license, licenseUrl: cfg.LICENSES[c.license], commonsUrl: ii.descriptionurl,
       revision: ii.timestamp, sha1: ii.sha1, takenAt, localOffsetHours: off, offsetSource,
       lat, lon, ...place(lat, lon), width: ii.width, height: ii.height, thumbhash: '', durationMs: 0,
-      thumbUrl: thumbWidth(preview, cfg.THUMB_WIDTH), previewUrl: preview, sourceId: null, modifications: mods.join(' '), owner,
+      previewUrl: preview, sourceId: null, modifications: mods.join(' '), owner,
     });
   });
   return {assets, skipped};
@@ -147,7 +156,7 @@ function cetOffset(localWall: number): number {
 
 // ---------------------------------------------------------------------------------- media
 
-/** Downloads both copies of every photo; returns the ids whose copies could not be fetched. */
+/** Downloads the preview copy of every photo and makes its thumbnail; returns the ids whose preview could not be fetched. */
 async function photoMedia(assets: DemoAsset[]): Promise<Set<string>> {
   let done = 0, fetched = 0;
   const failed = new Set<string>();
@@ -155,8 +164,8 @@ async function photoMedia(assets: DemoAsset[]): Promise<Set<string>> {
     if (a.kind !== 'photo') continue;
     const dir = join(MEDIA, a.id);
     try {
-      if (await download(a.thumbUrl!, join(dir, 'thumbnail.jpg'))) fetched++;
       if (await download(a.previewUrl!, join(dir, 'preview.jpg'))) fetched++;
+      if (!existsSync(join(dir, 'thumbnail.jpg'))) makeThumbnail(join(dir, 'preview.jpg'), join(dir, 'thumbnail.jpg'));
     } catch (err) {
       console.warn(`  ${a.title}: ${(err as Error).message}`);
       failed.add(a.id);
@@ -216,12 +225,12 @@ function clipAssets(photos: DemoAsset[]): DemoAsset[] {
         '-crf', '23', '-profile:v', 'high', '-movflags', '+faststart', '-an', '-threads', '1'], video);
     }
     if (!existsSync(join(dir, 'preview.jpg'))) ffmpeg(['-i', video, '-frames:v', '1', '-q:v', '3'], join(dir, 'preview.jpg'));
-    if (!existsSync(join(dir, 'thumbnail.jpg'))) ffmpeg(['-i', video, '-frames:v', '1', '-vf', `scale=${cfg.THUMB_WIDTH}:-2`, '-q:v', '4'], join(dir, 'thumbnail.jpg'));
+    if (!existsSync(join(dir, 'thumbnail.jpg'))) makeThumbnail(video, join(dir, 'thumbnail.jpg'));
     const takenAt = new Date(Date.parse(src.takenAt) + cfg.CLIP.offsetSeconds * 1000).toISOString();
     return {
       ...src, id, kind: 'video' as const, takenAt, width: w, height: h,
       thumbhash: thumbhashOf(join(dir, 'thumbnail.jpg')).hash,
-      durationMs: cfg.CLIP.seconds * 1000, thumbUrl: null, previewUrl: null, sourceId: src.id,
+      durationMs: cfg.CLIP.seconds * 1000, previewUrl: null, sourceId: src.id,
       modifications: `Video derived from the photo: ${cfg.CLIP.seconds} s ${move.name} over its ${cfg.PREVIEW_WIDTH} px copy (ffmpeg, H.264 ${w}×${h}, no audio); ` +
         `time set ${cfg.CLIP.offsetSeconds} s after the photo, same location. Licensed like the photo.`,
     };
@@ -235,7 +244,7 @@ function albums(): DemoAlbum[] {
 }
 
 /** JSON with one asset/album per line: compact, and diffs stay readable. */
-function manifestJson(m: DemoManifest): string {
+export function manifestJson(m: DemoManifest): string {
   const list = (xs: unknown[]) => '[\n' + xs.map(x => '  ' + JSON.stringify(x)).join(',\n') + '\n ]';
   const {assets, albums, ...head} = m;
   return '{\n' + Object.entries(head).map(([k, v]) => ` ${JSON.stringify(k)}: ${JSON.stringify(v)},\n`).join('') +

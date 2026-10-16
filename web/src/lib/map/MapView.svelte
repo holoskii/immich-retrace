@@ -15,7 +15,7 @@
   import {explainIndex, explainMedia, probeMedia, retryLibrary, type MediaFailure} from '../failure.ts';
   import {lowerBound, sameSelection, selection, toLocal, writeUrl, type Selection} from '../selection.svelte.ts';
   import {thumbHashDataUrl} from '../thumbhash.ts';
-  import {thumbUrl} from '../lightbox/media.ts';
+  import {mediaQueue, thumbUrl} from '../lightbox/media.ts';
   import {dayAround, fDays, selName, zoomName, zoomSpan} from '../nav.ts';
   import {countRows, DAY, fNum} from '../overview/data.ts';
   import {fDay, fDuration, fFullDay, fSpan, fWhen} from './format.ts';
@@ -23,6 +23,8 @@
   import {binFixes, boxOf, buildTrack, mercX, mercY, type Track} from './camera.ts';
   import type {TrackRequest} from './camera.worker.ts';
   import {camNext, FOLLOW, Follower, type CamEvent, type CamState} from './follow.ts';
+  import type {Insets} from './camera.ts';
+  import {back} from '../actions.ts';
   import {Inset} from './inset.ts';
   import {isScrub} from './scrub.ts';
   import TimeStrip from './TimeStrip.svelte';
@@ -33,6 +35,12 @@
   const RAMP: [number, string][] = [[0, '#6E4519'], [0.5, '#C98128'], [1, '#F6D49A']];
   const EMPTY: FeatureCollection = {type: 'FeatureCollection', features: []};
 
+  /**
+   * Space the follow camera keeps clear around its frame, following / framing the whole selection (a phone's
+   * floating title and dock); default FOLLOW.pad / wholePad on every side.
+   */
+  let {insets, wholeInsets}: {insets?: Insets; wholeInsets?: Insets} = $props();
+
   let el = $state<HTMLDivElement>();
   let markerEl = $state<HTMLDivElement>();
   let map: MlMap | undefined;
@@ -40,6 +48,12 @@
   let markerOn = false;
   let ready = $state(false);
   let failed = $state<string | null>(null);
+  /**
+   * The browser took the map's WebGL context (memory pressure, a GPU reset): MapLibre has dropped the style and
+   * restores it once the context is back. Until that style (with our sources) is in, nothing touches the map;
+   * the data and camera effects then run again with the current selection.
+   */
+  let lost = $state(false);
   let reduced = $state(false);
   /** Marker position on screen, for placing the pop-out on the side with room. */
   let mpt = $state<{x: number; y: number; w: number; h: number} | null>(null);
@@ -103,6 +117,8 @@
   function create(container: HTMLDivElement, style: string) {
     const m = new maplibregl.Map({
       container, style, center: [0, 20], zoom: 1.4, attributionControl: {compact: true},
+      // 3× screens would triple the fill cost for detail nobody sees on a moving map.
+      pixelRatio: Math.min(devicePixelRatio || 1, 2),
       dragRotate: false, pitchWithRotate: false, fadeDuration: reduced ? 0 : 300,
     });
     map = m;
@@ -111,6 +127,19 @@
     m.addControl(new maplibregl.NavigationControl({showCompass: false}), 'top-right');
     // The default style references a sprite image it doesn't ship ("capital"): blank instead of a warning per tile.
     m.setMissingStyleImageResolver(id => { if (!m.hasImage(id)) m.addImage(id, {width: 1, height: 1, data: new Uint8Array(4)}); });
+    m.on('webglcontextlost', () => { lost = true; if (follower) follower.stopped = true; });
+    m.on('webglcontextrestored', () => {
+      const resume = () => {
+        lost = false;
+        if (follower) { follower.stopped = false; follower.snap(); }
+      };
+      // MapLibre restores a loaded style itself, but drops one that was still loading when the context went
+      // (maplibre-gl-js#8690): load it again ('load', and so our layers, hasn't happened yet then).
+      if (!ready) { m.setStyle(style, {diff: false}); resume(); }
+      // The restored style may still be loading (with the sources as they were at the loss).
+      else if (m.getSource('pins')) resume();
+      else m.once('style.load', resume);
+    });
     m.on('error', e => { if (!ready) failed = e.error?.message ?? 'Map failed to load.'; console.warn('map:', e.error); });
     m.on('load', () => {
       font = pickFont(m);
@@ -261,7 +290,7 @@
   $effect(() => () => clearTimeout(zoomedTimer));
   function zoomBack() {
     zoomed = null;
-    if (selection.back()) writeUrl('commit', selection.cursor);
+    back();
   }
   /** "29 Apr 2023" or "29 Apr 2023 → 2 May" in the selection's local time. */
   function fVisit(v: Visit, off: number) {
@@ -304,9 +333,10 @@
 
   // Data: only when the selection (or, without one, the library or its visible period) changes. Never per frame.
   $effect(() => {
-    if (!ready || !map) return;
+    if (!ready || !map || lost) return;
     const a = active, r = route, lib = library.index, m = map;
-    const pins = m.getSource('pins') as GeoJSONSource, lines = m.getSource('route') as GeoJSONSource, gaps = m.getSource('gaps') as GeoJSONSource;
+    const pins = m.getSource('pins') as GeoJSONSource | undefined, lines = m.getSource('route') as GeoJSONSource, gaps = m.getSource('gaps') as GeoJSONSource;
+    if (!pins || !lines || !gaps) return;
     tip = null; hoverSeq++; hoverKey = ''; clickSeq++;
     const g = ++gen;
     if (a && r) {
@@ -330,7 +360,7 @@
   // Without a selection: fit the library's visible period once. With one, the follower drives the camera.
   let fittedFor: unknown = null;
   $effect(() => {
-    if (!ready) return;
+    if (!ready || lost) return;
     const sel = selection.sel, lib = library.index;
     if (sel) { fittedFor = null; return; }
     if (!lib || fittedFor === 'library') return;
@@ -399,6 +429,13 @@
   });
 
   $effect(() => { if (follower) { follower.reduced = reduced; follower.kick(); } });
+  $effect(() => {
+    const i = insets, w = wholeInsets;
+    if (!ready || !follower || (!i && !w)) return;
+    if (i) follower.insets = i;
+    if (w) follower.wholeInsets = w;
+    follower.release(); follower.kick();
+  });
 
   // Marker: shown at the cursor's route position; the follower moves it (on a spring while following).
   $effect(() => {
@@ -471,10 +508,14 @@
   }
 
   // The pop-out photo: the thumbhash until the first thumbnail is in, then the last loaded thumbnail
-  // stays up until the next one has decoded. One load in flight, latest wins: scrubbing never
-  // flashes back to the blur or to an empty frame.
-  let shown = $state<{id: string; url: string} | null>(null);
+  // stays up until the next one has decoded. One load in flight (through the media queue), latest wins:
+  // scrubbing never flashes back to the blur or to an empty frame.
+  /** `src`: an object URL of the loaded thumbnail, revoked when the next one replaces it. */
+  let shown = $state<{id: string; url: string; src: string} | null>(null);
   let want: {id: string; url: string} | null = null, loading = false, broken = '';
+  /** Cancels the load in flight when the map goes away. */
+  const cardLoads = new AbortController();
+  $effect(() => () => { cardLoads.abort(); if (shown) URL.revokeObjectURL(shown.src); });
   /** Why thumbnails fail (probed once, until one loads again): a missing permission shouldn't look like a blur. */
   let thumbIssue = $state<MediaFailure | null>(null), probing = false;
   $effect(() => {
@@ -482,20 +523,31 @@
     want = a && r >= 0 ? {id: a.ix.id[r], url: thumbUrl(a.ix.id[r], a.ix.thumbhash[r])} : null;
     pump();
   });
+  function show(next: {id: string; url: string; src: string} | null) {
+    const old = untrack(() => shown);
+    shown = next;
+    if (old && old.src !== next?.src) URL.revokeObjectURL(old.src);
+  }
   function pump() {
     const w = want;
     // A thumbnail that failed: its own thumbhash (the card's background), not the previous photo.
-    if (w && w.url === broken) { shown = null; return; }
+    if (w && w.url === broken) { show(null); return; }
     if (loading || !w || w.url === untrack(() => shown?.url)) return;
     loading = true;
-    const img = new Image();
-    img.src = w.url;
-    img.decode().then(() => { shown = w; thumbIssue = null; }, () => {
+    let src = '';
+    mediaQueue.load(w.url, {signal: cardLoads.signal, high: true}).then(blob => {
+      src = URL.createObjectURL(blob);
+      const img = new Image();
+      img.src = src;
+      return img.decode();
+    }).then(() => { show({...w, src}); thumbIssue = null; }, () => {
+      if (src) URL.revokeObjectURL(src);
+      if (cardLoads.signal.aborted) return;
       broken = w.url;
       if (thumbIssue || probing) return;
       probing = true;
       void probeMedia(w.url).then(k => { thumbIssue = k; }).finally(() => { probing = false; });
-    }).finally(() => { loading = false; pump(); });
+    }).finally(() => { loading = false; if (!cardLoads.signal.aborted) pump(); });
   }
   // Card note only for causes worth knowing (a missing file or an odd format just keeps the blur).
   const thumbNote = $derived(thumbIssue === 'permission' ? 'no thumbnails: the API key needs asset.view'
@@ -580,6 +632,11 @@
             <button onclick={retryLibrary}>Retry</button>
           </div>
         {/if}
+      </div>
+    {:else if lost}
+      <div class="notice" role="status">
+        The browser paused the map's graphics; it comes back on its own.
+        <button onclick={() => location.reload()}>Reload</button>
       </div>
     {:else if failed}
       <div class="notice">Map unavailable: {failed}</div>
@@ -689,7 +746,7 @@
       <div class="card {cardSide}" style:top="{cardTop}px" bind:offsetHeight={cardH} {@attach cardActions}
         role="button" tabindex="0" title="Open in the lightbox" aria-label="Open {fWhen(ix.t[r], ix.off[r])} in the lightbox">
         <div class="ph" style:background-image={hash ? `url(${hash})` : undefined}>
-          {#if shown}<img src={shown.url} alt="" />{/if}
+          {#if shown}<img src={shown.src} alt="" />{/if}
           {#if ix.video[r]}<span class="vid">{fDuration(ix.dur[r])}</span>{/if}
         </div>
         <strong>{fWhen(ix.t[r], ix.off[r])}</strong>

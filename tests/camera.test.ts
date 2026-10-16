@@ -1,6 +1,6 @@
 import {describe, expect, it} from 'vitest';
 import {
-  binFixes, buildTrack, CAMERA, farZoomCap, latOf, lonOf, mercX, mercY, spring, trackAt, unitsPerKm, zoomFor,
+  binFixes, buildTrack, CAMERA, farZoomCap, insetShift, latOf, lonOf, mercX, mercY, spring, trackAt, uniformInsets, unitsPerKm, zoomFor,
 } from '../web/src/lib/map/camera.ts';
 
 const H = 3600e3, M = 60e3, T0 = Date.UTC(2026, 7, 1);
@@ -128,10 +128,24 @@ describe('trackAt / zoom / spring', () => {
   });
 
   it('zoomFor fits the half-extent; farZoomCap pulls back with distance', () => {
-    expect(zoomFor(0.5, 0.5, 512, 512, 0)).toBeCloseTo(0, 12);
-    expect(zoomFor(0.25, 0.01, 512, 512, 0)).toBeCloseTo(1, 12);
+    const none = uniformInsets(0);
+    expect(zoomFor(0.5, 0.5, 512, 512, none)).toBeCloseTo(0, 12);
+    expect(zoomFor(0.25, 0.01, 512, 512, none)).toBeCloseTo(1, 12);
+    // A uniform pad is what the desktop always used: half the viewport less the pad on each axis.
+    expect(zoomFor(0.25, 0.25, 1000, 800, uniformInsets(70))).toBeCloseTo(Math.log2((400 - 70) / 0.25 / 512), 12);
     expect(farZoomCap(0, 0, 800, 600)).toBe(Infinity);
     expect(farZoomCap(0.01, 0, 800, 600)).toBeGreaterThan(farZoomCap(0.1, 0, 800, 600));
+  });
+
+  it('insets: the frame fits the free area, and the map center shifts toward the larger inset', () => {
+    // A phone: 390 × 844 with a 300 px dock below and a 60 px pill above leaves 484 px of height.
+    const ins = {t: 60, r: 16, b: 300, l: 16};
+    expect(zoomFor(0.01, 0.5, 390, 844, ins)).toBeCloseTo(Math.log2(242 / 0.5 / 512), 12);
+    expect(insetShift(uniformInsets(70), 3)).toEqual({dx: 0, dy: 0});
+    const sh = insetShift(ins, 2);
+    expect(sh.dx).toBe(0);
+    // The free area's center is 120 px above the viewport's, so the map center sits 120 px below the frame's.
+    expect(sh.dy * 512 * 4).toBeCloseTo(120, 9);
   });
 
   it('spring settles without overshoot from rest', () => {

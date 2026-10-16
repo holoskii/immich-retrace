@@ -202,10 +202,26 @@ export function trackAt(tr: Track, t: number) {
 /** MapLibre's world size at zoom 0, px (512-px tiles). */
 export const TILE = 512;
 
-/** Zoom that fits half-extents (hx, hy) into a w × h viewport with `pad` px on every side. */
-export function zoomFor(hx: number, hy: number, w: number, h: number, pad: number) {
-  const scale = Math.min(Math.max(1, w / 2 - pad) / hx, Math.max(1, h / 2 - pad) / hy);
+/**
+ * Space kept clear on each side of a w × h viewport, px: margin, plus whatever floats over the map there (a
+ * phone's dock and title pill). The camera frames its target in the rest.
+ */
+export interface Insets { t: number; r: number; b: number; l: number }
+export const uniformInsets = (px: number): Insets => ({t: px, r: px, b: px, l: px});
+
+/** Zoom that fits half-extents (hx, hy) into a w × h viewport less `ins`. */
+export function zoomFor(hx: number, hy: number, w: number, h: number, ins: Insets) {
+  const scale = Math.min(Math.max(1, (w - ins.l - ins.r) / 2) / hx, Math.max(1, (h - ins.t - ins.b) / 2) / hy);
   return Math.log2(scale / TILE);
+}
+
+/**
+ * World units from the center of the area `ins` leaves to the map's center at zoom z: a frame centered at
+ * (x, y) needs the map at (x + dx, y + dy). Zero for symmetric insets.
+ */
+export function insetShift(ins: Insets, z: number) {
+  const s = TILE * 2 ** z;
+  return {dx: (ins.r - ins.l) / 2 / s, dy: (ins.b - ins.t) / 2 / s};
 }
 
 /**

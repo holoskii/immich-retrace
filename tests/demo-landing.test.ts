@@ -168,7 +168,7 @@ function index(rows: [number, boolean, (0 | 1)?, number?][]) {
 
 describe('landing', () => {
   const album = (id: string, name: string, count: number): AlbumSummary =>
-    ({id, name, start: T0, end: T0 + DAY, count, shared: false, version: '1'});
+    ({id, name, start: T0, end: T0 + DAY, count, shared: false, cover: null, version: '1'});
   const albums = railAlbums([album('a1', 'Pamplona & Basque Country, 2–12 Aug 2024', 120), album('a2', 'San Sebastián to Huesca, 6–10 Sep 2024', 194),
     album('a3', 'Lisbon & Queluz', 300)]);
 

@@ -4,7 +4,7 @@
 import type {DemoConfig} from './demo.ts';
 
 /** Bump when any shape below changes; the browser drops caches with another version. */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 /**
  * Error body for every non-2xx /api answer. `error` is a sentence fit to show as is. Codes:
@@ -74,6 +74,8 @@ export interface AlbumSummary {
   end: number | null;
   count: number;
   shared: boolean;
+  /** The asset Immich shows as the album's cover (`albumThumbnailAssetId`), for its thumbnail; null without one. */
+  cover: string | null;
   /** Opaque; changes when membership changes (updatedAt + count + last-asset timestamp). */
   version: string;
 }

@@ -21,7 +21,7 @@ function month(m: string, n = 3): MonthColumns {
 }
 
 const MONTHS = ['2023-01', '2023-02', '2023-03', '2023-04', '2023-05', '2023-06', '2023-07'].map(m => month(m));
-const ALBUMS: AlbumSummary[] = [{id: 'alb-1', name: 'Trip', start: MONTHS[1].t[0], end: MONTHS[2].t[0], count: 3, shared: true, version: 'v1'}];
+const ALBUMS: AlbumSummary[] = [{id: 'alb-1', name: 'Trip', start: MONTHS[1].t[0], end: MONTHS[2].t[0], count: 3, shared: true, cover: null, version: 'v1'}];
 /** Two library assets plus one of another user's, which only the album has. */
 function members(): AssetColumns {
   const {month: _, ...c} = month('2023-02', 3);

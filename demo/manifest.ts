@@ -36,8 +36,7 @@ export interface DemoAsset {
   thumbhash: string;
   /** Video duration in ms; 0 for photos. */
   durationMs: number;
-  /** Commons scaler URLs the photo's copies were downloaded from (null for clips). */
-  thumbUrl: string | null;
+  /** Commons scaler URL the photo's preview copy was downloaded from (null for clips). The thumbnail is made from it. */
   previewUrl: string | null;
   /** For clips: the id of the photo the clip was made from. */
   sourceId: string | null;

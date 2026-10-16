@@ -6,7 +6,7 @@
   import {selection, type Active} from '../selection.svelte.ts';
   import {base64Bytes, thumbHashDataUrl, thumbHashRatio} from '../thumbhash.ts';
   import {fDuration} from '../map/format.ts';
-  import {getConfig, immichLink, thumbUrl, videoUrl} from './media.ts';
+  import {getConfig, immichLink, mediaQueue, thumbUrl, videoUrl} from './media.ts';
   import {explainMedia, probeMedia, type MediaFailure} from '../failure.ts';
   import {bins, fClock, fCoords, fLongDate, fOffset, fPlace, fPosition, neighbours, step} from './model.ts';
   import MiniMap from './MiniMap.svelte';
@@ -95,11 +95,20 @@
     };
   });
 
-  // Neighbours' previews (±2), held so the requests aren't dropped; cached by the versioned URL.
-  let held: HTMLImageElement[] = [];
+  // Neighbours' previews (±2) through the media queue, into the HTTP cache (the versioned URL); a step cancels
+  // the ones no longer next to the open photo and keeps those that still are.
+  const preloads = new Map<string, AbortController>();
   $effect(() => {
-    held = neighbours(a, row).map(r => { const img = new Image(); img.decoding = 'async'; img.src = thumbUrl(ix.id[r], ix.thumbhash[r], 'preview'); return img; });
+    const urls = new Set(neighbours(a, row).map(r => thumbUrl(ix.id[r], ix.thumbhash[r], 'preview')));
+    for (const [u, c] of preloads) if (!urls.has(u)) { c.abort(); preloads.delete(u); }
+    for (const u of urls) {
+      if (preloads.has(u)) continue;
+      const c = new AbortController();
+      preloads.set(u, c);
+      mediaQueue.load(u, {signal: c.signal}).catch(() => {});
+    }
   });
+  $effect(() => () => { for (const c of preloads.values()) c.abort(); preloads.clear(); });
 
   // Position strip: density of the range (√ scale) with the open asset marked.
   let strip = $state<HTMLCanvasElement>();

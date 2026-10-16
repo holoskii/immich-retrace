@@ -18,7 +18,7 @@ function lib(rows: Row[]) {
 }
 /** Immich album dates: the first and last item's local calendar day, at midnight. */
 const album = (id: string, from: string, to: string, count: number, name = id): AlbumSummary =>
-  ({id, name, start: D(from), end: D(to), count, shared: false, version: 'v'});
+  ({id, name, start: D(from), end: D(to), count, shared: false, cover: null, version: 'v'});
 
 const HOME: [number, number] = [59.44, 24.75];
 const AWAY: [number, number] = [41.39, 2.17];   // ~2 600 km from HOME

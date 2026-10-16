@@ -138,6 +138,12 @@ describe('adapter: albums', () => {
     expect(empty.start).toBeNull();
     expect(empty.end).toBeNull();
   });
+
+  it('takes the cover from albumThumbnailAssetId, null when absent or not a UUID', () => {
+    expect(out.find(a => a.id === ALBUM_ID)!.cover).toBe('b0000000-0000-4000-8000-000000000002');
+    expect(out.find(a => a.id === 'c0000000-0000-4000-8000-000000000002')!.cover).toBeNull();
+    expect(out.find(a => a.id === 'c0000000-0000-4000-8000-000000000003')!.cover).toBeNull();
+  });
 });
 
 describe('routes', () => {
