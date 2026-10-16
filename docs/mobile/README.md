@@ -1,5 +1,8 @@
 # Retrace on a phone
 
+> **Current plan:** [demo-scope.md](demo-scope.md), a minimal Concept D for demo visitors.
+> The study below is the long-term reference.
+
 Design study, October 2026. Demo data only (public sample library). All mockups are in
 [gallery.html](gallery.html) (one page, light and dark), also published as a private artifact:
 https://claude.ai/code/artifact/f5663ff8-7f18-4a33-adaa-9fe6324bb728
@@ -183,6 +186,8 @@ Hallway tests (timeline §6, map §6) run after 1b. If the strip fails, swap in 
 | [05-categories/preview.md](05-categories/preview.md) | Photos/Story layout, lightbox rules, media queue; V1 + rail + lightbox 3a |
 | [05-categories/albums.md](05-categories/albums.md) | Library, search, trip cards, month ranges; V2 years-first |
 | [06-review.md](06-review.md) | Consistency review: canonical data, terms, gestures, status slot, gaps, fixes |
+| [demo-scope.md](demo-scope.md) | Current build plan: minimal Concept D for demo visitors |
+| [07-web-platform.md](07-web-platform.md) | Mobile web platform research: budgets, loading, viewport, touch, images, MapLibre, testing |
 | [gallery.html](gallery.html) | Every mockup on one page (concepts A–D, then the five categories) |
 | [mockups/](mockups/) | The individual mockups (`concept-a..d.html`, `<category>.html`) |
 | [screens/](screens/) | Renders of the mockups and of the public demo on desktop and phone |
