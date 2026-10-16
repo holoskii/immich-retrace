@@ -10,6 +10,7 @@
   import {explainMedia, probeMedia, type MediaFailure} from '../failure.ts';
   import {bins, fClock, fCoords, fLongDate, fOffset, fPlace, fPosition, neighbours, step} from './model.ts';
   import MiniMap from './MiniMap.svelte';
+  import {closeLightbox} from './Lightbox.svelte';
   import {hooks} from '../hooks.svelte.ts';
 
   let {a, row}: {a: Active; row: number} = $props();
@@ -55,7 +56,8 @@
   function retry() { failed = null; tries++; }
 
   const go = (r: number | null) => { if (r != null) selection.lightbox = r; };
-  const close = () => { selection.lightbox = null; };
+  // Like Back: pops the entry the opening pushed (no dead Back step), cursor kept on the photo shown.
+  const close = closeLightbox;
 
   function onKey(e: KeyboardEvent) {
     if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
@@ -96,11 +98,13 @@
   });
 
   // Neighbours' previews (±2) through the media queue, into the HTTP cache (the versioned URL); a step cancels
-  // the ones no longer next to the open photo and keeps those that still are.
+  // the ones no longer next to the open photo and keeps those that still are. The open photo's own preload is kept
+  // too (none is started for it): aborting it as it becomes the photo on show would only make the <img> start the
+  // same request over.
   const preloads = new Map<string, AbortController>();
   $effect(() => {
     const urls = new Set(neighbours(a, row).map(r => thumbUrl(ix.id[r], ix.thumbhash[r], 'preview')));
-    for (const [u, c] of preloads) if (!urls.has(u)) { c.abort(); preloads.delete(u); }
+    for (const [u, c] of preloads) if (!urls.has(u) && u !== preview) { c.abort(); preloads.delete(u); }
     for (const u of urls) {
       if (preloads.has(u)) continue;
       const c = new AbortController();

@@ -96,6 +96,18 @@ export class MediaQueue {
     });
   }
 
+  /**
+   * Moves the waiting request `signal` belongs to first in line (a preloaded neighbour that became the photo on show,
+   * the most urgent thing there is). Nothing for one already in flight or done.
+   */
+  prioritize(signal: AbortSignal) {
+    const i = this.queue.findIndex(j => j.signal === signal);
+    if (i <= 0) return;
+    const [job] = this.queue.splice(i, 1);
+    job.high = true;
+    this.queue.unshift(job);
+  }
+
   private wake(ms: number) {
     clearTimeout(this.timer);
     this.timer = setTimeout(() => { this.timer = undefined; this.pump(); }, Math.max(0, ms));
@@ -151,3 +163,72 @@ export const DEMO_MEDIA_WINDOW: RateWindow = {events: 50, ms: 20_000};
 
 /** The app's queue: 6 in flight (a browser's HTTP/1.1 limit per host), the demo's rate on the demo only. */
 export const mediaQueue = new MediaQueue({concurrency: 6, window: () => (config.demo ? DEMO_MEDIA_WINDOW : null)});
+
+/** One preview held by a PreviewSet: its object URL once loaded, or why it couldn't be. */
+export interface HeldPreview { src: string | null; error: unknown }
+
+/**
+ * The previews a pager keeps (the touch lightbox: the photo on show and its neighbours). They load through the queue
+ * into object URLs, so the <img> showing one makes no request of its own. `keep` names the wanted URLs, the one on
+ * show first (loaded ahead of everything waiting). One still wanted keeps its request, in flight or done: a neighbour
+ * that becomes the photo on show is not asked for again. The rest are aborted and their URLs revoked, so at most as
+ * many as `keep` was last given are ever held (decoded previews are what iOS kills a tab for).
+ */
+export class PreviewSet {
+  private held = new Map<string, HeldPreview & {ctrl: AbortController}>();
+  private wanted: string[] = [];
+  private queue: Pick<MediaQueue, 'load' | 'prioritize'>;
+  private changed: () => void;
+  private urls: {create: (b: Blob) => string; revoke: (u: string) => void};
+
+  /** `changed`: a preview loaded or failed (read `get` again). */
+  constructor(queue: Pick<MediaQueue, 'load' | 'prioritize'>, changed: () => void,
+    urls = {create: (b: Blob) => URL.createObjectURL(b), revoke: (u: string) => URL.revokeObjectURL(u)}) {
+    this.queue = queue; this.changed = changed; this.urls = urls;
+  }
+
+  keep(want: string[]) {
+    this.wanted = want;
+    const set = new Set(want);
+    for (const [u, h] of this.held) if (!set.has(u)) this.drop(u, h);
+    want.forEach((u, i) => {
+      const had = this.held.get(u);
+      if (had) { if (i === 0 && had.src == null && had.error == null) this.queue.prioritize(had.ctrl.signal); return; }
+      const h: HeldPreview & {ctrl: AbortController} = {src: null, error: null, ctrl: new AbortController()};
+      this.held.set(u, h);
+      this.queue.load(u, {signal: h.ctrl.signal, high: i === 0}).then(b => {
+        if (this.held.get(u) !== h) return;
+        h.src = this.urls.create(b);
+        this.changed();
+      }, e => {
+        if (this.held.get(u) !== h || h.ctrl.signal.aborted) return;
+        h.error = e ?? new Error('failed');
+        this.changed();
+      });
+    });
+  }
+
+  get(url: string): HeldPreview | null {
+    const h = this.held.get(url);
+    return h ? {src: h.src, error: h.error} : null;
+  }
+
+  /** Loads `url` again (after a failed request, or bytes that wouldn't decode). */
+  retry(url: string) {
+    const h = this.held.get(url);
+    if (!h) return;
+    this.drop(url, h);
+    this.keep(this.wanted);
+  }
+
+  /** How many are held (tests). */
+  get size() { return this.held.size; }
+
+  dispose() { this.wanted = []; for (const [u, h] of this.held) this.drop(u, h); }
+
+  private drop(u: string, h: HeldPreview & {ctrl: AbortController}) {
+    h.ctrl.abort();
+    if (h.src) this.urls.revoke(h.src);
+    this.held.delete(u);
+  }
+}

@@ -7,8 +7,11 @@ export interface HelpAction { label: string; run: () => void }
 class Hooks {
   /** Extra buttons at the top of the `?` overlay; it closes before running one. */
   helpActions = $state.raw<HelpAction[]>([]);
-  /** Extra content in the lightbox panel, under the position strip (e.g. per-photo credits). */
-  lightboxPanel = $state.raw<Component<{id: string; video: boolean}> | null>(null);
+  /**
+   * Extra content in the lightbox panel, under the position strip (e.g. per-photo credits). `compact`: the touch
+   * lightbox's bottom bar, a line or two over the photo.
+   */
+  lightboxPanel = $state.raw<Component<{id: string; video: boolean; compact?: boolean}> | null>(null);
   /** The album picker's button text in place of "Albums", shown emphasised. */
   albumPickerLabel = $state<string | null>(null);
 }

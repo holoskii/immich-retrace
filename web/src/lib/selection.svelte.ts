@@ -244,9 +244,9 @@ const LIVE_MS = 250;
  * - 'commit' (release, scrub end, click): one pushState for the whole gesture, nothing if the URL ended where it started.
  * - 'replace': replaceState of the current entry, outside any gesture (lightbox stepping and closing).
  * `at`: undefined keeps the URL's current `at` (the overview never writes hover positions); a number or null sets/clears it.
- * `lb` always follows `selection.lightboxId`.
+ * `lb` always follows `selection.lightboxId`. `state`: the new entry's history.state on a commit that pushes.
  */
-export function writeUrl(how: 'live' | 'commit' | 'replace', at?: number | null) {
+export function writeUrl(how: 'live' | 'commit' | 'replace', at?: number | null, state: unknown = null) {
   const cur = new URLSearchParams(location.search);
   const keep = cur.has('at') ? Number(cur.get('at')) : null;
   const sq = selectionToQuery(selection.sel, at === undefined ? keep : at, cur);
@@ -267,7 +267,7 @@ export function writeUrl(how: 'live' | 'commit' | 'replace', at?: number | null)
   gesture = null;
   if (new URL(href, location.href).href === start.href) { history.replaceState(start.state, '', href); return; }
   history.replaceState(start.state, '', start.href);
-  history.pushState(null, '', href);
+  history.pushState(state, '', href);
 }
 
 /** `lb` from the URL waiting for `active` (album members load async). While set, the lightbox must not write the URL. */
