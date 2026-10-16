@@ -1,7 +1,7 @@
 # Demo dataset and Immich stub
 
-Everything for the public demo lives here, apart from the viewer itself. The dataset is about 1,700
-photos and 14 short clips by Kent Wang from Wikimedia Commons. A small stub server answers the
+Everything for the public demo lives here, apart from the viewer itself. The dataset is photos and short
+clips by Kent Wang from Wikimedia Commons. A small stub server answers the
 Immich endpoints the viewer uses, so the real viewer runs against it unchanged. The owner's own
 library is never involved.
 
@@ -24,13 +24,13 @@ node demo/fetch.ts
 ```
 
 This downloads two resized copies of every photo from the Commons image scaler, about 250 px and
-1280 px wide (about 3,400 requests, one at a time: about 50 minutes and 950 MB on disk). It then renders the clips
+1280 px wide, one request at a time (slow; needs about 1 GB of disk). It then renders the clips
 with ffmpeg (needs `ffmpeg` with libx264). Files that already exist are skipped. It makes no API
 calls and leaves the manifest as it is. If a file has been deleted from Commons since the freeze,
 the run fails with its title.
 
-`node demo/fetch.ts --refresh` re-lists the uploads (35 API calls of 50 files each, 1 per second,
-cached under `data/cache/api`, so delete that directory to really re-query). It also rewrites
+`node demo/fetch.ts --refresh` re-lists the uploads (rate-limited API calls, cached under
+`data/cache/api`, so delete that directory to really re-query). It also rewrites
 `manifest.json` and `CREDITS.md` before fetching the media. Use it only to change the dataset, and
 check the licences again when you do. Both modes send a descriptive User-Agent; set the contact
 URL in `commons.ts` (`USER_AGENT`) before running it from a public repo.
@@ -42,8 +42,8 @@ What the builder does:
 - The thumbhash is computed locally from the 250 px copy (ffmpeg decode + the `thumbhash` package).
 - Demo modifications are deterministic and recorded in each asset's `modifications`:
   - The Núria photos are presented as another user's, shared through an album (see below).
-  - GPS is removed from two whole trips (Madrid, Mar 2025; Esslingen & Ulm, Jun 2025), from the Lyon leg of the May 2025 album, and from about 3% of single shots (picked by a hash of the title).
-  - 14 clips, 6 s each: ffmpeg pan/zoom over the 1280 px copy of a photo, H.264 at 1280×720 or 720×1280, no audio. Each clip is placed 5 s after its photo at the same location and licensed like the photo.
+  - GPS is removed from whole trips, from the Lyon leg of the May 2025 album, and from a small share of single shots (picked by a hash of the title); the lists are in `config.ts`.
+  - Clips: ffmpeg pan/zoom over the 1280 px copy of a photo, H.264, landscape or portrait, no audio. Each clip is placed 5 s after its photo at the same location and licensed like the photo.
 
 ## Run the demo locally
 
@@ -63,7 +63,7 @@ manifest baked in, `demo/data/media` mounted read-only) and the normal viewer im
 (`demo/manifest.json` mounted read-only, for the credits). The media has to exist first.
 
 ```bash
-node demo/fetch.ts                                  # once: ~950 MB into demo/data/media
+node demo/fetch.ts                                  # once: fills demo/data/media
 docker compose -f docker-compose.demo.yml up -d --build   # → http://127.0.0.1:8081
 docker compose -f docker-compose.demo.yml down
 ```
@@ -82,7 +82,7 @@ Settings, read by `server/demo.ts` (a normal deployment never reads them):
 |---|---|---|
 | `DEMO` | off | `1` turns demo mode on. Anything but 1/0/true/false/yes/no/on/off stops the server. Demo mode also requires `IMMICH_API_KEY=demo` (the stub), so a real `.env` can't end up public. |
 | `DEMO_TRIP` | `San Sebastián to Huesca` | The trip a visit without a link opens: an album id, or part of its name (case and accents ignored). No match: the album with the most items. |
-| `REPO_URL` | `REPO_URL` in `shared/demo.ts` (a placeholder, `https://github.com/OWNER/immich-retrace`) | Where "Get it for your Immich" and the About panel link to. Set the constant once the repository is public. |
+| `REPO_URL` | `REPO_URL` in `shared/demo.ts` (a placeholder until the repository is public) | Where "Get it for your Immich" and the About panel link to. |
 | `DEMO_MANIFEST` | `demo/manifest.json` | The dataset manifest, for the credits. Read at startup; a missing file stops the server. |
 
 What changes (everything else is the normal app):
@@ -111,11 +111,6 @@ own chunk only when `/api/config` says `demo` (`App.svelte`); it plugs into the 
 picker's label) and `selection.albumRequest` (open an album as a bar click would). The server side is
 `server/demo.ts`, wired by one call in `server/main.ts`; its types are in `shared/demo.ts`.
 
-First load against the stub (headless Chromium, cold profile, 1440×900): the overview paints in
-0.24 s unthrottled and 1.09 s at 5 Mbit/s (40 ms latency); the landing's photo card is up in 1.35 s
-and 4.5 s (MapLibre's chunk and worker plus OpenFreeMap's style and tiles). The index is 33 month
-requests, about 250 kB of JSON.
-
 The stub accepts any non-empty API key. It implements only what `server/immich.ts` and
 `server/adapter.ts` call, with Immich v3.1.0 shapes:
 
@@ -133,13 +128,11 @@ Errors behave like Immich: no key gives 401, an unknown id gives 400, video of a
 and an unsatisfiable range gives 404. `tests/demo-stub.test.ts` runs every response through
 `server/adapter.ts` and `server/app.ts`.
 
-Albums (curated trips): Pamplona & Basque Country (Aug 2024); San Sebastián to Huesca (Sep 2024,
-with clips); Sète, Lyon & Dole (May 2025, the Lyon days have no GPS); Alsace & Freiburg (May 2025);
-Lisbon & Queluz (Jan 2026).
+Albums (curated trips) are defined in `config.ts`.
 
 ### Shared album
 
-The stub has two users: the key's user (`Demo`) and `Alex (demo friend)`. The 39
+The stub has two users: the key's user (`Demo`) and `Alex (demo friend)`. The
 Núria & Queralbs photos (26–27 Jul 2024, `owner: "friend"` in the manifest) belong to Alex. They are
 left out of the key user's `timeline/buckets`/`bucket`, and they appear only in Alex's album
 "Pyrenees, 14–27 Jul 2024". That album is listed under `shared=true` (`shared: true`,
