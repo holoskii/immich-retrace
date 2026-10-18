@@ -1,8 +1,8 @@
 <script lang="ts">
   // The phone shell (demo mode on a phone-sized touch screen; main.ts picks it once at boot). Three tabs over the one
-  // `selection` store: Map (home: the map, a floating pill, the dock), Photos (phase 3) and Trips. The tab is not in
-  // the URL; it follows the selection (tabs.ts) and tab switches add no history. One MapLibre instance for the
-  // shell's life: the Map tab stays mounted, hidden under the others (visibility, never display: none). The touch
+  // `selection` store: Map (home: the map, a floating pill, the dock), Photos (the grid, a lazy chunk) and Trips. The
+  // tab is not in the URL; it follows the selection (tabs.ts) and tab switches add no history. One MapLibre instance
+  // for the shell's life: the Map tab stays mounted, hidden under the others (visibility, never display: none). The touch
   // lightbox opens over any tab with a history entry, so Back closes it. The root is fixed and never scrolls; tabs
   // scroll inside themselves.
   import {onMount, untrack} from 'svelte';
@@ -22,7 +22,10 @@
 
   const mapView = loadMapView();
   const idle = (f: () => void) => 'requestIdleCallback' in window ? requestIdleCallback(f, {timeout: 5000}) : setTimeout(f, 1000);
-  mapView.then(() => idle(() => void preloadLightbox(true).catch(() => {})), () => {});
+  // The Photos grid is its own chunk (off the phone's eager path): fetched on first entry, or when idle after the map.
+  let photosChunk: Promise<typeof import('./Photos.svelte')> | undefined;
+  const loadPhotos = () => (photosChunk ??= import('./Photos.svelte').catch(e => { photosChunk = undefined; throw e; }));
+  mapView.then(() => idle(() => { void preloadLightbox(true).catch(() => {}); void loadPhotos().catch(() => {}); }), () => {});
 
   let tab = $state<Tab>('map');
   /** Tabs mounted so far (they stay mounted: scroll positions, loaded covers). */
@@ -79,11 +82,11 @@
 
     <div class="pane" class:off={tab !== 'photos'} id="tab-photos" role="tabpanel" aria-label="Photos" inert={tab !== 'photos'}>
       {#if seen.photos}
-        <div class="soon">
-          <h1>Photos</h1>
-          <p>The photos of this trip as a grid are coming here. For now, open them from the photo card on the Map tab and swipe through them.</p>
-          <button onclick={() => show('map')}>Go to the map</button>
-        </div>
+        {#await loadPhotos() then {default: Photos}}
+          <Photos shown={tab === 'photos'} pick={() => show('trips')} />
+        {:catch}
+          <div class="placeholder" role="alert">The photos couldn't load. <button onclick={() => location.reload()}>Reload</button></div>
+        {/await}
       {/if}
     </div>
 
@@ -138,13 +141,10 @@
     position: absolute; inset: 0; display: flex; gap: 12px; align-items: center; justify-content: center; padding: 24px;
     text-align: center; color: var(--muted); font-size: 14px;
   }
-  .placeholder button, .soon button {
+  .placeholder button {
     min-height: 44px; padding: 0 18px; border: 1px solid var(--photo); border-radius: 999px; background: var(--raised);
     color: var(--ink); font: 500 14px var(--f-body);
   }
-
-  .soon { padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) 20px max(20px, env(safe-area-inset-left)); color: var(--ink2); }
-  .soon h1 { margin: 8px 0 12px; font: 700 28px/1.2 var(--f-body); color: var(--ink); }
 
   .tabbar {
     display: grid; grid-template-columns: repeat(3, 1fr);
