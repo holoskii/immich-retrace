@@ -8,3 +8,6 @@ e2e/.browsers/
 e2e/.deps/
 e2e/test-results/
 e2e/playwright-report/
+# The author's own deployment and launch notes: kept on disk, never published
+*.homelab.yml
+docs/private/

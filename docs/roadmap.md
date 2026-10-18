@@ -18,26 +18,14 @@ Everything that is still open. Decisions and architecture are in [AGENTS.md](../
 2. Phone demo on real devices: phase 4 of [mobile/demo-scope.md](mobile/demo-scope.md) (one iPhone,
    one cheap Android, the link opened from Telegram/WhatsApp).
 3. Verify shared albums end to end (see below).
-4. Release:
-   - Set the repo URL: `REPO_URL` in `shared/demo.ts`, `USER_AGENT` in `demo/commons.ts`, the
-     clone line in the README.
-   - Prebuilt image on GHCR (`ghcr.io/<owner>/immich-retrace`), published by CI; the README's
-     quick start pulls it instead of building from source.
-   - README: a GIF or video at the top and the public demo link.
-   - Launch video: a draft is in `brag-output/` (gitignored; `brag.mp4`, `share-copy.txt`,
-     `brag-plan.md`). After the UI review, re-film and render with `brag-output/work/make.sh`
-     (needs the demo viewer, `BASE` in `capture.py`). Fill the link slot (`outro.url` in
-     `work/config.json`, `[LINK]` in `share-copy.txt`) and listen to the audio. Known weak spots:
-     the trip-pick shot is dark after the click, the hook has no basemap.
-   - Where to announce it, in what order: [outreach.md](outreach.md).
-   - After going public, watch `sudo demo-report` for the first days and tighten the deliberately
-     relaxed media limits from data ([demo-hardening.md](demo-hardening.md)).
+4. Release: a prebuilt multi-arch image on GHCR (the README's quick start pulls it instead of
+   building from source), a first tagged version, the public demo link and a GIF or video at the
+   top of the README. The author's launch checklist is in `docs/private/` (not in the repo).
 
-## Demo: proper public deployment
+## Demo
 
-The demo is behind Authelia until the switch-over in
-[demo-hardening.md](demo-hardening.md#going-public). Left: a visits/top-paths view (Caddy's JSON
-log), and a CDN if traffic outgrows the 50 Mbit ceiling.
+Hardening: [demo-hardening.md](demo-hardening.md). Left, once traffic shows up: a visits/top-paths
+view from the proxy's access log, and a CDN if traffic outgrows the home uplink.
 
 ## Shared albums
 

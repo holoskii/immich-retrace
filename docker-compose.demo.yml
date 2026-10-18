@@ -46,7 +46,7 @@ services:
       DEMO: "1"
       DEMO_MANIFEST: /app/demo/manifest.json
       # DEMO_TRIP: Alsace             # the trip a visit without a link opens (album id or part of its name)
-      # REPO_URL: https://github.com/OWNER/immich-retrace   # "Get it for your Immich" (default: shared/demo.ts)
+      # REPO_URL: https://example.com/your-fork   # "Get it for your Immich" (default: shared/demo.ts)
     volumes:
       - ./demo/manifest.json:/app/demo/manifest.json:ro
     ports:

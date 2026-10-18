@@ -39,8 +39,8 @@ The viewer's server has to reach Immich; the browser only talks to the viewer.
 ### Option A: next to Immich
 
 Add the viewer to Immich's own `docker-compose.yml`. It then shares Immich's
-network and reaches it as `immich-server`. Clone this repository next to your Immich directory and
-add a service:
+network and reaches it as `immich-server`. Clone this repository next to your Immich directory
+(`git clone https://github.com/holoskii/immich-retrace`) and add a service:
 
 ```yaml
   immich-retrace:
@@ -61,6 +61,7 @@ Then `docker compose up -d --build immich-retrace`.
 Use this repository's [docker-compose.yml](docker-compose.yml):
 
 ```bash
+git clone https://github.com/holoskii/immich-retrace && cd immich-retrace
 cp .env.example .env    # set IMMICH_URL and IMMICH_API_KEY
 docker compose up -d --build
 ```

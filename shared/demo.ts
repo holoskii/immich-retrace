@@ -1,10 +1,9 @@
 // Demo mode's part of the API (server/demo.ts ↔ web/src/lib/demo/). A normal deployment never sends these.
 
 /**
- * The project's home, linked from the demo ("Get it for your Immich"). A placeholder until the repository
- * is public: set it here, or per deployment with REPO_URL.
+ * The project's home, linked from the demo ("Get it for your Immich"). Override per deployment with REPO_URL.
  */
-export const REPO_URL = 'https://github.com/OWNER/immich-retrace';
+export const REPO_URL = 'https://github.com/holoskii/immich-retrace';
 
 /** ViewerConfig.demo (GET /api/config) when DEMO=1. */
 export interface DemoConfig {
