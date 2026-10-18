@@ -245,6 +245,15 @@ export const fMonth = (t: number) => F_MON.format(t);
 export const fDayMonth = (t: number) => F_DM.format(t);
 
 /**
+ * The readout's span of axis days [l0, l1): "6 Sept 2024 → 10 Sept 2024 · 5d", a single day once ("10 Sept 2024 ·
+ * 10h"), or only the length when the name shown before it already says the dates (`named`).
+ */
+export function readoutSpan(l0: number, l1: number, named = false) {
+  const a = fDay(l0), b = fDay(l1 - 1), len = fLength(l0, l1);
+  return named ? len : `${a === b ? a : `${a} → ${b}`} · ${len}`;
+}
+
+/**
  * Calendar length of [t0, t1) (axis times, read as UTC): "2y 3m 14d", "5d", or hours under two days ("30h", a cluster zoom).
  * Days are the calendar days touched, so 1 May 00:00 → 3 May 00:00 (exclusive) is "2d" and an album 29 Apr → 6 May is "8d".
  */

@@ -15,12 +15,16 @@
   import {mediaQueue, thumbUrl} from '../lightbox/media.ts';
   import {CardImage} from '../lightbox/card.ts';
   import {fNum} from '../albums.ts';
+  import {explainAlbums} from '../failure.ts';
   import {Player} from './player.ts';
   import {stopLabel} from './strip.ts';
   import Strip from './Strip.svelte';
 
-  /** `pulse`: ▶ pulses once (the demo landing). `covered`: the map is out of sight. */
-  let {active, covered, pulse = false}: {active: Active | null; covered: boolean; pulse?: boolean} = $props();
+  /** `pulse`: ▶ pulses once (the demo landing). `covered`: the map is out of sight. `pick`: show Trips. */
+  let {active, covered, pulse = false, pick}: {active: Active | null; covered: boolean; pulse?: boolean; pick: () => void} = $props();
+
+  /** The selected album's photos couldn't be loaded (the Photos tab says the same). */
+  const membersError = $derived(selection.sel?.kind === 'album' && selection.membersLoad?.albumId === selection.sel.albumId ? selection.membersLoad.error : null);
 
   const offset = $derived(active ? typicalOffset(active.ix, active.lo, active.hi) : 0);
   const stops = $derived(active ? findStops(active.ix, active.lo, active.hi) : []);
@@ -148,7 +152,18 @@
       </div>
       <span class="n">{fNum(r - active.lo + 1)} / {fNum(active.hi - active.lo)}</span>
     </div>
+  {:else if !active && membersError}
+    <div class="card msg" role="alert">
+      <p>{explainAlbums(membersError, 'The trip’s photos')}</p>
+      <button onclick={() => selection.retryMembers()}>Try again</button>
+    </div>
+  {:else if active && active.hi <= active.lo}
+    <div class="card msg">
+      <p>No photos in this selection.</p>
+      <button onclick={pick}>Choose a trip</button>
+    </div>
   {:else}
+    <!-- Loading (the photos, or the cursor's first placement). -->
     <div class="card skeleton" aria-hidden="true"><div class="ph"></div><div class="txt"><span></span><span></span></div></div>
   {/if}
 
@@ -181,11 +196,11 @@
 
 <style>
   .dock {
-    display: grid; gap: 8px; padding: 10px max(24px, env(safe-area-inset-right)) 8px max(24px, env(safe-area-inset-left));
+    display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; gap: 8px; padding: 10px max(24px, env(safe-area-inset-right)) 8px max(24px, env(safe-area-inset-left));
     background: var(--surface); border-top: 1px solid var(--line);
   }
   .card {
-    display: grid; grid-template-columns: 96px 1fr auto; gap: 10px; align-items: center; min-height: 72px;
+    display: grid; grid-template-columns: 96px minmax(0, 1fr) auto; gap: 10px; align-items: center; min-height: 72px;
     padding: 6px; margin: 0 -12px; border: 1px solid var(--line); border-radius: 12px; background: #0B0C0E;
     cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation;
   }
@@ -203,10 +218,17 @@
   .open { color: var(--photo-hi); font-size: 13px; margin-top: 2px; }
   .n { align-self: start; padding: 2px 4px 0 0; font: 400 11px var(--f-mono); color: var(--muted); white-space: nowrap; }
   .skeleton { cursor: default; }
+  .card.msg { display: flex; flex-wrap: wrap; gap: 8px 12px; padding: 10px 12px; cursor: default; font-size: 13px; color: var(--ink2); }
+  .card.msg p { flex: 1 1 160px; margin: 0; }
+  .card.msg button {
+    flex: none; min-height: 44px; padding: 0 18px; border: 1px solid var(--photo); border-radius: 999px; background: var(--raised);
+    color: var(--ink); font: 500 14px var(--f-body); cursor: pointer;
+  }
+  .card.msg button:focus-visible { outline: 2px solid var(--photo-hi); outline-offset: 2px; }
   .skeleton .txt span { height: 10px; margin: 4px 0; border-radius: 4px; background: var(--raised); width: 70%; }
   .strip-ph { height: 50px; }
 
-  .transport { display: flex; align-items: center; gap: 8px; }
+  .transport { display: flex; align-items: center; gap: 8px; min-width: 0; }
   .tb {
     flex: none; width: 48px; height: 48px; display: grid; place-items: center; padding: 0; border-radius: 50%;
     background: var(--raised); border: 1px solid var(--line); color: var(--ink); cursor: pointer;
@@ -226,4 +248,14 @@
   }
   @media (prefers-reduced-motion: reduce) { .tb.play.pulse { animation: none; } }
   .where { flex: 1; min-width: 0; text-align: right; font-size: 13px; color: var(--ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* Landscape: the dock is a narrow column beside the map; the stop's name gets its own line under the buttons. */
+  @media (orientation: landscape) and (max-height: 500px) {
+    .dock { padding-left: 16px; }
+    .transport { flex-wrap: wrap; row-gap: 4px; }
+    .where { flex-basis: 100%; text-align: left; }
+    /* The counter under the text, not beside it: the text keeps the card's width. */
+    .card:not(.msg, .skeleton) { grid-template-columns: 80px minmax(0, 1fr); row-gap: 2px; }
+    .card:not(.msg, .skeleton) .ph { grid-row: span 2; }
+    .card:not(.msg, .skeleton) .n { grid-column: 2; padding: 0; }
+  }
 </style>

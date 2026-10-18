@@ -1,12 +1,13 @@
 import type {AlbumSummary, IndexManifest} from '../../../../shared/api.ts';
 import {openKV} from './idb.ts';
 import {withLookup, type LibraryIndex} from './model.ts';
-import {albumMembers, ApiFailure, libraryCache, refreshIndex, type LibraryCache} from './refresh.ts';
+import {albumMembers, ApiFailure, fetchAlbums, libraryCache, refreshIndex, type LibraryCache} from './refresh.ts';
 
 /** cached: showing the last snapshot, manifest pending · building: no index yet · refreshing: snapshot shown, new one loading. */
 export type Status = 'cached' | 'building' | 'refreshing' | 'ready' | 'error';
 
-interface Run { ac: AbortController; refresh?: Promise<unknown> }
+/** `albums`: a retry of the album list (it writes to the cache too, so stopping waits for it). */
+interface Run { ac: AbortController; refresh?: Promise<unknown>; albums?: Promise<unknown> }
 
 /** Where a run is: before the manifest, backing off while Immich wakes (503), or fetching months. */
 export type Phase = 'connecting' | 'waiting' | 'loading';
@@ -79,6 +80,7 @@ export class LibraryStore {
     this.#run = undefined;
     r?.ac.abort();
     await r?.refresh?.catch(() => {});
+    await r?.albums?.catch(() => {});
   }
 
   #fail(e: unknown) {
@@ -140,6 +142,31 @@ export class LibraryStore {
     await this.#stop();
     this.#lib = undefined; this.#reset();
     if (lib) await cache.purge(lib);
+  }
+
+  /**
+   * The album list again after it failed (Trips' "Try again"). Only the list: the index is fine. Without a library
+   * yet (the index failed too, or no manifest) it is a whole new run.
+   */
+  async retryAlbums() {
+    const run = this.#run, lib = this.#lib;
+    if (this.status === 'error' || !run || !lib) return this.load();
+    // One retry at a time: a second tap waits for the first (and stopping the run waits for it).
+    if (run.albums) return run.albums.then(() => {}, () => {});
+    this.albumsError = null; this.albumsLoaded = false;
+    const current = () => this.#run === run && !run.ac.signal.aborted;
+    try {
+      const p = this.#getCache().then(cache => fetchAlbums({cache, signal: run.ac.signal}, lib));
+      run.albums = p;
+      void p.finally(() => { if (run.albums === p) run.albums = undefined; }).catch(() => {});
+      const a = await p;
+      if (current()) { this.albums = a; this.albumsLoaded = true; }
+    } catch (e) {
+      if (!current()) return;
+      console.warn('albums:', e);
+      if (e instanceof ApiFailure && e.code === 'auth') this.albums = [];
+      this.albumsError = e; this.albumsLoaded = true;
+    }
   }
 
   abort() { void this.#stop(); }

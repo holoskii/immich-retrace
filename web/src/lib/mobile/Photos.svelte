@@ -177,7 +177,7 @@
     {:else if !active}
       <p class="msg" role="status">Loading photos…</p>
     {:else if !count}
-      <p class="msg">No photos in this selection.</p>
+      <div class="msg"><p>No photos in this selection.</p><button onclick={pick}>Choose a trip</button></div>
     {:else if L}
       {@const ix = active.ix}
       <div class="space" style:height="{L.height}px" style:--cell="{L.cell}px" style:--cols={L.cols} role="list" aria-label="Photos by day">

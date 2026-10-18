@@ -389,6 +389,45 @@ describe('store', () => {
     expect(await libraryCache(kv).albums('lib-a')).toEqual(ALBUMS);
   });
 
+  it('retryAlbums: after the list failed, fetches only the list and fills it', async () => {
+    const kv = await freshKV();
+    let fail = true;
+    const api = fakeApi({override: p => (p === '/api/albums' && fail ? auth() : undefined)});
+    const lib = store(kv, api);
+    await lib.load();
+    expect([lib.albums, lib.albumsLoaded]).toEqual([[], true]);
+    expect(lib.albumsError).toBeTruthy();
+    fail = false;
+    const asked: string[] = [];
+    vi.stubGlobal('fetch', (u: string, i?: RequestInit) => { asked.push(u); return api.fetch(u, i); });
+    await lib.retryAlbums();
+    expect(asked).toEqual(['/api/albums']);
+    expect([lib.albums, lib.albumsError, lib.albumsLoaded, lib.status]).toEqual([ALBUMS, null, true, 'ready']);
+    expect(await libraryCache(kv).albums('lib-a')).toEqual(ALBUMS);
+  });
+
+  it('a purge waits for an album retry still writing: nothing of it lands after the purge', async () => {
+    const base = await freshKV();
+    let fail = true;
+    let entered = () => {};
+    const writing = new Promise<void>(r => { entered = r; });
+    const {kv, writes} = spyKV(base, async put => {
+      if (Object.keys(put).some(k => k.endsWith('/albums')) && !fail) { entered(); await tick(30); }
+    });
+    const lib = store(kv, fakeApi({override: p => (p === '/api/albums' && fail ? auth() : undefined)}));
+    await lib.load();
+    fail = false;
+    // Two taps: one retry; the purge waits for its write, which has begun.
+    const retry = lib.retryAlbums(), again = lib.retryAlbums();
+    await writing;
+    await lib.invalidate();
+    await Promise.all([retry, again]);
+    const purge = writes.findIndex(w => w.clear.includes('lib-a/'));
+    expect(purge).toBeGreaterThan(0);
+    expect(writes.slice(purge + 1).flatMap(w => w.put)).toEqual([]);
+    expect(await libraryCache(base).albums('lib-a')).toBeUndefined();
+  });
+
   it('only an index failure means a bad key: an index 403 still purges', async () => {
     const kv = await freshKV();
     await store(kv, fakeApi()).load();

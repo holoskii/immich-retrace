@@ -2,7 +2,7 @@
 // one thumbnail at a time through the media queue, latest wins, paced so a scrub doesn't spend the demo's request
 // budget on photos the finger only passed over.
 import {config} from '../config.svelte.ts';
-import type {MediaQueue} from './media.ts';
+import {registerLoaded, type MediaQueue} from './media.ts';
 
 export interface CardImageOptions {
   /** A wanted photo the cursor rested on this long (ms) is loaded at once. */
@@ -63,7 +63,11 @@ export class CardImage {
       rest: CARD_REST_MS, gap: () => (config.demo ? CARD_GAP_MS : 0), keep: 24, onFail: () => {}, onLoad: () => {}, now: () => performance.now(),
       prepare: prepareBlob, revoke: u => URL.revokeObjectURL(u), ...opts,
     };
+    // Lent to the lightbox: object URLs, and an adopted <img> URL only when versioned (`c=`: the relay lets the
+    // browser cache it, so showing it again is no request; an unversioned one is no-store).
+    this.unregister = registerLoaded(u => { const h = this.held.get(u); return h && (h.own || /[?&]c=/.test(u)) ? h.src : null; });
   }
+  private unregister: () => void;
 
   /** The thumbnail of the wanted photo, once loaded; null: show its thumbhash. */
   get src(): string | null {
@@ -92,6 +96,7 @@ export class CardImage {
   }
 
   dispose() {
+    this.unregister();
     this.dead = true;
     clearTimeout(this.timer);
     this.flight?.ctrl.abort();

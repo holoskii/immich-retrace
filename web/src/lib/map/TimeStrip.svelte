@@ -73,12 +73,15 @@
       cur = {s, x0: lx - 8, x1: lx + tw + 8};
     }
     // Day / month grid with labels below the bars.
+    // A label is left out (its line stays) when it would come within GAP px of the cursor's label or the last label.
     ctx.font = MONO;
+    const GAP = 14;
+    let lastEnd = -Infinity;
     for (const tk of ticks()) {
       const tx = Math.round(x(tk.t)) + .5, tw = tk.label ? ctx.measureText(tk.label).width : 0;
-      const hidden = cur && tx + 4 + tw > cur.x0 && tx < cur.x1;
-      ctx.fillStyle = C.line; ctx.fillRect(tx - .5, 0, 1, tk.label && !hidden ? BARS + 6 : BARS);
-      if (tk.label && !hidden && tx + 4 + tw < width) { ctx.fillStyle = C.muted; ctx.fillText(tk.label, tx + 4, BARS + 15); }
+      const hidden = !tk.label || (cur && tx + 4 + tw + GAP > cur.x0 && tx - GAP < cur.x1) || tx + 4 < lastEnd + GAP || tx + 4 + tw >= width;
+      ctx.fillStyle = C.line; ctx.fillRect(tx - .5, 0, 1, !hidden ? BARS + 6 : BARS);
+      if (!hidden) { ctx.fillStyle = C.muted; ctx.fillText(tk.label, tx + 4, BARS + 15); lastEnd = tx + 4 + tw; }
     }
     // √ scale: one busy day mustn't flatten the rest.
     const {gps: photo, nogps: video} = bins;

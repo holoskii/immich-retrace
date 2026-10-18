@@ -1,12 +1,12 @@
 <script lang="ts">
   // Lightbox G-B: the photo (or video) on ~70% of the width, a logbook panel beside it.
-  // Thumbhash placeholder → `size=preview` fades in. ←/→ step through the active range, Esc closes.
+  // Thumbhash placeholder (under the thumbnail the map card already showed, if held) → `size=preview` fades in. ←/→ step through the active range, Esc closes.
   import {onMount} from 'svelte';
   import type {ViewerConfig} from '../../../../shared/api.ts';
   import {selection, type Active} from '../selection.svelte.ts';
   import {base64Bytes, thumbHashDataUrl, thumbHashRatio} from '../thumbhash.ts';
   import {fDuration} from '../map/format.ts';
-  import {getConfig, immichLink, mediaQueue, thumbUrl, videoUrl} from './media.ts';
+  import {getConfig, immichLink, loadedThumb, mediaQueue, thumbUrl, videoUrl} from './media.ts';
   import {explainMedia, probeMedia, type MediaFailure} from '../failure.ts';
   import {bins, fClock, fCoords, fLongDate, fOffset, fPlace, fPosition, neighbours, step} from './model.ts';
   import MiniMap from './MiniMap.svelte';
@@ -22,6 +22,8 @@
   const gps = $derived(ix.gps[row] === 1);
   const preview = $derived(thumbUrl(id, hash, 'preview'));
   const placeholder = $derived(thumbHashDataUrl(hash));
+  /** The photo's thumbnail if something on the page holds it loaded (no request): layered over the thumbhash. */
+  const thumb = $derived(loadedThumb(thumbUrl(id, hash)));
   const place = $derived(fPlace(ix.city[row], ix.country[row]));
   const prevRow = $derived(step(a, row, -1));
   const nextRow = $derived(step(a, row, 1));
@@ -143,7 +145,7 @@
   <div class="frame">
     <div class="stage" bind:this={stage} bind:clientWidth={sw} bind:clientHeight={sh}>
       <div class="box" style:width="{box.w}px" style:height="{box.h}px"
-        style:background-image={placeholder ? `url(${placeholder})` : undefined}>
+        style:background-image={[thumb, placeholder].filter(Boolean).map(u => `url(${u})`).join(', ') || undefined}>
         {#key `${id}:${tries}`}
           {#if isVideo && failed?.id !== id}
             <!-- svelte-ignore a11y_media_has_caption (personal footage, no captions exist) -->

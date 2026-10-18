@@ -2,16 +2,19 @@
 // map's chunk and MapLibre), then mounts the shell. The shell is chosen once here; rotating never swaps it.
 import {mount, type Component} from 'svelte';
 import {library} from './lib/index/store.svelte.ts';
-import {startUrlSync} from './lib/selection.svelte.ts';
+import {hasViewerState, startUrlSync} from './lib/selection.svelte.ts';
 import {getConfig} from './lib/config.svelte.ts';
 import {loadMapView} from './lib/map/load.ts';
 import './app.css';
 
-/** What every shell gets. `landing`: opened without a link (no query), so the demo picks what to show. */
+/**
+ * What every shell gets. `landing`: opened without a link (no viewer state in the query; tracking keys such as
+ * utm_source don't count), so the demo picks what to show.
+ */
 export type ShellProps = {landing: boolean};
 
 // Before anything writes the URL.
-const landing = !location.search;
+const landing = !hasViewerState(new URLSearchParams(location.search));
 void library.load();
 // Applies ?from/to/album/at/lb once the index is there, then follows back/forward.
 startUrlSync();

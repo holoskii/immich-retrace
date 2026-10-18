@@ -37,3 +37,19 @@ test('a desktop gets the desktop shell, not the phone one', async ({page}) => {
   await expect(page.getByRole('tablist', {name: 'Views'})).toHaveCount(0);
   await expect(page.locator('.pill')).toHaveCount(0);
 });
+
+test('the toolbar readout: an album named with its dates doesn’t repeat them; a one-day zoom shows its day once', async ({page}) => {
+  await page.addInitScript(() => { try { localStorage.setItem('immich-retrace.demo.tour-seen', '1'); } catch { /* */ } });
+  await page.setViewportSize({width: 1440, height: 900});
+  await page.goto('/');
+  const readout = page.locator('.readout');
+  await expect(readout).toContainText('San Sebastián to Huesca, 6–10 Sep 2024 · 5d ·', {timeout: 20_000});
+  await expect(readout).not.toContainText('→');
+  // The album narrowed to hours of one day (a cluster zoom's URL): that day once, then the length.
+  const album = new URL(page.url()).searchParams.get('album');
+  await page.goto(`/?album=${album}&from=2024-09-09T10:00Z&to=2024-09-09T12:00Z`);
+  await expect(readout).toContainText(/9 Sept 2024 · 2h/, {timeout: 20_000});
+  await expect(readout).not.toContainText('→');
+  // One row of controls plus at most a wrapped readout: never a third row.
+  expect((await page.locator('.bar').boundingBox())!.height).toBeLessThanOrEqual(40);
+});

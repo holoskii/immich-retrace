@@ -39,6 +39,36 @@ export function railAlbums(albums: AlbumSummary[], keep?: (a: AlbumSummary) => b
 /** Display name: drops a leading `YYYY_` / `YYYY_MM_` (or legacy `YYYY-MM_`) folder prefix. */
 export const albumLabel = (name: string) => name.replace(/^\d{4}([-_]\d\d)?_/, '') || name;
 
+/**
+ * A trip's name without the dates its album name may end with ("San Sebastián to Huesca, 6–10 Sep 2024" →
+ * "San Sebastián to Huesca"): the pill and the card show the dates on their own line. The folder prefix goes too.
+ * Unchanged when the name carries no dates (the desktop readout then adds them).
+ */
+export function tripName(name: string) {
+  const n = albumLabel(name), m = /^(.*\S)\s*,\s*[^,]*\b\d{4}\s*$/.exec(n);
+  return m && /\d/.test(n.slice(m[1].length)) ? m[1] : n;
+}
+
+const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+
+/**
+ * Whether an album's name ends with its own dates ("…, 6–10 Sep 2024" for 6–10 Sep 2024: its first and last day, its
+ * month(s) and year, and no other month or year), so a readout needn't repeat them. "Paris, Summer 2024" or another
+ * trip's dates don't count. `start`/`end`: the album's days (midnight read as UTC).
+ */
+export function nameHasDates(name: string, start: number, end: number) {
+  const full = albumLabel(name), short = tripName(name);
+  if (short === full) return false;
+  const tail = full.slice(short.length).toLowerCase(), s = new Date(start), e = new Date(end);
+  const nums = (tail.match(/\d+/g) ?? []).map(Number);
+  const years = nums.filter(n => n >= 1000), days = nums.filter(n => n < 1000);
+  const months = (tail.match(/\p{L}+/gu) ?? []).map(w => (w.length >= 3 ? MONTHS.indexOf(w.slice(0, 3)) : -1));
+  const wantM = new Set([s.getUTCMonth(), e.getUTCMonth()]), wantY = new Set([s.getUTCFullYear(), e.getUTCFullYear()]);
+  return years.includes(e.getUTCFullYear()) && years.every(y => wantY.has(y))
+    && days.includes(s.getUTCDate()) && days.includes(e.getUTCDate()) && days.every(d => d === s.getUTCDate() || d === e.getUTCDate())
+    && months.includes(e.getUTCMonth()) && months.every(m => wantM.has(m));
+}
+
 // ---- formatting (read as UTC: the axis, album dates and labels are local wall time read as UTC, see `toLocal`) ----
 
 const F_DAY = new Intl.DateTimeFormat('en-GB', {timeZone: 'UTC', day: 'numeric', month: 'short', year: 'numeric'});

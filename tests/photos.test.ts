@@ -5,7 +5,7 @@ import type {AssetColumns} from '../shared/api.ts';
 import {buildIndex} from '../web/src/lib/index/model.ts';
 import {centerOn, gridColumns, groupDays, layoutGrid, reveal, rowOf, visibleRows, type Layout} from '../web/src/lib/mobile/grid.ts';
 import {ThumbSet} from '../web/src/lib/mobile/thumbs.ts';
-import {MediaQueue} from '../web/src/lib/lightbox/media.ts';
+import {loadedThumb, MediaQueue} from '../web/src/lib/lightbox/media.ts';
 
 const H = 3600e3, D = 86400e3, T0 = Date.UTC(2024, 8, 6);
 
@@ -139,6 +139,21 @@ describe('ThumbSet', () => {
     const set = new ThumbSet(q, () => changes++, max, {create: () => `blob:${++n}`, revoke: u => { revoked.push(u); }});
     return {set, calls, revoked, changes: () => changes};
   }
+
+  it('lends its loaded thumbnails to the lightbox (loadedThumb), with no request, until disposed', async () => {
+    const {set, calls} = setup();
+    set.want(['grid-a', 'grid-b']);
+    await flush();
+    expect(loadedThumb('grid-a')).toBeNull(); // still loading: the lightbox keeps the thumbhash
+    calls[0].ok(); await flush();
+    const n = calls.length;
+    expect(loadedThumb('grid-a')).toBe(set.get('grid-a'));
+    expect(loadedThumb('grid-a')).toMatch(/^blob:/);
+    expect(loadedThumb('elsewhere')).toBeNull();
+    expect(calls.length).toBe(n);
+    set.dispose();
+    expect(loadedThumb('grid-a')).toBeNull();
+  });
 
   it('loads the on-screen cells first, then the overscan', async () => {
     const {set, calls} = setup(1);

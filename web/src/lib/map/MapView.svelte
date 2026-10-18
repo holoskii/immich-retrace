@@ -26,7 +26,6 @@
   import type {TrackRequest} from './camera.worker.ts';
   import {camNext, FOLLOW, Follower, type CamEvent, type CamState} from './follow.ts';
   import type {Insets} from './camera.ts';
-  import {back} from '../actions.ts';
   import {Inset} from './inset.ts';
   import {isScrub} from './scrub.ts';
   import TimeStrip from './TimeStrip.svelte';
@@ -79,7 +78,7 @@
   let menu = $state<{x: number; y: number; visits: Visit[]; here: Here | null; all: Visit | null; expand: () => void; off: number} | null>(null);
   /** "Only photos here": the place selection, its rows of the library, its name (no count) and first photo's time. */
   interface Here { sel: Extract<Selection, {kind: 'place'}>; rows: Int32Array; name: string; t: number }
-  let tipW = $state(162), tipH = $state(150), wrapW = $state(0), wrapH = $state(0);
+  let tipW = $state(162), tipH = $state(150), wrapW = $state(0), wrapH = $state(0), menuW = $state(320), menuH = $state(200);
 
   const active = $derived(selection.active);
   const route = $derived(active ? segmentRoute(active.ix, active.lo, active.hi) : null);
@@ -136,7 +135,12 @@
     m.touchZoomRotate.disableRotation();
     m.keyboard.disableRotation();
     // Phone: pinch and double-tap zoom; the bottom-right corner is the Follow / Fit buttons'.
-    if (phone) m.addControl(new maplibregl.AttributionControl({compact: true}), 'bottom-left');
+    if (phone) {
+      m.addControl(new maplibregl.AttributionControl({compact: true}), 'bottom-left');
+      // MapLibre opens the compact attribution expanded until the first drag: on a phone it runs under Fit. Shown
+      // while the first tiles load, then folded to its ⓘ (a tap opens it again; `.phone` CSS keeps it off Fit).
+      m.once('idle', () => container.querySelector('.maplibregl-ctrl-attrib.maplibregl-compact-show')?.classList.remove('maplibregl-compact-show'));
+    }
     else m.addControl(new maplibregl.NavigationControl({showCompass: false}), 'top-right');
     // The default style references a sprite image it doesn't ship ("capital"): blank instead of a warning per tile.
     m.setMissingStyleImageResolver(id => { if (!m.hasImage(id)) m.addImage(id, {width: 1, height: 1, data: new Uint8Array(4)}); });
@@ -370,19 +374,15 @@
   }
 
   // After a cluster or pin zoom: say what was narrowed and how to get back, until the selection changes or ~12 s pass.
-  let zoomed = $state.raw<{sel: Selection; label: string; what: string; parent: string} | null>(null);
+  let zoomed = $state.raw<{sel: Selection; label: string; what: string} | null>(null);
   let zoomedTimer: ReturnType<typeof setTimeout> | undefined;
   function narrowed(sel: Selection, label: string, what: string) {
     clearTimeout(zoomedTimer);
-    zoomed = {sel, label, what, parent: selName(selection.sel, selection.zoomLabel)};
+    zoomed = {sel, label, what};
     zoomedTimer = setTimeout(() => (zoomed = null), 12_000);
   }
   $effect(() => { if (zoomed && selection.sel !== zoomed.sel) untrack(() => { zoomed = null; clearTimeout(zoomedTimer); }); });
   $effect(() => () => clearTimeout(zoomedTimer));
-  function zoomBack() {
-    zoomed = null;
-    back();
-  }
   /** "29 Apr 2023" or "29 Apr 2023 → 2 May" in the selection's local time. */
   function fVisit(v: Visit, off: number) {
     const a = fFullDay(v.t0, off), b = fFullDay(v.t1, off);
@@ -728,8 +728,8 @@
       </div>
     {:else if zoomed && zoomed.sel === selection.sel}
       <div class="notice zoomed" role="status">
-        <span>Narrowed to <b>{zoomed.label}</b>: {zoomed.what}.</span>
-        <button onclick={zoomBack} title="Back (Backspace)">← Back to {zoomed.parent}</button>
+        <!-- One way back, the toolbar's ← pill (it stays for as long as the zoom does); this only says what happened. -->
+        <span>Narrowed to <b>{zoomed.label}</b>: {zoomed.what}. <span class="k">← above or Backspace to go back</span></span>
         <button class="x" onclick={() => (zoomed = null)} aria-label="Dismiss">✕</button>
       </div>
     {:else if !selection.sel}
@@ -751,25 +751,27 @@
 
 
     {#if menu}
+      <!-- Two lines a row (what, then dates · count · place): nothing is cut off or wraps mid-date. -->
       <div class="menu" role="menu" aria-label="Visits to this place" {@attach n => n.querySelector('button')?.focus()}
-        style:left="{Math.max(8, Math.min(menu.x + 8, wrapW - 250))}px"
-        style:top="{Math.max(8, Math.min(menu.y + 8, wrapH - 40 - 30 * (menu.visits.length + 2 + (menu.here ? 1 : 0) + (menu.all ? 1 : 0))))}px">
+        bind:offsetWidth={menuW} bind:offsetHeight={menuH}
+        style:left="{Math.max(8, Math.min(menu.x + 8, wrapW - menuW - 8))}px"
+        style:top="{Math.max(8, Math.min(menu.y + 8, wrapH - menuH - 8))}px">
         {#if menu.here}
           {@const h = menu.here}
           <button role="menuitem" class="all" onclick={() => zoomHere(h)} title="Only the photos taken within {fRadius(h.sel.r)} of this spot, {fDays(h.sel.t0, h.sel.t1)}">
-            <span>Only photos here</span><span class="mut">{fNum(h.rows.length)}</span>
+            <span>Only photos here</span><span class="mut">{fNum(h.rows.length)} {h.rows.length === 1 ? 'photo' : 'photos'} within {fRadius(h.sel.r)}</span>
           </button>
         {/if}
         {#if menu.all}
           {@const all = menu.all}
           <button role="menuitem" class="all" onclick={() => zoomTo(all)} title="Everything from the first visit to the last, other places in between included">
-            <span>Everything in this period</span><span class="mut">{fVisit(all, menu.off)} · {fNum(all.n)}</span>
+            <span>Everything in this period</span><span class="mut">{fVisit(all, menu.off)} · {fNum(all.n)} {all.n === 1 ? 'item' : 'items'}</span>
           </button>
         {/if}
         {#if menu.visits.length}<div class="mh" class:split={!!(menu.here || menu.all)}>{menu.visits.length} {menu.visits.length === 1 ? 'visit' : 'visits'} here</div>{/if}
         {#each menu.visits as v (v.t0)}
           <button role="menuitem" onclick={() => zoomTo(v)}>
-            <span>{fVisit(v, menu.off)}</span><span class="mut">{v.n}{v.place ? ` · ${v.place}` : ''}</span>
+            <span>{fVisit(v, menu.off)}</span><span class="mut">{fNum(v.n)} {v.n === 1 ? 'item' : 'items'}{v.place ? ` · ${v.place}` : ''}</span>
           </button>
         {/each}
         <button role="menuitem" class="sec" onclick={() => { const e = menu!.expand; menu = null; void e(); }}>Just zoom the map in</button>
@@ -827,7 +829,7 @@
           <strong>{tip.count} items</strong>
           <span>{fWhen(tip.first, ix.off[tip.row])}</span>
           {#if tip.last - tip.first > 60e3}<span>→ {fWhen(tip.last, ix.off[tip.row])}</span>{/if}
-          <span class="hint">click: narrow to these dates</span>
+          <span class="hint">click: narrow to this place or its visits</span>
         {:else}
           <strong>{fWhen(tip.first, ix.off[tip.row])}</strong>
           <span>{ix.video[tip.row] ? `video ${fDuration(ix.dur[tip.row])} · ` : ''}{where(ix, tip.row)}</span>
@@ -878,6 +880,9 @@
 
   /* Phone: notices below the floating pill; Follow / Fit stacked at the right edge, low (the thumb's arc). */
   .phone .notice { top: var(--top); max-width: calc(100% - 24px); white-space: normal; text-align: center; border-radius: 14px; }
+  /* Expanded by a tap, the attribution wraps short of the Follow / Fit column instead of running under it. */
+  .mapview.phone { container-type: inline-size; }
+  .phone :global(.maplibregl-ctrl-attrib.maplibregl-compact-show) { box-sizing: border-box; max-width: calc(100vw - 92px); max-width: calc(100cqw - 92px); }
   .pmodes { position: absolute; right: 12px; bottom: 14px; z-index: 2; display: grid; gap: 8px; }
   .pmodes button {
     width: 48px; height: 48px; display: grid; place-items: center; align-content: center; gap: 1px; padding: 0;
@@ -945,22 +950,24 @@
 
   .notice.zoomed { pointer-events: auto; display: flex; gap: 10px; align-items: center; color: var(--ink2); }
   .notice.zoomed b { color: var(--photo-hi); font-weight: 500; }
+  .notice.zoomed .k { color: var(--muted); }
   .notice.zoomed .x { border: 0; background: none; padding: 0 2px; color: var(--muted); }
   .notice.zoomed .x:hover { color: var(--ink); background: none; }
 
   .menu button:focus-visible { outline: 2px solid var(--photo-hi); outline-offset: 2px; }
   .menu {
-    position: absolute; z-index: 4; width: 240px; display: grid; padding: 4px; max-height: calc(100% - 56px); overflow-y: auto;
+    position: absolute; z-index: 4; width: min(320px, calc(100% - 16px)); box-sizing: border-box; display: grid; padding: 4px;
+    max-height: calc(100% - 16px); overflow-y: auto;
     background: #0B0C0E; border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 8px 24px rgba(0, 0, 0, .5);
     font: 400 12px var(--f-body);
   }
   .menu .mh { padding: 4px 8px 6px; color: var(--muted); font-size: 11px; }
   .menu button {
-    display: flex; justify-content: space-between; gap: 8px; background: none; border: 0; border-radius: 4px;
+    display: grid; gap: 1px; background: none; border: 0; border-radius: 4px;
     color: var(--ink); font: inherit; padding: 6px 8px; cursor: pointer; text-align: left;
   }
   .menu button:hover { background: var(--raised); }
-  .menu .mut { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .menu .mut { color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
   .menu .all { color: var(--photo-hi); }
   .menu .mh.split { border-top: 1px solid var(--line); margin-top: 2px; padding-top: 6px; }
   .menu .sec { color: var(--ink2); border-top: 1px solid var(--line); border-radius: 0 0 4px 4px; margin-top: 2px; }

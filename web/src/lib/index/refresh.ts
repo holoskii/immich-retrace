@@ -215,6 +215,14 @@ export async function refreshIndex(ctx: Ctx, hooks: RefreshHooks = {}): Promise<
   }
 }
 
+/** The album list alone (a retry after it failed while the index was fine), cached like a full refresh does. */
+export async function fetchAlbums(ctx: Ctx, lib: string): Promise<AlbumSummary[]> {
+  const a = await getJson<AlbumSummary[]>(ctx, '/api/albums');
+  ctx.signal?.throwIfAborted();
+  await ctx.cache.setAlbums(lib, a);
+  return a;
+}
+
 /** An album's members (incl. other users' assets in shared albums), from cache while its version is unchanged. */
 export async function albumMembers(ctx: Ctx, lib: string, album: AlbumSummary): Promise<LibraryIndex> {
   let m = await ctx.cache.members(lib, album.id);

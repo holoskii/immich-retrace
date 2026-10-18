@@ -1,14 +1,7 @@
 // Labels on the phone shell (pure).
-import {albumLabel} from '../albums.ts';
 
-/**
- * A trip's name without the dates its album name may end with ("San Sebastián to Huesca, 6–10 Sep 2024" →
- * "San Sebastián to Huesca"): the pill and the card show the dates on their own line. The folder prefix goes too.
- */
-export function tripName(name: string) {
-  const n = albumLabel(name), m = /^(.*\S)\s*,\s*[^,]*\b\d{4}\s*$/.exec(n);
-  return m && /\d/.test(n.slice(m[1].length)) ? m[1] : n;
-}
+// The trip name without its dates is shared with the desktop readout: it lives with the album helpers.
+export {tripName} from '../albums.ts';
 
 const F = (o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat('en-GB', {timeZone: 'UTC', ...o});
 const D = F({day: 'numeric'}), DM = F({day: 'numeric', month: 'short'}), DMY = F({day: 'numeric', month: 'short', year: 'numeric'});

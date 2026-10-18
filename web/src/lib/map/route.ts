@@ -257,3 +257,17 @@ export function clusterVisits(ix: IndexColumns, lo: number, hi: number, leaves: 
   close(rows.length);
   return out;
 }
+
+/**
+ * A photo to open a selection on (the demo landing; a phone link without `at`): one with GPS (so the marker sits
+ * on the route), not a video, taken nearest the middle of the trip's GPS time span (route behind and ahead of it), preferring a landscape one among
+ * the few nearest (the map card crops to landscape). Falls back to the first row; -1 for an empty range.
+ */
+export function representativeRow(ix: IndexColumns, lo: number, hi: number, near = 6): number {
+  const rows: number[] = [];
+  for (let r = lo; r < hi; r++) if (ix.gps[r] === 1 && ix.video[r] === 0) rows.push(r);
+  if (!rows.length) return hi > lo ? lo : -1;
+  const mid = (ix.t[rows[0]] + ix.t[rows[rows.length - 1]]) / 2;
+  const byDistance = [...rows].sort((a, b) => Math.abs(ix.t[a] - mid) - Math.abs(ix.t[b] - mid) || a - b);
+  return byDistance.slice(0, near).find(r => ix.ratio[r] > 1.2) ?? byDistance[0];
+}

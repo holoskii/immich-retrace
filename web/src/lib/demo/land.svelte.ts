@@ -1,6 +1,6 @@
-// The demo landing, for either shell: once the (empty) URL is applied and the albums are in, open the curated trip
-// the way a click on it would, with the cursor on a representative photo mid-trip (landing.ts), Follow on (the
-// map's default), nothing playing. Call during a component's init: the effect lives as long as the component.
+// The demo landing, for either shell: once the URL (without viewer state) is applied and the albums are in, open the
+// curated trip the way a click on it would, with the cursor on a representative photo mid-trip (landing.ts), Follow
+// on (the map's default), nothing playing. Call during a component's init: the effect lives as long as the component.
 import {untrack} from 'svelte';
 import {pickAlbum} from '../actions.ts';
 import {railAlbums} from '../albums.ts';
@@ -9,7 +9,8 @@ import {selection} from '../selection.svelte.ts';
 import {findTrip, representativeRow} from './landing.ts';
 
 /**
- * `trip`: DEMO_TRIP (an album id or part of a name). `landing`: the page was opened without a link (no query).
+ * `trip`: DEMO_TRIP (an album id or part of a name). `landing`: the page was opened without a link (no viewer state
+ * in the query).
  * `landed`: runs once it is settled, `picked` whether a trip was opened (the phone shell pulses Play then).
  */
 export function landOnTrip(o: {trip: () => string; landing: () => boolean; landed?: (picked: boolean) => void}) {

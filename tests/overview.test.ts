@@ -1,15 +1,16 @@
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {
   countRows, DAY, daysFromIndex, daysFromMonths, defaultView, dens, dragTo, hitGrip, packLanes, railAlbums, sample,
-  smooth, snapDay, sumRange, fLength, trimOutliers, viewAround, viewToShow, zoomAt, albumLabel,
+  smooth, snapDay, sumRange, fLength, readoutSpan, trimOutliers, viewAround, viewToShow, zoomAt, albumLabel,
 } from '../web/src/lib/overview/data.ts';
 import {withLookup, type IndexColumns} from '../web/src/lib/index/model.ts';
 import {
-  albumSpan, applyUrl, fromLocal, lightboxPending, selection, selectionFromUrl, selectionToQuery, toLocal, urlReady, writeUrl, type Selection,
+  albumSpan, applyUrl, fromLocal, hasViewerState, lightboxPending, selection, selectionFromUrl, selectionToQuery, toLocal, urlReady, writeUrl, type Selection,
 } from '../web/src/lib/selection.svelte.ts';
 import {library} from '../web/src/lib/index/store.svelte.ts';
 import type {AlbumSummary} from '../shared/api.ts';
 import {dayAround, fDays, zoomSpan} from '../web/src/lib/nav.ts';
+import {nameHasDates} from '../web/src/lib/albums.ts';
 import {shortAlbum} from '../web/src/lib/trips.ts';
 
 const D = (s: string) => Date.parse(s + 'T00:00:00Z');
@@ -259,6 +260,12 @@ describe('brush', () => {
 });
 
 describe('URL', () => {
+  it('tells a link (any viewer key) from a bare visit with tracking keys only (the demo lands on those)', () => {
+    for (const q of ['', 'utm_source=telegram', 'fbclid=abc&utm_medium=social', 'gclid=1&ref=x'])
+      expect(hasViewerState(new URLSearchParams(q))).toBe(false);
+    for (const q of ['album=a', 'from=2024-09-06&to=2024-09-10', 'near=1,2,3', 'at=5', 'lb=x', 'mode=range', 'utm_source=t&album=a'])
+      expect(hasViewerState(new URLSearchParams(q))).toBe(true);
+  });
   // Immich album dates: local calendar days, midnight read as UTC.
   const albums = [{id: 'alb', start: D('2024-05-01'), end: D('2024-05-09')}];
   it('range round-trips through from/to (days, to inclusive)', () => {
@@ -391,6 +398,31 @@ describe('writeUrl history', () => {
     writeUrl('commit', at + H);
     expect(h.entries.at(-1)!.href).toBe(`http://x/?from=2024-01-01&to=2024-01-04&at=${at + H}`);
     expect(h.entries.length).toBe(2);
+  });
+});
+
+describe('nameHasDates', () => {
+  it('only when the name ends with this album’s own days and year', () => {
+    const s = D('2024-09-06'), e = D('2024-09-10');
+    expect(nameHasDates('San Sebastián to Huesca, 6–10 Sep 2024', s, e)).toBe(true);
+    expect(nameHasDates('2024_San Sebastián, 6 – 10 Sept 2024', s, e)).toBe(true);
+    expect(nameHasDates('Paris, Summer 2024', s, e)).toBe(false);
+    expect(nameHasDates('Paris, Sep 2024', s, e)).toBe(false);
+    expect(nameHasDates('Paris, 1–3 Sep 2024', s, e)).toBe(false);
+    expect(nameHasDates('Paris 2024', s, e)).toBe(false);
+    expect(nameHasDates('Day out, 6 Sep 2024', s, s)).toBe(true);
+    expect(nameHasDates('Paris, 6–10 Oct 2024', s, e)).toBe(false); // another month
+    expect(nameHasDates('Paris, 6–10 Sep 2023', s, e)).toBe(false); // another year
+    expect(nameHasDates('Paris, 6–10 Sep–Oct 2024', s, e)).toBe(false);
+    expect(nameHasDates('Lisbon, 30 Dec 2024 – 2 Jan 2025', D('2024-12-30'), D('2025-01-02'))).toBe(true);
+  });
+});
+
+describe('readoutSpan', () => {
+  it('a span of days, one day once, and only the length when the name already says the dates', () => {
+    expect(readoutSpan(D('2024-09-06'), D('2024-09-11'))).toBe('6 Sept 2024 → 10 Sept 2024 · 5d');
+    expect(readoutSpan(D('2024-09-10') + 8 * H, D('2024-09-10') + 18 * H)).toBe('10 Sept 2024 · 10h');
+    expect(readoutSpan(D('2024-09-06'), D('2024-09-11'), true)).toBe('5d');
   });
 });
 

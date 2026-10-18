@@ -1,6 +1,6 @@
 // The Photos grid's thumbnails: loaded through the media queue (rate-limited in the demo) into object URLs, so a cell's
 // <img> makes no request of its own.
-import type {MediaQueue} from '../lightbox/media.ts';
+import {registerLoaded, type MediaQueue} from '../lightbox/media.ts';
 
 interface Held { src: string | null; failed: boolean; ctrl: AbortController }
 
@@ -24,7 +24,9 @@ export class ThumbSet {
   constructor(queue: Pick<MediaQueue, 'load' | 'prioritize'>, changed: () => void, max = 180,
     urls = {create: (b: Blob) => URL.createObjectURL(b), revoke: (u: string) => URL.revokeObjectURL(u)}) {
     this.queue = queue; this.changed = changed; this.max = max; this.urls = urls;
+    this.unregister = registerLoaded(u => this.get(u));
   }
+  private unregister: () => void;
 
   /** `list`: the URLs to hold, the first `urgent` of them on screen. */
   want(list: string[], urgent = list.length) {
@@ -71,7 +73,7 @@ export class ThumbSet {
   /** How many are held, loaded or not (tests). */
   get size() { return this.held.size; }
 
-  dispose() { this.wanted = new Set(); for (const [u, h] of this.held) this.drop(u, h); }
+  dispose() { this.unregister(); this.wanted = new Set(); for (const [u, h] of this.held) this.drop(u, h); }
 
   /** Drops the least recently wanted loaded thumbnails beyond `max`, never one in `keep`. */
   private trim(keep: Set<string>) {

@@ -39,10 +39,13 @@
     const cx = cursorIn == null ? null : xAt(cursorIn, active.t0, active.t1, w);
     ctx.font = '400 11px ui-monospace, Menlo, Consolas, monospace';
     ctx.textBaseline = 'alphabetic';
+    // A label that would touch the previous one (a wide font) is left out; its day line stays.
+    let lastEnd = -Infinity;
     for (const d of days) {
-      const x = Math.round(d.x) + .5;
-      ctx.fillStyle = C.line; ctx.fillRect(x - .5, 6, 1, d.label ? BARS : BARS - 6);
-      if (d.label && x + 3 + ctx.measureText(d.label).width < w) { ctx.fillStyle = C.muted; ctx.fillText(d.label, x + 3, BARS + 15); }
+      const x = Math.round(d.x) + .5, end = d.label ? x + 3 + ctx.measureText(d.label).width : x;
+      const show = !!d.label && end < w && x + 3 >= lastEnd + 8;
+      ctx.fillStyle = C.line; ctx.fillRect(x - .5, 6, 1, show ? BARS : BARS - 6);
+      if (show) { ctx.fillStyle = C.muted; ctx.fillText(d.label, x + 3, BARS + 15); lastEnd = end; }
     }
     let max = 0;
     for (let i = 0; i < nb; i++) max = Math.max(max, bins.gps[i] + bins.nogps[i]);

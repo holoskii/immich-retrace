@@ -13,7 +13,7 @@
   import Coach from './Coach.svelte';
   import DemoCredit from './DemoCredit.svelte';
 
-  /** `landing`: the page was opened without a link (no query), so the demo picks what to show. */
+  /** `landing`: the page was opened without a link (no viewer state in the query), so the demo picks what to show. */
   let {config, landing}: {config: DemoConfig; landing: boolean} = $props();
 
   // Landing: once the URL (empty) is applied and the albums are in, open the trip the way a click on its bar would.

@@ -9,6 +9,7 @@
   import {shortAlbum} from '../trips.ts';
   import {thumbHashDataUrl} from '../thumbhash.ts';
   import {thumbUrl} from '../lightbox/media.ts';
+  import {explainAlbums} from '../failure.ts';
   import {fDayRange, tripName} from './format.ts';
 
   /** `picked`: a card was tapped (after the selection has been set). */
@@ -33,8 +34,17 @@
 
 <div class="trips">
   <h1>Trips</h1>
+  {#if library.albumsError}
+    <!-- Failed, not empty: say so and offer a retry (a cached list, if any, stays below). -->
+    <div class="err" role="alert">
+      <p>{explainAlbums(library.albumsError, 'Trips')}</p>
+      <button onclick={() => void library.retryAlbums()}>Try again</button>
+    </div>
+  {/if}
   {#if !library.albumsLoaded && !trips.length}
     <p class="msg" role="status">Loading trips…</p>
+  {:else if library.albumsError && !trips.length}
+    <!-- the error above says it all -->
   {:else if !trips.length}
     <p class="msg">No trips here.</p>
   {:else}
@@ -64,6 +74,13 @@
   }
   h1 { margin: 8px 0 14px; font: 700 28px/1.2 var(--f-body); color: var(--ink); }
   .msg { color: var(--muted); }
+  .err { display: grid; justify-items: start; gap: 10px; margin-bottom: 14px; color: var(--ink2); }
+  .err p { margin: 0; }
+  .err button {
+    min-height: 44px; padding: 0 18px; border: 1px solid var(--photo); border-radius: 999px; background: var(--raised);
+    color: var(--ink); font: 500 14px var(--f-body); cursor: pointer;
+  }
+  .err button:focus-visible { outline: 2px solid var(--photo-hi); outline-offset: 2px; }
   ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
   .trip {
     width: 100%; display: grid; grid-template-columns: 88px 1fr; gap: 12px; align-items: center; padding: 8px;

@@ -26,6 +26,8 @@ async function openMenu(page: Page) {
     const tip = page.locator('.tip strong');
     const text = await tip.textContent({timeout: 1500}).catch(() => '');
     if (!text?.includes('items')) continue;
+    // The hint says what a click offers (a menu or a zoom to the one visit), not just "these dates".
+    await expect(page.locator('.tip .hint')).toHaveText('click: narrow to this place or its visits');
     const n = Number(text.match(/(\d+) items/)![1]), url = page.url();
     await page.mouse.click(x, y);
     // A menu, or a zoom straight to the one visit (a new URL), or the map zooming in.
@@ -64,12 +66,23 @@ test('a multi-visit cluster: only the photos here, or everything in the period',
   await expect(items.last()).toHaveText('Just zoom the map in');
   // The circle's count: the cluster's own photos, nothing from the clusters around it.
   await expect(items.nth(0)).toContainText(String(n));
+  // Wide enough (~320 px, inside the map) that no date, count or place is cut off: each row is a label over a
+  // second line that wraps rather than truncating.
+  const mb = (await menu.boundingBox())!, map = (await page.locator('.mapwrap').boundingBox())!;
+  expect(mb.width).toBeGreaterThanOrEqual(300);
+  expect(mb.x).toBeGreaterThanOrEqual(map.x);
+  expect(mb.x + mb.width).toBeLessThanOrEqual(map.x + map.width);
+  expect(await menu.locator('button span').evaluateAll(els => els.filter(e => e.scrollWidth > e.clientWidth + 1).map(e => e.textContent))).toEqual([]);
+  await expect(items.nth(1)).toContainText(/\d+ items?$/);
 
   await items.nth(0).click();
   await expect.poll(() => new URL(page.url()).searchParams.get('near')).toMatch(/^-?\d+(\.\d+)?,-?\d+(\.\d+)?,\d+$/);
   await expect(page.locator('.readout')).toContainText(`${n} photos`);
   expect(await count(page)).toEqual([n, 0]);
   await expect(page.locator('.notice.zoomed')).toContainText('only the photos within');
+  // One way back: the toolbar's ← pill; the notice over the map only says what happened.
+  await expect(page.locator('.notice.zoomed').getByRole('button', {name: /Back/})).toHaveCount(0);
+  await expect(page.locator('.bar .btn.back')).toHaveCount(1);
   const place = page.url();
 
   // Back returns to the range; Forward and a reload come back to the same place.
@@ -88,7 +101,7 @@ test('a multi-visit cluster: only the photos here, or everything in the period',
   await expect(page.locator('.readout .sw').first()).toBeVisible({timeout: 20_000});
   const again = await openMenu(page);
   const all = again.menu.getByRole('menuitem', {name: /Everything in this period/});
-  const total = Number((await all.textContent())!.replace(/\u202f/g, '').match(/· (\d+)$/)![1]);
+  const total = Number((await all.textContent())!.replace(/\u202f/g, '').match(/· (\d+) items?$/)![1]);
   await all.click();
   await expect.poll(() => new URL(page.url()).searchParams.get('from')).toMatch(/T\d\d:\d\dZ$/);
   expect(new URL(page.url()).searchParams.has('near')).toBe(false);

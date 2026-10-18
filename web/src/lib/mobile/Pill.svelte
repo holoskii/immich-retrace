@@ -10,8 +10,11 @@
   import {fDayRange, tripName} from './format.ts';
   import {shareLink} from './share.ts';
 
-  /** `bottom`: the pill's bottom edge in the map's box (px), for the camera's top inset. */
-  let {bottom = $bindable(0)}: {bottom?: number} = $props();
+  /**
+   * `bottom`: the pill's bottom edge in the map's box (px), for the camera's top inset. `loading`: the demo landing
+   * is still opening its trip (a neutral line then, not a call to pick one).
+   */
+  let {bottom = $bindable(0), loading = false}: {bottom?: number; loading?: boolean} = $props();
   let el = $state<HTMLDivElement>(), height = $state(0);
   $effect(() => {
     void height;
@@ -41,7 +44,7 @@
         : fDayRange(Math.floor(toLocal(s.t0) / DAY) * DAY, Math.floor(toLocal(s.t1 - 1) / DAY) * DAY));
       const n = a ? a.hi - a.lo : album?.count;
       if (n != null) parts.push(`${fNum(n)} ${n === 1 ? 'photo' : 'photos'}`);
-    } else parts.push('Pick a trip');
+    } else parts.push(loading ? 'Loading the trip…' : 'Pick a trip');
     return parts.join(' · ');
   });
 

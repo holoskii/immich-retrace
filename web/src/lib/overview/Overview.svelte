@@ -12,9 +12,10 @@
   import {selName} from '../nav.ts';
   import AlbumPicker from './AlbumPicker.svelte';
   import {tripsOf} from '../trips.ts';
+  import {nameHasDates, tripName} from '../albums.ts';
   import Help from '../Help.svelte';
   import {
-    clamp, countRows, albumLabel, fLength, DAY, daysFromIndex, daysFromMonths, defaultView, dragTo, fDay, fNum, hitGrip, noSelectionHint, overviewHint, railAlbums,
+    clamp, countRows, albumLabel, readoutSpan, DAY, daysFromIndex, daysFromMonths, defaultView, dragTo, fDay, fNum, hitGrip, noSelectionHint, overviewHint, railAlbums,
     snapDay, viewAround, viewToShow, zoomAt, type Grip, type Span,
   } from './data.ts';
   import {CTX, drawContext, drawMain, MAIN, type RailHit} from './draw.ts';
@@ -354,9 +355,17 @@
   const readout = $derived.by(() => {
     const d = draft, s = selection.sel, l = selSpan;
     if (!l || (!d && !s)) return null;
-    const name = d ? null : s?.kind === 'place' ? selName(s, selection.zoomLabel) : selection.zoomLabel
-      ? selection.zoomLabel : s?.kind === 'album' ? (album ? albumLabel(album.name) : 'Album') : null;
-    const head = `${fDay(l[0])} → ${fDay(l[1] - 1)} · ${fLength(l[0], l[1])}`;
+    // A zoom's "Album › place": the album without the dates its name ends with (the span says the zoom's own).
+    const zoomed = (l: string) => {
+      const i = l.indexOf(' › '), head = l.slice(0, i), b = i < 0 ? null : library.albums.find(x => albumLabel(x.name) === head);
+      return b && b.start != null && b.end != null && nameHasDates(b.name, b.start, b.end) ? tripName(b.name) + l.slice(i) : l;
+    };
+    const name = d ? null : s?.kind === 'place' ? zoomed(selName(s, selection.zoomLabel)) : selection.zoomLabel
+      ? zoomed(selection.zoomLabel) : s?.kind === 'album' ? (album ? albumLabel(album.name) : 'Album') : null;
+    // A whole album whose name ends with its dates ("…, 6–10 Sep 2024"): they aren't repeated.
+    const named = !d && s?.kind === 'album' && !s.sub && !selection.zoomLabel && !!album && album.start != null && album.end != null
+      && nameHasDates(album.name, album.start, album.end);
+    const head = readoutSpan(l[0], l[1], named);
     const lib = library.index;
     const a = d ? (lib ? {ix: lib, lo: lowerBound(lib.t, fromLocal(d[0])), hi: lowerBound(lib.t, fromLocal(d[1]))} : null) : selection.active;
     if (!a) return {name, head, gps: null, nogps: null};
@@ -489,7 +498,8 @@
 <style>
   .overview { background: var(--surface); border-bottom: 1px solid var(--line); padding: 8px 16px 6px; display: grid; gap: 4px; }
   .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; font-size: 12px; color: var(--muted); min-height: 26px; }
-  .readout { color: var(--ink); flex: 1 1 420px; min-width: 0; font-size: 12px; }
+  /* A small basis: a long readout wraps inside its own box rather than pushing the status onto a row of its own. */
+  .readout { color: var(--ink); flex: 1 1 280px; min-width: 0; font-size: 12px; }
   .readout b { font-weight: 500; color: var(--photo-hi); }
   .mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
   .ink2 { color: var(--ink2); }

@@ -21,6 +21,26 @@ export function immichLink(base: string | null | undefined, id: string) {
   return base ? `${base.replace(/\/+$/, '')}/photos/${id}` : null;
 }
 
+// ---- thumbnails already loaded on the page ----
+
+/** Something holding loaded thumbnails (the Photos grid, a card): the URL to show for `url`, or null. */
+export type LoadedLookup = (url: string) => string | null;
+const loadedSources = new Set<LoadedLookup>();
+/** Lists a holder for `loadedThumb`; returns its removal. */
+export function registerLoaded(f: LoadedLookup) {
+  loadedSources.add(f);
+  return () => { loadedSources.delete(f); };
+}
+/**
+ * The thumbnail for `url` if something on the page already holds it loaded (an object URL, or a URL the browser
+ * cached), else null: never a request. The lightbox layers it between the thumbhash and the preview, so a photo
+ * opened from a sharp grid cell or card doesn't open as a blur.
+ */
+export function loadedThumb(url: string): string | null {
+  for (const f of loadedSources) { const s = f(url); if (s) return s; }
+  return null;
+}
+
 /** A media request answered with an error status (after the queue's own 429 retries). */
 export class MediaStatusError extends Error {
   status: number;

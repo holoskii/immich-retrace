@@ -26,12 +26,13 @@ const F_DM = new Intl.DateTimeFormat('en-GB', {timeZone: 'UTC', day: 'numeric', 
 
 /**
  * Local midnights in [t0, t1) (in the selection's typical offset, hours) as ticks. Every day gets a line; labels
- * ("Sat 7", or "7 Sept" when days are narrow) go on every k-th day so that each has `minLabel` px.
+ * ("Sat 7" when each day has `minLabel` px, else "17 Sept", which is wider, every k-th day so that each has
+ * `minWide` px) never run into each other.
  */
-export function dayTicks(t0: number, t1: number, offset: number, w: number, minLabel = 44): {t: number; x: number; label: string}[] {
+export function dayTicks(t0: number, t1: number, offset: number, w: number, minLabel = 50, minWide = 64): {t: number; x: number; label: string}[] {
   const off = offset * HOUR, days = (t1 - t0) / DAY;
   if (!(days > 0) || !(w > 0) || days > 400) return [];
-  const pxDay = w / days, every = Math.max(1, Math.ceil(minLabel / pxDay));
+  const pxDay = w / days, every = pxDay >= minLabel ? 1 : Math.max(2, Math.ceil(minWide / pxDay));
   const out: {t: number; x: number; label: string}[] = [];
   let t = Math.ceil((t0 + off) / DAY) * DAY - off;
   for (let k = 0; t < t1; t += DAY, k++) {

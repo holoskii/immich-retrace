@@ -1,5 +1,6 @@
 // What is selected and where the time cursor is: the contract between the overview (stage 3,
 // writes the selection, owns URL sync) and the map + scrubber (stage 4, reads it, writes the cursor).
+import {untrack} from 'svelte';
 import {sliceIndex, type IndexColumns, type LibraryIndex} from './index/model.ts';
 import {library} from './index/store.svelte.ts';
 import {nearParam, parseNear, placeRows, type Circle} from './place.ts';
@@ -243,7 +244,10 @@ export function selectionFromUrl(q: URLSearchParams, albums: {id: string; start:
 
 const isoDay = (t: number) => new Date(t).toISOString().slice(0, 10);
 const isoMin = (t: number) => new Date(t).toISOString().slice(0, 16) + 'Z';
-const URL_KEYS = ['from', 'to', 'album', 'mode', 'near', 'at', 'lb'];
+/** The query keys that are the viewer's state; anything else (utm_source, fbclid…) is left alone. */
+export const URL_KEYS = ['from', 'to', 'album', 'mode', 'near', 'at', 'lb'] as const;
+/** Whether a query carries any viewer state (a link to something), as opposed to none or only foreign keys. */
+export const hasViewerState = (q: URLSearchParams) => URL_KEYS.some(k => q.has(k));
 
 /**
  * `base` with the selection keys replaced. `at` is written only when it lies inside the selection.
@@ -361,6 +365,14 @@ export function startUrlSync() {
       applied = true;
       applyUrl(library.albums);
       selection.urlApplied = true;
+    });
+    // An `album` the URL names that wasn't in the list when it was applied (the list failed, then a retry brought
+    // it): applied once it is there, unless something else has been selected since.
+    $effect(() => {
+      const albums = library.albums;
+      if (!applied || selection.sel) return;
+      const id = new URLSearchParams(location.search).get('album');
+      if (id && albums.some(a => a.id === id && a.start != null)) untrack(() => applyUrl(albums));
     });
   });
   return () => { removeEventListener('popstate', onPop); stop(); };

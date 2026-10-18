@@ -8,7 +8,8 @@
   import {onMount, untrack} from 'svelte';
   import {config} from '../config.svelte.ts';
   import {library} from '../index/store.svelte.ts';
-  import {selection} from '../selection.svelte.ts';
+  import {lightboxPending, selection, writeUrl} from '../selection.svelte.ts';
+  import {representativeRow} from '../map/route.ts';
   import {loadMapView, NoWebGL} from '../map/load.ts';
   import Lightbox, {preloadLightbox} from '../lightbox/Lightbox.svelte';
   import {fNum} from '../albums.ts';
@@ -46,6 +47,25 @@
   const covered = $derived(mapCovered(tab, selection.lightbox != null));
   const active = $derived(selection.active);
 
+  // A link without `at` (an album, near=, a range shared from the desktop) or with one outside the selection: put
+  // the cursor on a representative photo (as the demo landing does), so the dock shows a photo rather than a
+  // placeholder that never resolves. A task later: a pick sets its own cursor once its photos are in (actions.ts),
+  // and an open lightbox (`lb`) leaves the cursor on the photo it shows when it closes. `at` is replaced, no history.
+  $effect(() => {
+    const a = active, c = selection.cursor;
+    if (!selection.urlApplied || !landed || !a || a.hi <= a.lo || selection.lightbox != null || lightboxPending()) return;
+    if (c != null && c >= a.t0 && c < a.t1) return;
+    const t = setTimeout(() => untrack(() => {
+      const b = selection.active, cc = selection.cursor;
+      if (b !== a || selection.lightbox != null || (cc != null && cc >= b.t0 && cc < b.t1)) return;
+      const r = representativeRow(b.ix, b.lo, b.hi);
+      if (r < 0) return;
+      selection.cursorTo(b.ix, r);
+      writeUrl('replace', selection.cursor);
+    }));
+    return () => clearTimeout(t);
+  });
+
   // The camera frames the area between the pill and the bottom of the map (the dock is below it); the right edge
   // keeps the Follow / Fit buttons clear.
   let pillBottom = $state(0);
@@ -75,9 +95,9 @@
             <div class="placeholder" role="alert">The map couldn't load. <button onclick={() => location.reload()}>Reload</button></div>
           {/if}
         {/await}
-        <Pill bind:bottom={pillBottom} />
+        <Pill bind:bottom={pillBottom} loading={!landed} />
       </div>
-      <Dock {active} {covered} {pulse} />
+      <Dock {active} {covered} {pulse} pick={() => show('trips')} />
     </div>
 
     <div class="pane" class:off={tab !== 'photos'} id="tab-photos" role="tabpanel" aria-label="Photos" inert={tab !== 'photos'}>
@@ -134,8 +154,10 @@
   .pane.off { visibility: hidden; }
   /* MapLibre's expanded attribution sets visibility: visible itself. */
   .pane.off :global(.maplibregl-ctrl) { visibility: hidden !important; }
-  .maptab { display: grid; grid-template-rows: minmax(0, 1fr) auto; }
-  .mapbox { position: relative; min-height: 0; overflow: hidden; }
+  .maptab { display: grid; grid-template-rows: minmax(0, 1fr) auto; grid-template-columns: minmax(0, 1fr); }
+  /* min-width 0 (and the explicit minmax column): a long stop or place name must never widen the map or dock past
+     the screen (an auto column grows to the dock's min-content and pushes Follow / Fit off it). */
+  .mapbox { position: relative; min-height: 0; min-width: 0; overflow: hidden; }
 
   .placeholder {
     position: absolute; inset: 0; display: flex; gap: 12px; align-items: center; justify-content: center; padding: 24px;

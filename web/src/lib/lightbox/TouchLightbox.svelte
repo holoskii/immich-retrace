@@ -13,7 +13,7 @@
   import {selection, type Active} from '../selection.svelte.ts';
   import {base64Bytes, thumbHashDataUrl, thumbHashRatio} from '../thumbhash.ts';
   import {fDuration, fFullDay} from '../map/format.ts';
-  import {mediaQueue, PreviewSet, thumbUrl, videoUrl} from './media.ts';
+  import {loadedThumb, mediaQueue, PreviewSet, thumbUrl, videoUrl} from './media.ts';
   import {explainMedia, probeMedia, type MediaFailure} from '../failure.ts';
   import {fClock, fPlace, fPosition, step} from './model.ts';
   import {
@@ -53,6 +53,8 @@
     r, id: ix.id[r], video: ix.video[r] === 1,
     preview: thumbUrl(ix.id[r], ix.thumbhash[r], 'preview'),
     placeholder: thumbHashDataUrl(ix.thumbhash[r]),
+    // The thumbnail the grid or card already showed sharp, if still held (no request): over the thumbhash.
+    thumb: loadedThumb(thumbUrl(ix.id[r], ix.thumbhash[r])),
     box: ix.video[r] === 1 ? fit({w: sw, h: Math.max(0, sh - topH - botH)}, ratioOf(r)) : fit({w: sw, h: sh}, ratioOf(r)),
   })));
   const cur = $derived(pages.find(p => p.r === row)!);
@@ -73,6 +75,8 @@
   });
   onMount(() => () => previews.dispose());
   function held(url: string) { void loads; return previews.get(url); }
+  /** The box's background: the loaded thumbnail (if any) over the thumbhash. */
+  const layers = (thumb: string | null, hash: string | null) => [thumb, hash].filter(Boolean).map(u => `url(${u})`).join(', ') || undefined;
   /** Pages whose image has decoded (keyed by id; the fade-in runs once). */
   let decoded = $state<Record<string, true>>({});
   /** Pages whose preview arrived but won't decode (HTTP 200, corrupt bytes): shown as a failure once current. */
@@ -348,7 +352,7 @@
         <div class="page" class:current style:transform={pageT(p.r, current ? dy : 0)} aria-hidden={!current}
           style:padding={p.video ? `${topH}px 0 ${botH}px` : undefined}>
           <div class="box" style:width="{p.box.w}px" style:height="{p.box.h}px"
-            style:background-image={p.placeholder ? `url(${p.placeholder})` : undefined}
+            style:background-image={layers(p.thumb, p.placeholder)}
             style:transform={current ? boxT(view) : undefined}>
             {#if p.video && current && failed?.id !== p.id}
               {#key videoTries}

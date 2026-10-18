@@ -1,5 +1,5 @@
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
-import {MediaQueue, type RateWindow} from '../web/src/lib/lightbox/media.ts';
+import {loadedThumb, MediaQueue, type RateWindow} from '../web/src/lib/lightbox/media.ts';
 import {CardImage} from '../web/src/lib/lightbox/card.ts';
 
 /** A fetch whose answers the test hands out by hand. */
@@ -42,6 +42,22 @@ describe('CardImage', () => {
     await answerAll();
     expect(card.src).toBe('blob:a');
     expect(changes()).toBe(2);
+  });
+
+  it('lends what it holds to the lightbox (loadedThumb): its own loads and an adopted LCP image, until disposed', async () => {
+    // URLs of its own: the other tests leave their cards (and so their registrations) undisposed.
+    const {card, calls, answerAll} = setup({gap: 0});
+    card.adopt('/lend-lcp?c=h', '/lend-lcp?c=h');
+    card.adopt('/lend-nocache', '/lend-nocache');
+    card.want('lend-a');
+    await flush(); await answerAll();
+    expect(loadedThumb('lend-a')).toBe('blob:lend-a');
+    expect(loadedThumb('/lend-lcp?c=h')).toBe('/lend-lcp?c=h'); // the <img>'s own request, versioned: in the HTTP cache
+    expect(loadedThumb('/lend-nocache')).toBeNull(); // unversioned (no-store): showing it again would be a request
+    expect(loadedThumb('lend-b')).toBeNull();
+    expect(calls.length).toBe(1);
+    card.dispose();
+    expect(loadedThumb('lend-a')).toBeNull();
   });
 
   it('never shows another photo: a new want drops the src until its own thumbnail is in', async () => {

@@ -49,8 +49,17 @@ describe('time strip', () => {
     expect(narrow.length).toBe(28);
     const labelled = narrow.filter(d => d.label);
     expect(labelled[0].label).toMatch(/^6 Sep/);
-    expect(labelled[1].t - labelled[0].t).toBe(4 * D); // 330 / 28 ≈ 11.8 px a day: every 4th for 44 px
+    expect(labelled[1].t - labelled[0].t).toBe(6 * D); // 330 / 28 ≈ 11.8 px a day: every 6th for 64 px ("17 Sept")
     expect(dayTicks(T0, T0, 0, 300)).toEqual([]);
+  });
+
+  it('never puts day-month labels closer than they are wide (a 2-month near= link: "10 Sept18 Sept" ran together)', () => {
+    for (const [days, w] of [[60, 290], [28, 330], [10, 330], [8, 330], [45, 360], [7, 300], [5, 240], [6, 330]]) {
+      const ticks = dayTicks(T0, T0 + days * D, 2, w), labelled = ticks.filter(d => d.label);
+      expect(labelled.length).toBeGreaterThan(0);
+      // ~6.6 px a character at the strip's 11 px mono, plus the 3 px inset and a gap.
+      for (let i = 1; i < labelled.length; i++) expect(labelled[i].x - labelled[i - 1].x).toBeGreaterThanOrEqual(labelled[i - 1].label.length * 6.6 + 8);
+    }
   });
 
   it('says which stop the cursor is in, or which one it is after', () => {
