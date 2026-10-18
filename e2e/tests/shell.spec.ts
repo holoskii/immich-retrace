@@ -112,6 +112,65 @@ test('dragging the strip scrubs the cursor without history entries', async ({pag
   expect(await histLen(page)).toBe(len);
 });
 
+test('a slow strip drag keeps the card on the photo at the cursor: its thumbhash at once, never another photo', async ({page}) => {
+  // Which thumbnail URL each object URL holds, so the card's <img src="blob:…"> can be checked against the cursor.
+  await page.addInitScript(() => {
+    const tags = new Map<string, string>();
+    (window as unknown as {__objUrls: Map<string, string>}).__objUrls = tags;
+    const blob = Response.prototype.blob;
+    Response.prototype.blob = async function (this: Response) {
+      const b = await blob.call(this);
+      (b as Blob & {__u?: string}).__u = new URL(this.url).pathname + new URL(this.url).search;
+      return b;
+    };
+    const create = URL.createObjectURL;
+    URL.createObjectURL = (o: Blob | MediaSource) => {
+      const u = create(o), tag = (o as Blob & {__u?: string}).__u;
+      if (tag) tags.set(u, tag);
+      return u;
+    };
+  });
+  await land(page);
+  // Every change in the card's picture: the photo wanted (data-want) and the thumbnail its visible <img> shows.
+  await page.evaluate(() => {
+    const w = window as unknown as {__objUrls: Map<string, string>; __card: [string, string | null][]};
+    w.__card = [];
+    const ph = () => document.querySelector<HTMLElement>('.card .ph');
+    const shown = () => {
+      const img = ph()?.querySelector('img');
+      if (!img || img.style.visibility === 'hidden') return null;
+      if (img.src.startsWith('blob:')) return w.__objUrls.get(img.src) ?? img.src;
+      const u = new URL(img.src);
+      return u.pathname + u.search;
+    };
+    new MutationObserver(() => {
+      const want = ph()?.dataset.want ?? '', last = w.__card.at(-1), s = shown();
+      if (!last || last[0] !== want || last[1] !== s) w.__card.push([want, s]);
+    }).observe(document.querySelector('.dock')!, {subtree: true, childList: true, attributes: true, attributeFilter: ['src', 'style', 'data-want']});
+  });
+  const box = (await page.getByRole('slider').boundingBox())!;
+  const y = box.y + box.height / 2;
+  // Slow: ~2.5 s across half the trip, the finger down until the end.
+  await swipe(page, {x: box.x + box.width * 0.1, y}, {x: box.x + box.width * 0.6, y}, {steps: 40, ms: 60});
+  const states = await page.evaluate(() => (window as unknown as {__card: [string, string | null][]}).__card);
+  const wants = new Set(states.map(s => s[0]));
+  // The card followed the finger: many photos, each shown (thumbhash or thumbnail) as the cursor reached it…
+  expect(wants.size).toBeGreaterThanOrEqual(5);
+  expect(states.length).toBeGreaterThanOrEqual(5);
+  // …some as their real thumbnail before the finger lifted, and never a photo for another moment.
+  expect(states.filter(([want, shown]) => shown === want).length).toBeGreaterThanOrEqual(1);
+  expect(states.filter(([want, shown]) => shown != null && shown !== want)).toEqual([]);
+  // At rest, the photo at the cursor's own thumbnail.
+  await expect.poll(() => page.evaluate(() => {
+    const ph = document.querySelector<HTMLElement>('.card .ph')!, img = ph.querySelector('img');
+    if (!img) return false;
+    const u = new URL(img.src);
+    // An object URL from the queue, or the first card image's own (the page's LCP, kept).
+    const shown = img.src.startsWith('blob:') ? (window as unknown as {__objUrls: Map<string, string>}).__objUrls.get(img.src) : u.pathname + u.search;
+    return shown === ph.dataset.want;
+  })).toBe(true);
+});
+
 test('Play steps through the photos and stops when another tab covers the map or the cursor is moved', async ({page}) => {
   await land(page);
   const a0 = at(page);

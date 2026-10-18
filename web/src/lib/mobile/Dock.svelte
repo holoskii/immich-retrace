@@ -2,8 +2,8 @@
   // The Map tab's dock: the photo at the cursor (tap → lightbox), the time strip, and ⏮ ▶ ⏭ (by stop; ▶ steps photo
   // by photo, player.ts). Play stops when the page is hidden, the map covered (another tab, the lightbox), the
   // selection changes or the strip is touched. The card's first image is the page's LCP element: loaded by the
-  // <img> itself at high priority; later ones come through the media queue (rate-limited in the demo), the last one
-  // staying up until the next has decoded.
+  // <img> itself at high priority; later ones come through the media queue (rate-limited in the demo) via CardImage:
+  // the photo's thumbhash until its own thumbnail is in, never another photo's.
   import {onMount, untrack} from 'svelte';
   import {selection, writeUrl, type Active} from '../selection.svelte.ts';
   import {cursorRow, stepRow, typicalOffset} from '../map/route.ts';
@@ -13,6 +13,7 @@
   import {fDuration, fWhen} from '../map/format.ts';
   import {thumbHashDataUrl} from '../thumbhash.ts';
   import {mediaQueue, thumbUrl} from '../lightbox/media.ts';
+  import {CardImage} from '../lightbox/card.ts';
   import {fNum} from '../albums.ts';
   import {Player} from './player.ts';
   import {stopLabel} from './strip.ts';
@@ -29,48 +30,29 @@
 
   // ---- the card's image ----
   const wantUrl = $derived(active && nearest >= 0 ? thumbUrl(active.ix.id[nearest], active.ix.thumbhash[nearest]) : null);
-  /** On show: an object URL from the queue, or the first thumbnail's own URL. */
-  let shown = $state<{url: string; src: string} | null>(null);
-  /** The first thumbnail, loaded by the <img> (fetchpriority high) rather than the queue. */
+  /** The first thumbnail, loaded by the <img> (fetchpriority high) rather than the queue; then handed to `card`. */
   let lcp = $state<string | null>(null), lcpPending = $state(false);
-  let want: string | null = null, loading = false, broken = '';
-  const loads = new AbortController();
-  $effect(() => () => { loads.abort(); if (shown?.src.startsWith('blob:')) URL.revokeObjectURL(shown.src); });
+  let cardV = $state(0);
+  const card = new CardImage(mediaQueue, () => cardV++);
+  $effect(() => () => card.dispose());
   $effect(() => {
-    want = wantUrl;
-    if (want && lcp == null) { lcp = want; lcpPending = true; return; }
-    untrack(pump);
+    const w = wantUrl;
+    if (w && lcp == null) { lcp = w; lcpPending = true; return; }
+    if (!untrack(() => lcpPending)) card.want(w);
   });
-  function show(next: {url: string; src: string} | null) {
-    const old = untrack(() => shown);
-    shown = next;
-    if (old && old.src !== next?.src && old.src.startsWith('blob:')) URL.revokeObjectURL(old.src);
-  }
   function lcpDone(ok: boolean) {
     if (!lcpPending || !lcp) return;
     lcpPending = false;
-    if (ok) show({url: lcp, src: lcp}); else broken = lcp;
-    pump();
+    if (ok) card.adopt(lcp, lcp);
+    card.want(wantUrl);
   }
-  function pump() {
-    const w = want;
-    if (lcpPending || loading) return;
-    if (!w) return;
-    if (w === broken) { show(null); return; }
-    if (w === untrack(() => shown?.url)) return;
-    loading = true;
-    let src = '';
-    mediaQueue.load(w, {signal: loads.signal, high: true}).then(blob => {
-      src = URL.createObjectURL(blob);
-      const img = new Image();
-      img.src = src;
-      return img.decode();
-    }).then(() => show({url: w, src}), () => {
-      if (src) URL.revokeObjectURL(src);
-      if (!loads.signal.aborted) broken = w;
-    }).finally(() => { loading = false; if (!loads.signal.aborted) pump(); });
-  }
-  const imgSrc = $derived(shown?.src ?? (lcpPending ? lcp : null));
+  /** Only ever the photo at the cursor: else no <img>, and the card shows that photo's thumbhash. */
+  const imgSrc = $derived.by(() => {
+    void cardV;
+    if (lcpPending) return lcp;
+    return wantUrl ? card.src : null;
+  });
+  const imgHidden = $derived(lcpPending && lcp !== wantUrl);
 
   function open() { if (nearest >= 0) selection.lightbox = nearest; }
 
@@ -154,8 +136,9 @@
     {@const hash = thumbHashDataUrl(ix.thumbhash[r])}
     <div class="card" role="button" tabindex="0" onclick={open} onkeydown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } }}
       aria-label="Open the photo from {fWhen(ix.t[r], ix.off[r])}">
-      <div class="ph" style:background-image={hash ? `url(${hash})` : undefined}>
-        {#if imgSrc}<img src={imgSrc} alt="" fetchpriority="high" decoding="async" onload={() => lcpDone(true)} onerror={() => lcpDone(false)} />{/if}
+      <div class="ph" style:background-image={hash ? `url(${hash})` : undefined} data-want={wantUrl}>
+        {#if imgSrc}<img src={imgSrc} alt="" fetchpriority="high" decoding="async" style:visibility={imgHidden ? 'hidden' : null}
+          onload={() => lcpDone(true)} onerror={() => lcpDone(false)} />{/if}
         {#if ix.video[r]}<span class="vid">{fDuration(ix.dur[r])}</span>{/if}
       </div>
       <div class="txt">

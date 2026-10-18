@@ -42,7 +42,7 @@ export interface QueueOptions {
 }
 
 interface Job {
-  url: string; high: boolean; tries: number; signal?: AbortSignal;
+  url: string; high: boolean; tries: number; signal?: AbortSignal; onStart?: () => void;
   resolve: (b: Blob) => void; reject: (e: unknown) => void;
 }
 
@@ -75,8 +75,11 @@ export class MediaQueue {
   /** Requests waiting / in flight (for tests and diagnostics). */
   get pending() { return {queued: this.queue.length, active: this.active}; }
 
-  /** `high`: ahead of everything waiting (the photo on show, before its neighbours). */
-  load(url: string, {signal, high = false}: {signal?: AbortSignal; high?: boolean} = {}): Promise<Blob> {
+  /**
+   * `high`: ahead of everything waiting (the photo on show, before its neighbours). `onStart`: its request was sent
+   * (counted against the window), once.
+   */
+  load(url: string, {signal, high = false, onStart}: {signal?: AbortSignal; high?: boolean; onStart?: () => void} = {}): Promise<Blob> {
     return new Promise((resolve, reject) => {
       if (signal?.aborted) { reject(signal.reason); return; }
       const onAbort = () => {
@@ -85,7 +88,7 @@ export class MediaQueue {
       };
       const done = () => signal?.removeEventListener('abort', onAbort);
       const job: Job = {
-        url, high, tries: 0, signal,
+        url, high, tries: 0, signal, onStart,
         resolve: b => { done(); resolve(b); },
         reject: e => { done(); reject(e); },
       };
@@ -130,6 +133,7 @@ export class MediaQueue {
 
   private async run(job: Job) {
     this.active++;
+    if (job.tries === 0) job.onStart?.();
     try {
       const res = await this.opts.fetch(job.url, {signal: job.signal});
       if (res.status === 429) {
