@@ -22,12 +22,16 @@ const sharedAlbum = manifest.albums.find(a => a.shared && a.owner === 'friend')!
 const mediaDir = mkdtempSync(join(tmpdir(), 'demo-stub-'));
 const VIDEO_BYTES = Buffer.from('0123456789abcdef');
 mkdirSync(join(mediaDir, photo.id));
-writeFileSync(join(mediaDir, photo.id, 'thumbnail.jpg'), 'thumb');
+writeFileSync(join(mediaDir, photo.id, 'thumbnail.webp'), 'thumb');
+writeFileSync(join(mediaDir, photo.id, 'thumbnail.jpg'), 'old jpeg');
+// A media directory built before the WebP thumbnails: the friend's photo has only a JPEG one.
+const OLD_THUMB = 'old-style thumb';
 writeFileSync(join(mediaDir, photo.id, 'preview.jpg'), 'preview!');
 mkdirSync(join(mediaDir, video.id));
 writeFileSync(join(mediaDir, video.id, 'video.mp4'), VIDEO_BYTES);
 mkdirSync(join(mediaDir, friends[0].id));
 writeFileSync(join(mediaDir, friends[0].id, 'preview.jpg'), 'friend');
+writeFileSync(join(mediaDir, friends[0].id, 'thumbnail.jpg'), OLD_THUMB);
 afterAll(() => rmSync(mediaDir, {recursive: true, force: true}));
 
 const stub = createStub({manifest, mediaDir});
@@ -200,8 +204,11 @@ describe('demo stub media through the viewer relay', () => {
   it('serves thumbnails and previews', async () => {
     const thumb = await app.request(`/api/assets/${photo.id}/thumbnail?size=thumbnail&c=${encodeURIComponent(photo.thumbhash)}`);
     expect(thumb.status).toBe(200);
-    expect(thumb.headers.get('content-type')).toBe('image/jpeg');
+    expect(thumb.headers.get('content-type')).toBe('image/webp'); // as Immich's own thumbnails
     expect(await thumb.text()).toBe('thumb');
+    const old = await get(`/api/assets/${friends[0].id}/thumbnail`);
+    expect(old.headers.get('content-type')).toBe('image/jpeg');
+    expect(await old.text()).toBe(OLD_THUMB);
     const preview = await app.request(`/api/assets/${photo.id}/thumbnail?size=preview`);
     expect(await preview.text()).toBe('preview!');
     expect(preview.headers.get('content-length')).toBe('8');

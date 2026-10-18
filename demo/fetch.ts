@@ -6,7 +6,7 @@
 //   node demo/fetch.ts --refresh  list the uploads via the Commons API (cached in demo/data/cache),
 //                                 rebuild demo/manifest.json and demo/CREDITS.md, then the media
 //
-// Media lands in demo/data/media/<asset id>/{thumbnail.jpg,preview.jpg,video.mp4} (gitignored).
+// Media lands in demo/data/media/<asset id>/{thumbnail.webp,preview.jpg,video.mp4} (gitignored).
 
 import {execFileSync} from 'node:child_process';
 import {existsSync, mkdirSync, readFileSync, renameSync, writeFileSync} from 'node:fs';
@@ -22,7 +22,9 @@ const CREDITS = join(DEMO, 'CREDITS.md');
 const CACHE = join(DEMO, 'data/cache/api');
 export const MEDIA = join(DEMO, 'data/media');
 
-export const RESIZED = `Resized copies (${cfg.THUMB_WIDTH} px and ${cfg.PREVIEW_WIDTH} px wide) of the Commons file; original not redistributed.`;
+export const RESIZED = `Resized copies (within ${cfg.THUMB_SIZE} px, and ${cfg.PREVIEW_WIDTH} px wide) of the Commons file; original not redistributed.`;
+/** The thumbnail's file name in each asset's media directory (the stub still serves an older `thumbnail.jpg`). */
+export const THUMB_FILE = 'thumbnail.webp';
 
 // ---------------------------------------------------------------------------------- images
 
@@ -51,11 +53,13 @@ function ffmpeg(args: string[], out: string) {
 }
 
 /**
- * The thumbnail: first frame of `src` (preview copy or clip) scaled to THUMB_WIDTH wide, never up.
- * Made locally because THUMB_WIDTH is not a standard Commons scaler width.
+ * The thumbnail: first frame of `src` (preview copy or clip) scaled to fit within THUMB_SIZE × THUMB_SIZE, never up,
+ * as WebP at THUMB_QUALITY. Made locally because the Commons scaler only makes JPEGs at standard widths.
  */
 export function makeThumbnail(src: string, out: string) {
-  ffmpeg(['-i', src, '-frames:v', '1', '-vf', `scale='min(${cfg.THUMB_WIDTH},iw)':-2`, '-q:v', '4'], out);
+  const s = cfg.THUMB_SIZE;
+  ffmpeg(['-i', src, '-frames:v', '1', '-vf', `scale=w='min(${s},iw)':h='min(${s},ih)':force_original_aspect_ratio=decrease:force_divisible_by=2`,
+    '-c:v', 'libwebp', '-quality', String(cfg.THUMB_QUALITY), '-f', 'webp'], out);
 }
 
 // ---------------------------------------------------------------------------------- places
@@ -165,7 +169,7 @@ async function photoMedia(assets: DemoAsset[]): Promise<Set<string>> {
     const dir = join(MEDIA, a.id);
     try {
       if (await download(a.previewUrl!, join(dir, 'preview.jpg'))) fetched++;
-      if (!existsSync(join(dir, 'thumbnail.jpg'))) makeThumbnail(join(dir, 'preview.jpg'), join(dir, 'thumbnail.jpg'));
+      if (!existsSync(join(dir, THUMB_FILE))) makeThumbnail(join(dir, 'preview.jpg'), join(dir, THUMB_FILE));
     } catch (err) {
       console.warn(`  ${a.title}: ${(err as Error).message}`);
       failed.add(a.id);
@@ -180,7 +184,7 @@ function setThumbhashes(assets: DemoAsset[]) {
   let swapped = 0;
   for (const a of assets) {
     if (a.kind !== 'photo') continue;
-    const {hash, ratio} = thumbhashOf(join(MEDIA, a.id, 'thumbnail.jpg'));
+    const {hash, ratio} = thumbhashOf(join(MEDIA, a.id, THUMB_FILE));
     a.thumbhash = hash;
     // Commons reports the stored size; if the rendered copy is rotated, use its orientation.
     if ((ratio > 1) !== (a.width / a.height > 1) && Math.abs(Math.log(ratio * a.height / a.width)) > 0.2) {
@@ -225,11 +229,11 @@ function clipAssets(photos: DemoAsset[]): DemoAsset[] {
         '-crf', '23', '-profile:v', 'high', '-movflags', '+faststart', '-an', '-threads', '1'], video);
     }
     if (!existsSync(join(dir, 'preview.jpg'))) ffmpeg(['-i', video, '-frames:v', '1', '-q:v', '3'], join(dir, 'preview.jpg'));
-    if (!existsSync(join(dir, 'thumbnail.jpg'))) makeThumbnail(video, join(dir, 'thumbnail.jpg'));
+    if (!existsSync(join(dir, THUMB_FILE))) makeThumbnail(video, join(dir, THUMB_FILE));
     const takenAt = new Date(Date.parse(src.takenAt) + cfg.CLIP.offsetSeconds * 1000).toISOString();
     return {
       ...src, id, kind: 'video' as const, takenAt, width: w, height: h,
-      thumbhash: thumbhashOf(join(dir, 'thumbnail.jpg')).hash,
+      thumbhash: thumbhashOf(join(dir, THUMB_FILE)).hash,
       durationMs: cfg.CLIP.seconds * 1000, previewUrl: null, sourceId: src.id,
       modifications: `Video derived from the photo: ${cfg.CLIP.seconds} s ${move.name} over its ${cfg.PREVIEW_WIDTH} px copy (ffmpeg, H.264 ${w}×${h}, no audio); ` +
         `time set ${cfg.CLIP.offsetSeconds} s after the photo, same location. Licensed like the photo.`,

@@ -1,9 +1,10 @@
 <script lang="ts">
   // Demo mode: what this is, the code's licence, and the dataset's credits and changes (CC BY 4.0 /
-  // CC BY-SA 4.0 attribution; demo/README.md lists what the hosted demo must show).
+  // CC BY-SA 4.0 attribution; demo/README.md lists what the hosted demo must show). `phone`: the way to the project
+  // as a button at the top, and the list of data changes folded (the attribution and its link stay in view).
   import {demoUi} from './ui.svelte.ts';
 
-  let {repoUrl}: {repoUrl: string} = $props();
+  let {repoUrl, phone = false}: {repoUrl: string; phone?: boolean} = $props();
   let dlg = $state<HTMLDialogElement>();
 
   $effect(() => {
@@ -22,12 +23,13 @@
       <button class="x" onclick={() => dlg?.close()} aria-label="Close" title="Close (Esc)"><span aria-hidden="true">✕</span></button>
     </header>
 
+    {#if phone}<a class="cta" href={repoUrl} target="_blank" rel="noopener noreferrer">Get it for your Immich →</a>{/if}
     <p><b>Retrace for Immich</b> is a companion app for <a href="https://immich.app" target="_blank" rel="noopener noreferrer">Immich</a>,
       the self-hosted photo library. It retraces where you went from the locations stored in your photos: a timeline of
       all your years, the route on a map that follows the time you scrub to, and the photos along it. Nothing but Immich
       is needed (no GPS tracker), and it only ever reads from Immich. Not affiliated with the Immich project.</p>
     <p>The code is open source under the <b>MIT licence</b>.
-      <a href={repoUrl} target="_blank" rel="noopener noreferrer">Get it for your Immich →</a></p>
+      {#if !phone}<a href={repoUrl} target="_blank" rel="noopener noreferrer">Get it for your Immich →</a>{/if}</p>
 
     <h3>The sample photos</h3>
     <p>Every photo and clip here is by <b>Kent Wang</b>, via
@@ -35,14 +37,24 @@
       under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="license noopener noreferrer">CC BY 4.0</a> or
       <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="license noopener noreferrer">CC BY-SA 4.0</a>
       (each photo's panel names its own). This doesn't imply that the author or the Wikimedia Foundation endorse this project.</p>
-    <p><b>The demo changed the data</b>, so don't read it as the author's real travels:</p>
-    <ul>
-      <li>photos are resized copies;</li>
-      <li>GPS was removed from some trips and single shots, to show how the viewer handles photos without a location;</li>
-      <li>the video clips were generated from photos (a slow pan or zoom);</li>
-      <li>one shared album belongs to a fictional second user, "Alex".</li>
-    </ul>
-    <p>Each photo's panel says what was changed for it. The material is provided as-is, without warranties, as the licences state.</p>
+    {#snippet changes()}
+      <ul>
+        <li>photos are resized copies;</li>
+        <li>GPS was removed from some trips and single shots, to show how the viewer handles photos without a location;</li>
+        <li>the video clips were generated from photos (a slow pan or zoom);</li>
+        <li>one shared album belongs to a fictional second user, "Alex".</li>
+      </ul>
+      <p>Each photo's panel says what was changed for it. The material is provided as-is, without warranties, as the licences state.</p>
+    {/snippet}
+    {#if phone}
+      <details>
+        <summary><b>The demo changed the data</b>, so don't read it as the author's real travels</summary>
+        {@render changes()}
+      </details>
+    {:else}
+      <p><b>The demo changed the data</b>, so don't read it as the author's real travels:</p>
+      {@render changes()}
+    {/if}
     <p class="links"><a href="/credits" target="_blank" rel="noopener">Full credits: every file, its licence and changes →</a></p>
   </div>
 </dialog>
@@ -67,6 +79,13 @@
   ul { margin: 0 0 8px; padding-left: 20px; }
   a { color: var(--photo-hi); }
   .links { margin-top: 12px; }
+  .cta {
+    display: flex; align-items: center; justify-content: center; min-height: 44px; margin: 10px 0 12px; border-radius: 999px;
+    background: var(--photo-hi); color: #17130C; font: 500 15px var(--f-body); text-decoration: none;
+  }
+  details { margin: 0 0 8px; }
+  summary { padding: 10px 0; cursor: pointer; color: var(--ink2); }
+  details[open] summary { padding-bottom: 6px; }
   .x {
     flex: none; width: 32px; height: 32px; display: grid; place-items: center; padding: 0;
     background: var(--raised); border: 1px solid var(--line); border-radius: 6px; color: var(--ink2);
@@ -75,5 +94,5 @@
   .x:hover { color: var(--ink); border-color: var(--muted); }
   /* A finger's target on the phone shell. */
   :global(html.phone) .x { width: 44px; height: 44px; border-radius: 12px; font-size: 18px; }
-  a:focus-visible, .x:focus-visible { outline: 2px solid var(--photo-hi); outline-offset: 2px; }
+  a:focus-visible, .x:focus-visible, summary:focus-visible { outline: 2px solid var(--photo-hi); outline-offset: 2px; }
 </style>

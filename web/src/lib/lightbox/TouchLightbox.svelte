@@ -99,6 +99,11 @@
   $effect(() => {
     if (cur && !cur.video && (held(cur.preview)?.error != null || broken[cur.id])) fail(cur.preview);
   });
+  // A preview still waiting after a moment (the demo's request budget, a slow network): a quiet "Loading…", so the
+  // blur doesn't read as the photo itself.
+  let slow = $state(false);
+  $effect(() => { void id; slow = false; const t = setTimeout(() => (slow = true), 600); return () => clearTimeout(t); });
+  const waiting = $derived(slow && !!cur && !cur.video && !failure && !decoded[cur.id]);
   let videoTries = $state(0);
   function retry() {
     failed = null;
@@ -394,6 +399,7 @@
     </button>
   </div>
 
+  {#if waiting}<div class="loading" role="status" style:bottom="{(bars ? botH : 0) + 12}px">Loading…</div>{/if}
   {#if failure}
     <div class="msg" role="status">
       {failure.text}
@@ -454,6 +460,13 @@
   .info { flex: 1; min-width: 0; padding-bottom: 4px; text-align: center; color: var(--ink2); font-size: 13px; line-height: 1.35; }
   .when { color: var(--ink); font-variant-numeric: tabular-nums; }
   .where { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .loading {
+    position: absolute; left: 50%; transform: translateX(-50%); padding: 4px 12px;
+    border-radius: 999px; background: rgba(6, 7, 8, .7); color: var(--ink2); font-size: 12px; pointer-events: none;
+    animation: fadein .3s ease-out;
+  }
+  @keyframes fadein { from { opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .loading { animation: none; } }
   .msg {
     position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); max-width: 80%;
     padding: 10px 14px; border-radius: 6px; background: rgba(6, 7, 8, .85); color: var(--ink);

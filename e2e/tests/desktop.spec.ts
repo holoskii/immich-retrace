@@ -53,3 +53,18 @@ test('the toolbar readout: an album named with its dates doesn’t repeat them; 
   // One row of controls plus at most a wrapped readout: never a third row.
   expect((await page.locator('.bar').boundingBox())!.height).toBeLessThanOrEqual(40);
 });
+
+test('the desktop landing frames the trip whole; Space plays and turns Follow on', async ({page}) => {
+  await page.addInitScript(() => { try { localStorage.setItem('immich-retrace.demo.tour-seen', '1'); } catch { /* */ } });
+  await page.goto('/');
+  await expect(page.locator('.card[role=button]')).toBeAttached({timeout: 20_000});
+  const fit = page.getByRole('button', {name: 'Fit', exact: true}), follow = page.locator('button.follow');
+  await expect(fit).toHaveAttribute('class', /\bon\b/);
+  await expect(follow).not.toHaveAttribute('class', /\bon\b/);
+  const at0 = new URL(page.url()).searchParams.get('at');
+  await page.keyboard.press('Space');
+  await expect(follow).toHaveAttribute('class', /\bon\b/);
+  await expect(fit).not.toHaveAttribute('class', /\bon\b/);
+  await expect.poll(() => new URL(page.url()).searchParams.get('at'), {timeout: 5000}).not.toBe(at0);
+  await page.keyboard.press('Space');
+});

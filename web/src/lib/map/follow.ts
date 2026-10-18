@@ -13,9 +13,11 @@ export type View = {x: number; y: number; z: number};
  * The camera control (a Follow toggle + Fit). `mode` drives the Follower; `auto` is what a new selection
  * starts in: the toggle's last explicit state (on → follow, off or Fit → frame the whole selection).
  * A pan or zoom on the map only pauses (manual) and keeps `auto`, so the next selection follows again.
+ * The demo landing (`land`) frames its trip whole with Follow still the automatic mode: the first ▶ or scrub
+ * (`play`) turns Follow on and flies in. Only from that state: after an explicit Fit, `play` changes nothing.
  */
 export interface CamState { mode: CamMode; auto: 'follow' | 'whole' }
-export type CamEvent = 'follow' | 'unfollow' | 'fit' | 'pan' | 'select';
+export type CamEvent = 'follow' | 'unfollow' | 'fit' | 'pan' | 'select' | 'land' | 'play';
 
 export function camNext(s: CamState, ev: CamEvent): CamState {
   switch (ev) {
@@ -25,6 +27,8 @@ export function camNext(s: CamState, ev: CamEvent): CamState {
     case 'fit': return {mode: 'whole', auto: 'whole'};
     case 'pan': return s.mode === 'manual' ? s : {mode: 'manual', auto: s.auto};
     case 'select': return {mode: s.auto, auto: s.auto};
+    case 'land': return {mode: 'whole', auto: 'follow'};
+    case 'play': return s.mode === 'whole' && s.auto === 'follow' ? {mode: 'follow', auto: 'follow'} : s;
   }
 }
 

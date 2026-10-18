@@ -114,6 +114,46 @@ describe('retryDelay', () => {
   });
 });
 
+describe('MediaQueue reserve', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('background loads use only their share of the window; explicit ones the rest, ahead of everything', async () => {
+    const {f, calls} = fakeFetch(), q = new MediaQueue({concurrency: 6, window: () => ({events: 4, ms: 1000, background: 2}), fetch: f, now: () => Date.now()});
+    for (const u of ['g1', 'g2', 'g3', 'g4']) void q.load(u, {high: true});
+    await flush();
+    expect(calls.map(c => c.url)).toEqual(['g1', 'g2']); // the background share is spent
+    void q.load('lb', {explicit: true});
+    void q.load('card', {explicit: true});
+    void q.load('lb2', {explicit: true});
+    await flush();
+    expect(calls.map(c => c.url)).toEqual(['g1', 'g2', 'lb', 'card']); // the reserve; then the window is full
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(calls.map(c => c.url)).toEqual(['g1', 'g2', 'lb', 'card', 'lb2', 'g3']); // explicit first again
+  });
+
+  it('prioritize(…, true) lets a waiting background load (a neighbour now on show) use the reserve', async () => {
+    const {f, calls} = fakeFetch(), q = new MediaQueue({concurrency: 6, window: () => ({events: 3, ms: 1000, background: 1}), fetch: f, now: () => Date.now()});
+    const c = new AbortController();
+    void q.load('g1'); void q.load('g2'); void q.load('next', {signal: c.signal});
+    await flush();
+    expect(calls.map(x => x.url)).toEqual(['g1']);
+    q.prioritize(c.signal); // not explicit: still waits for the background share
+    await flush();
+    expect(calls.map(x => x.url)).toEqual(['g1']);
+    q.prioritize(c.signal, true);
+    await flush();
+    expect(calls.map(x => x.url)).toEqual(['g1', 'next']);
+  });
+
+  it('without a background share every start may be anyone\'s (the old behaviour)', async () => {
+    const {f, calls} = fakeFetch(), q = new MediaQueue({concurrency: 6, window: () => ({events: 2, ms: 1000}), fetch: f, now: () => Date.now()});
+    for (const u of ['a', 'b', 'c']) void q.load(u);
+    await flush();
+    expect(calls.map(x => x.url)).toEqual(['a', 'b']);
+  });
+});
+
 describe('MediaQueue.prioritize', () => {
   beforeEach(() => { vi.useFakeTimers(); });
   afterEach(() => { vi.useRealTimers(); });

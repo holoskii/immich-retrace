@@ -12,6 +12,11 @@ class Hooks {
    * lightbox's bottom bar, a line or two over the photo.
    */
   lightboxPanel = $state.raw<Component<{id: string; video: boolean; compact?: boolean}> | null>(null);
+  /**
+   * The phone shell's note over the map, under the pill (the demo's pitch line). `top`: the pill's bottom edge (px in
+   * the map's box); `height`: reports its own height (0 once gone), which the camera keeps clear.
+   */
+  phoneMapNote = $state.raw<Component<{top: number; height: (h: number) => void}> | null>(null);
   /** The album picker's button text in place of "Albums", shown emphasised. */
   albumPickerLabel = $state<string | null>(null);
 }

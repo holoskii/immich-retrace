@@ -66,6 +66,22 @@ test('swipe left and right step through the selection without new history entrie
   expect(await pos(page)).toBe(n);
 });
 
+test('paging moves the cursor, but the covered dock card loads nothing (no thumbnail requests)', async ({page}) => {
+  await open(page);
+  const thumbs: string[] = [];
+  page.on('request', r => { if (r.url().includes('size=thumbnail')) thumbs.push(r.url()); });
+  const {w, h} = await size(page);
+  const first = await pos(page);
+  for (let i = 0; i < 4; i++) {
+    const p = await pos(page);
+    await swipe(page, {x: w * 0.8, y: h / 2}, {x: w * 0.2, y: h / 2});
+    await expect.poll(() => pos(page)).toBe(p + 1);
+  }
+  expect(await pos(page)).toBe(first + 4);
+  await page.waitForTimeout(600); // past the card's rest delay
+  expect(thumbs).toEqual([]);
+});
+
 test('a swipe starting at the screen edge does not page (left to the OS back gesture)', async ({page}) => {
   await open(page);
   const n = await pos(page), {w, h} = await size(page);

@@ -13,7 +13,7 @@ library is never involved.
 | `fetch.ts`, `commons.ts` | Builds the dataset from the Commons API and downloads the media. |
 | `stub.ts` | The Immich stub. |
 | `Dockerfile` | The stub's image (`docker-compose.demo.yml` in the project root runs it with the viewer). |
-| `data/` | API cache and media (`data/media/<asset id>/thumbnail.jpg`, `preview.jpg`, `video.mp4`). Gitignored, rebuilt by `fetch.ts`. |
+| `data/` | API cache and media (`data/media/<asset id>/thumbnail.webp`, `preview.jpg`, `video.mp4`). Gitignored, rebuilt by `fetch.ts`. |
 
 ## Rebuild the media
 
@@ -24,10 +24,14 @@ node demo/fetch.ts
 ```
 
 This downloads a resized copy of every photo from the Commons image scaler, 1280 px wide, one
-request at a time (slow; needs about 1 GB of disk), and makes the 480 px wide thumbnail from it
-locally (480 is not a standard Commons scaler width). It then renders the clips with ffmpeg (needs
-`ffmpeg` with libx264). Files that already exist are skipped, so delete `thumbnail.jpg` files to
-remake them at another `THUMB_WIDTH` (`config.ts`). It makes no API
+request at a time (slow; needs about 1 GB of disk), and makes the thumbnail from it locally: WebP at
+quality 70 (as Immich's own thumbnails are WebP), fit within 480 × 480 px (median ~31 KB, p90 ~44 KB;
+the 480 px wide q≈85 JPEGs before were ~53 / 89 KB, which mattered under the demo's per-visitor request
+and byte limits). It then renders the clips with ffmpeg (needs `ffmpeg` with libx264 and libwebp).
+Files that already exist are skipped, so delete the `thumbnail.webp` files to remake them at another
+`THUMB_SIZE` / `THUMB_QUALITY` (`config.ts`): with every preview on disk that is a local job (~4 min),
+no download. A media directory built before the WebP thumbnails still has `thumbnail.jpg` files; the
+stub serves those when there is no `thumbnail.webp`, and they can be deleted once it has. It makes no API
 calls and leaves the manifest as it is. If a file has been deleted from Commons since the freeze,
 the run fails with its title.
 
@@ -41,7 +45,7 @@ What the builder does:
 - It keeps uploads since 2023 that have an EXIF `DateTimeOriginal` and a CC BY 4.0 or CC BY-SA 4.0 licence (checked per file). Captures before 2023 are dropped.
 - Offset = EXIF local time − GPS UTC time (`GPSDateStamp` + `GPSTimeStamp`), rounded to 15 minutes. If a file has no usable GPS stamp, the offset comes from the nearest photo in time (within 36 h), else from the CET/CEST rule. Each file records which source was used (`offsetSource`).
 - City and country come from the nearest entry in a small place table in `config.ts`. Nothing is sent to a geocoder.
-- The thumbhash is computed locally from the 480 px thumbnail (ffmpeg decode + the `thumbhash` package).
+- The thumbhash is computed locally from the thumbnail (ffmpeg decode + the `thumbhash` package). Remaking the thumbnails without `--refresh` keeps the manifest's thumbhashes (from the earlier JPEGs: the same picture).
 - Demo modifications are deterministic and recorded in each asset's `modifications`:
   - The Núria photos are presented as another user's, shared through an album (see below).
   - GPS is removed from whole trips, from the Lyon leg of the May 2025 album, and from a small share of single shots (picked by a hash of the title); the lists are in `config.ts`.
@@ -88,10 +92,11 @@ Settings, read by `server/demo.ts` (a normal deployment never reads them):
 | `DEMO_MANIFEST` | `demo/manifest.json` | The dataset manifest, for the credits. Read at startup; a missing file stops the server. |
 
 What changes (everything else is the normal app):
-- Landing: a visit without a query opens `DEMO_TRIP` like a click on its album bar, with the
-  cursor on a landscape photo with GPS near the middle of the trip, Follow on, route, strip and photo
-  card visible (`web/src/lib/demo/landing.ts`). Nothing plays until Play is pressed. A link with a
-  query opens what it says.
+- Landing: a visit without a query opens `DEMO_TRIP` like a click on its album bar, framed whole
+  (Fit), with the cursor on the photo Play's first flight leaves from (a landscape photo with GPS),
+  route, strip and photo card visible (`web/src/lib/demo/landing.ts`). Nothing plays until Play is
+  pressed; the first ▶ turns Follow on and flies in. A link with a query opens what it says.
+- Phone: a one-line pitch under the trip's name, once per visitor (gone after the first ▶ or ✕).
 - Banner: "Demo · sample data", the pitch line, the dataset credit with "About & credits", and
   "Get it for your Immich →".
 - Coach mark: three steps (timeline → time strip → photo card), once per visitor
@@ -123,7 +128,7 @@ The stub accepts any non-empty API key. It implements only what `server/immich.t
 | `GET /api/timeline/bucket?timeBucket=YYYY-MM-01[&albumId=][&withCoordinates=true]` | Columnar rows. `latitude`/`longitude` are present only with `withCoordinates=true`. |
 | `GET /api/albums[?shared=true\|false]` | As in Immich: no parameter → owned albums; `shared=true` → albums shared with or by the user; `shared=false` → owned, not shared. |
 | `GET /api/albums/:id` | The album without assets (v3). |
-| `GET/HEAD /api/assets/:id/thumbnail?size=thumbnail\|preview\|fullsize` | JPEG. `fullsize` serves the preview, because originals are not part of the demo. |
+| `GET/HEAD /api/assets/:id/thumbnail?size=thumbnail\|preview\|fullsize` | Thumbnail WebP (JPEG from an older media directory), preview JPEG. `fullsize` serves the preview, because originals are not part of the demo. |
 | `GET/HEAD /api/assets/:id/video/playback` | MP4 with single byte ranges. |
 
 Errors behave like Immich: no key gives 401, an unknown id gives 400, video of a photo gives 404,

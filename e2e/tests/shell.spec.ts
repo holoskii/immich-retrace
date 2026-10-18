@@ -26,21 +26,54 @@ async function land(page: Page) {
   await expect(page.locator('.card[role=button] img')).toBeVisible({timeout: 15_000});
 }
 
-test('lands on the demo trip: Map tab, the pill, the cursor mid-trip, Follow on, Play pulsing', async ({page}) => {
+test('lands on the demo trip framed whole: Map tab, the pill, the pitch, the cursor before the first flight, Play pulsing', async ({page}) => {
   await land(page);
   await expect(tab(page, 'Map')).toHaveAttribute('aria-selected', 'true');
   await expect(tab(page, 'Trips')).toHaveAttribute('aria-selected', 'false');
   await expect(page.locator('.pill .l2')).toContainText(/Demo.*2024 · 194 photos/);
+  await expect(page.getByRole('note')).toContainText('retraced from where your photos were taken');
+  // On the first stop's last photo: the first ▶ flies on to the next stop at once.
   const [n, total] = await counter(page);
   expect(n).toBeGreaterThan(total * 0.05);
   expect(n).toBeLessThan(total * 0.95);
-  await expect(page.getByRole('button', {name: 'Following the time cursor'})).toHaveAttribute('aria-pressed', 'true');
+  await expect(where(page)).toHaveText(/stop 1 \//);
+  await expect(page.getByRole('button', {name: /^Fit/})).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('button', {name: 'Follow the time cursor'})).toHaveAttribute('aria-pressed', 'false');
   await expect(page.locator('.tb.play')).toHaveAttribute('data-pulsed', 'true');
   // The landing replaced the entry: no extra Back step. The card image is the high-priority LCP candidate.
   expect(await histLen(page)).toBe(await page.evaluate(() => (window as unknown as {len0: number}).len0));
   await expect(page.locator('.card img')).toHaveAttribute('fetchpriority', 'high');
   // The fixed root: the page itself never scrolls.
   expect(await page.evaluate(() => getComputedStyle(document.documentElement).overflow)).toBe('hidden');
+});
+
+test('the first ▶ turns Follow on, reaches the next stop within a few seconds and dismisses the pitch for good', async ({page}) => {
+  await land(page);
+  await page.locator('.tb.play').tap();
+  await expect(page.getByRole('button', {name: 'Following the time cursor'})).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('note')).toHaveCount(0);
+  await expect(where(page)).toHaveText(/stop 2 \//, {timeout: 4000});
+  await page.locator('.tb.play').tap(); // pause
+  await page.reload();
+  await expect(pill(page)).toHaveText('San Sebastián to Huesca', {timeout: 20_000});
+  await expect(page.locator('.card[role=button] img')).toBeVisible({timeout: 15_000});
+  await expect(page.getByRole('note')).toHaveCount(0);
+});
+
+test('the pitch: About opens the panel (call to action first, the data changes folded), ✕ dismisses it', async ({page}) => {
+  await land(page);
+  const note = page.getByRole('note');
+  await note.getByRole('button', {name: 'About'}).tap();
+  const about = page.getByRole('dialog', {name: 'About this demo'});
+  await expect(about).toBeVisible();
+  await expect(about.locator('.cta')).toHaveText(/Get it for your Immich/);
+  await expect(about.getByText('the video clips were generated from photos')).toBeHidden();
+  await about.locator('summary').tap();
+  await expect(about.getByText('the video clips were generated from photos')).toBeVisible();
+  await about.getByRole('button', {name: 'Close'}).tap();
+  await expect(about).toBeHidden();
+  await note.getByRole('button', {name: 'Dismiss'}).tap();
+  await expect(note).toHaveCount(0);
 });
 
 test('a trip card in Trips selects it and shows it on the map, one history entry', async ({page}) => {
@@ -95,6 +128,8 @@ test('the photo card opens the lightbox; Back closes it and stays on Map', async
   expect(q(page, 'lb')).toBeNull();
   expect(q(page, 'album')).toBeTruthy();
   await expect(tab(page, 'Map')).toHaveAttribute('aria-selected', 'true');
+  // The same trip applied again by Back is not a new selection: the landing's whole-trip frame stays.
+  await expect(page.getByRole('button', {name: /^Fit/})).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('dragging the strip scrubs the cursor without history entries', async ({page}) => {

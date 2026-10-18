@@ -1,4 +1,5 @@
-// The demo's 3-step coach mark (pure): the steps, where the bubble goes, and "seen once" in localStorage.
+// The demo's 3-step coach mark (pure): the steps, where the bubble goes, and "seen once" in localStorage (also the
+// phone's pitch line).
 
 export interface TourStep {
   /** CSS selector of what the step points at; when it isn't on screen the bubble sits in the middle. */
@@ -42,11 +43,18 @@ function local(): Store | null {
   try { return globalThis.localStorage ?? null; } catch { return null; }
 }
 
-/** Whether this visitor has finished or skipped the tour. Unreadable storage counts as not seen. */
-export function tourSeen(store: Store | null = local()): boolean {
-  try { return store?.getItem(TOUR_KEY) === '1'; } catch { return false; }
+/** Whether this visitor has seen (finished, dismissed) what `key` names. Unreadable storage counts as not seen. */
+export function seenFlag(key: string, store: Store | null = local()): boolean {
+  try { return store?.getItem(key) === '1'; } catch { return false; }
 }
 
-export function markTourSeen(store: Store | null = local()) {
-  try { store?.setItem(TOUR_KEY, '1'); } catch { /* private mode or full: the tour may show again */ }
+export function markSeen(key: string, store: Store | null = local()) {
+  try { store?.setItem(key, '1'); } catch { /* private mode or full: it may show again */ }
 }
+
+/** Whether this visitor has finished or skipped the tour. */
+export const tourSeen = (store: Store | null = local()) => seenFlag(TOUR_KEY, store);
+export const markTourSeen = (store: Store | null = local()) => markSeen(TOUR_KEY, store);
+
+/** The phone demo's one-line pitch over the map (Pitch.svelte): gone for good after the first ▶ or its ✕. */
+export const PITCH_KEY = 'immich-retrace.demo.pitch-seen';

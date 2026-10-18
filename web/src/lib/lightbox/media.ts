@@ -47,8 +47,11 @@ export class MediaStatusError extends Error {
   constructor(status: number) { super(`media ${status}`); this.name = 'MediaStatusError'; this.status = status; }
 }
 
-/** At most `events` request starts in any `ms` (a sliding window, like Caddy's rate_limit zones). */
-export interface RateWindow { events: number; ms: number }
+/**
+ * At most `events` request starts in any `ms` (a sliding window, like Caddy's rate_limit zones), of which at most
+ * `background` (default: all) for loads nobody explicitly asked to see: the rest is kept for `explicit` ones.
+ */
+export interface RateWindow { events: number; ms: number; background?: number }
 
 export interface QueueOptions {
   /** Requests in flight at once. */
@@ -62,7 +65,7 @@ export interface QueueOptions {
 }
 
 interface Job {
-  url: string; high: boolean; tries: number; signal?: AbortSignal; onStart?: () => void;
+  url: string; high: boolean; explicit: boolean; tries: number; signal?: AbortSignal; onStart?: () => void;
   resolve: (b: Blob) => void; reject: (e: unknown) => void;
 }
 
@@ -74,17 +77,21 @@ export function retryDelay(header: string | null, now: number, tries: number) {
   return Math.min(60_000, Math.max(500, ms));
 }
 
+/** Queue order: explicit loads, then high ones, then the rest; first come first served within each. */
+const rank = (j: Job) => (j.explicit ? 2 : j.high ? 1 : 0);
+
 /**
- * Thumbnail and preview loads: at most `concurrency` in flight, request starts kept under `window`, a 429 pauses
- * the whole queue (Retry-After) and retries the request first. `load` resolves with the body; an `AbortSignal`
+ * Thumbnail and preview loads: at most `concurrency` in flight, request starts kept under `window` (part of it
+ * reserved for explicit loads: the photo the visitor opened, the card resting on a photo, so they never wait behind
+ * grid or preload starts), a 429 pauses the whole queue (Retry-After) and retries the request first. `load` resolves with the body; an `AbortSignal`
  * drops a request still waiting, or cancels it in flight (a photo scrolled past, a lightbox stepped on).
  */
 export class MediaQueue {
   private opts: Required<QueueOptions>;
   private queue: Job[] = [];
   private active = 0;
-  /** Start times inside the current window, oldest first. */
-  private starts: number[] = [];
+  /** Starts inside the current window, oldest first (`bg`: not an explicit load). */
+  private starts: {t: number; bg: boolean}[] = [];
   private pausedUntil = 0;
   private timer: ReturnType<typeof setTimeout> | undefined;
 
@@ -96,10 +103,12 @@ export class MediaQueue {
   get pending() { return {queued: this.queue.length, active: this.active}; }
 
   /**
-   * `high`: ahead of everything waiting (the photo on show, before its neighbours). `onStart`: its request was sent
-   * (counted against the window), once.
+   * `high`: ahead of everything waiting but explicit loads (on-screen cells before overscan, a card's photo).
+   * `explicit`: the visitor asked to see this one now (the lightbox's photo on show, the card resting on a photo):
+   * first in line, and it may use the window's reserve. `onStart`: its request was sent (counted against the window),
+   * once.
    */
-  load(url: string, {signal, high = false, onStart}: {signal?: AbortSignal; high?: boolean; onStart?: () => void} = {}): Promise<Blob> {
+  load(url: string, {signal, high = false, explicit = false, onStart}: {signal?: AbortSignal; high?: boolean; explicit?: boolean; onStart?: () => void} = {}): Promise<Blob> {
     return new Promise((resolve, reject) => {
       if (signal?.aborted) { reject(signal.reason); return; }
       const onAbort = () => {
@@ -108,27 +117,32 @@ export class MediaQueue {
       };
       const done = () => signal?.removeEventListener('abort', onAbort);
       const job: Job = {
-        url, high, tries: 0, signal, onStart,
+        url, high: high || explicit, explicit, tries: 0, signal, onStart,
         resolve: b => { done(); resolve(b); },
         reject: e => { done(); reject(e); },
       };
       signal?.addEventListener('abort', onAbort);
-      const i = high ? this.queue.findIndex(j => !j.high) : -1;
+      const i = this.queue.findIndex(j => rank(j) < rank(job));
       this.queue.splice(i < 0 ? this.queue.length : i, 0, job);
       this.pump();
     });
   }
 
   /**
-   * Moves the waiting request `signal` belongs to first in line (a preloaded neighbour that became the photo on show,
-   * the most urgent thing there is). Nothing for one already in flight or done.
+   * Moves the waiting request `signal` belongs to first in line among the high ones (an on-screen cell asked for as
+   * overscan), or with `explicit` makes it explicit and first of all (a preloaded neighbour that became the photo on
+   * show, a card's photo the cursor came to rest on: the most urgent thing there is). Nothing for one already in
+   * flight or done.
    */
-  prioritize(signal: AbortSignal) {
+  prioritize(signal: AbortSignal, explicit = false) {
     const i = this.queue.findIndex(j => j.signal === signal);
-    if (i <= 0) return;
+    if (i < 0) return;
     const [job] = this.queue.splice(i, 1);
     job.high = true;
-    this.queue.unshift(job);
+    job.explicit ||= explicit;
+    const k = this.queue.findIndex(j => rank(j) <= rank(job));
+    this.queue.splice(k < 0 ? this.queue.length : k, 0, job);
+    this.pump();
   }
 
   private wake(ms: number) {
@@ -142,12 +156,19 @@ export class MediaQueue {
       const t = now();
       if (t < this.pausedUntil) { this.wake(this.pausedUntil - t); return; }
       const w = window();
+      let i = 0;
       if (w) {
-        while (this.starts.length && this.starts[0] <= t - w.ms) this.starts.shift();
-        if (this.starts.length >= w.events) { this.wake(this.starts[0] + w.ms - t); return; }
-        this.starts.push(t);
+        while (this.starts.length && this.starts[0].t <= t - w.ms) this.starts.shift();
+        if (this.starts.length >= w.events) { this.wake(this.starts[0].t + w.ms - t); return; }
+        const bg = this.starts.filter(s => s.bg);
+        if (!this.queue[0].explicit && bg.length >= (w.background ?? w.events)) {
+          // The background share is spent: only an explicit load may start, else wait for a background start to age out.
+          i = this.queue.findIndex(j => j.explicit);
+          if (i < 0) { this.wake(bg[0].t + w.ms - t); return; }
+        }
+        this.starts.push({t, bg: !this.queue[i].explicit});
       }
-      void this.run(this.queue.shift()!);
+      void this.run(this.queue.splice(i, 1)[0]);
     }
   }
 
@@ -181,9 +202,10 @@ export class MediaQueue {
 
 /**
  * The demo's media rate limit is 60 requests per 20 s per visitor (Caddy `(public_site)`, docs/demo-hardening.md);
- * 50 leaves room for video and the failure probes, which don't queue.
+ * 50 leaves room for video and the failure probes, which don't queue. Grid cells, preloads and Play's card
+ * prefetches share 35 of them; the other 15 are kept for explicit loads (the lightbox's photo, the card at rest).
  */
-export const DEMO_MEDIA_WINDOW: RateWindow = {events: 50, ms: 20_000};
+export const DEMO_MEDIA_WINDOW: RateWindow = {events: 50, ms: 20_000, background: 35};
 
 /** The app's queue: 6 in flight (a browser's HTTP/1.1 limit per host), the demo's rate on the demo only. */
 export const mediaQueue = new MediaQueue({concurrency: 6, window: () => (config.demo ? DEMO_MEDIA_WINDOW : null)});
@@ -217,10 +239,10 @@ export class PreviewSet {
     for (const [u, h] of this.held) if (!set.has(u)) this.drop(u, h);
     want.forEach((u, i) => {
       const had = this.held.get(u);
-      if (had) { if (i === 0 && had.src == null && had.error == null) this.queue.prioritize(had.ctrl.signal); return; }
+      if (had) { if (i === 0 && had.src == null && had.error == null) this.queue.prioritize(had.ctrl.signal, true); return; }
       const h: HeldPreview & {ctrl: AbortController} = {src: null, error: null, ctrl: new AbortController()};
       this.held.set(u, h);
-      this.queue.load(u, {signal: h.ctrl.signal, high: i === 0}).then(b => {
+      this.queue.load(u, {signal: h.ctrl.signal, explicit: i === 0}).then(b => {
         if (this.held.get(u) !== h) return;
         h.src = this.urls.create(b);
         this.changed();

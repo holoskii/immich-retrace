@@ -13,10 +13,13 @@ export const LICENSES = {
 } as const;
 
 /**
- * Copy widths. The preview is downloaded from the Commons scaler (a standard width); the thumbnail is
- * made locally from it (480 px is sharp enough for phone tiles at DPR 3). Originals are never downloaded.
+ * Copy sizes. The preview is downloaded from the Commons scaler (a standard width); the thumbnail is
+ * made locally from it, as WebP (like Immich's own thumbnails): fit within THUMB_SIZE × THUMB_SIZE, so its short
+ * side is ~320 px for a 3:2 photo, enough for the phone's ~136 px square tiles at DPR 3 with the demo's request
+ * budget in mind (~23 KB against ~54 KB for the 480 px wide JPEGs before). Originals are never downloaded.
  */
-export const THUMB_WIDTH = 480;
+export const THUMB_SIZE = 480;
+export const THUMB_QUALITY = 70;
 export const PREVIEW_WIDTH = 1280;
 
 export interface Range {from: string; to: string; why: string}

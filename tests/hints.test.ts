@@ -92,6 +92,16 @@ describe('camera control (Follow toggle + Fit)', () => {
     expect(run(off, 'follow')).toEqual(start);
     expect(run(start, 'fit', 'follow')).toEqual(start);
   });
+
+  it('the demo landing frames the trip whole; the first ▶ or scrub turns Follow on, once', () => {
+    const landed = run(start, 'land');
+    expect(landed).toEqual({mode: 'whole', auto: 'follow'});
+    expect(run(landed, 'play')).toEqual(start);
+    expect(run(landed, 'play', 'fit', 'play')).toEqual({mode: 'whole', auto: 'whole'}); // an explicit Fit stays
+    expect(run(start, 'play')).toBe(start);
+    expect(run(landed, 'pan', 'play')).toEqual({mode: 'manual', auto: 'follow'}); // moved by hand: left alone
+    expect(run(landed, 'select')).toEqual(start); // another trip follows as usual
+  });
 });
 
 describe('dayAround', () => {

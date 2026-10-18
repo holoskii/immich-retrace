@@ -3,12 +3,14 @@
   // by photo, player.ts). Play stops when the page is hidden, the map covered (another tab, the lightbox), the
   // selection changes or the strip is touched. The card's first image is the page's LCP element: loaded by the
   // <img> itself at high priority; later ones come through the media queue (rate-limited in the demo) via CardImage:
-  // the photo's thumbhash until its own thumbnail is in, never another photo's.
+  // the photo's thumbhash until its own thumbnail is in, never another photo's. Under another tab or the lightbox it
+  // loads nothing (the lightbox pages the cursor along); while playing it prefetches the next photos.
   import {onMount, untrack} from 'svelte';
   import {selection, writeUrl, type Active} from '../selection.svelte.ts';
   import {cursorRow, stepRow, typicalOffset} from '../map/route.ts';
   import {findStops, stepStop} from '../map/stops.ts';
-  import {playDelay, playStart} from '../map/play.ts';
+  import {planFor, playAhead, playDwell, playStart} from '../map/play.ts';
+  import {playState} from '../map/playing.svelte.ts';
   import {markScrub} from '../map/scrub.ts';
   import {fDuration, fWhen} from '../map/format.ts';
   import {thumbHashDataUrl} from '../thumbhash.ts';
@@ -41,14 +43,21 @@
   $effect(() => () => card.dispose());
   $effect(() => {
     const w = wantUrl;
-    if (w && lcp == null) { lcp = w; lcpPending = true; return; }
-    if (!untrack(() => lcpPending)) card.want(w);
+    if (w && lcp == null && !covered) { lcp = w; lcpPending = true; return; }
+    // Covered (another tab, the lightbox paging the cursor along): nothing to show, so nothing loaded.
+    if (!untrack(() => lcpPending)) card.want(covered ? null : w);
+  });
+  /** Play's prefetch (play.ts playAhead): the photos it lingers on next, in the background share of the demo's budget. */
+  $effect(() => {
+    const a = active, r = nearest, p = plan;
+    if (!playing || !a || !p || r < 0) { card.ahead([]); return; }
+    card.ahead(playAhead(p, r, !!reducedMq?.matches).map(k => thumbUrl(a.ix.id[k], a.ix.thumbhash[k])));
   });
   function lcpDone(ok: boolean) {
     if (!lcpPending || !lcp) return;
     lcpPending = false;
     if (ok) card.adopt(lcp, lcp);
-    card.want(wantUrl);
+    card.want(covered ? null : wantUrl);
   }
   /** Only ever the photo at the cursor: else no <img>, and the card shows that photo's thumbhash. */
   const imgSrc = $derived.by(() => {
@@ -75,10 +84,12 @@
     const a = active, c = selection.cursor;
     return a && c != null ? stepRow(a.ix, a.lo, a.hi, c, rowAt(a, c), 1) : -1;
   }
+  /** Play's timing for the selection (play.ts), with the stops ⏮ ⏭ use. */
+  const plan = $derived(active ? planFor(active.ix, active.lo, active.hi) : null);
   const player = new Player({
     dwell: () => {
-      const a = active, c = selection.cursor, r = nextRow();
-      return a && c != null && r >= 0 ? playDelay(a.ix.t[r] - c, !!reducedMq?.matches) : null;
+      const a = active, c = selection.cursor;
+      return a && plan && c != null ? playDwell(plan, a.ix, c, rowAt(a, c), !!reducedMq?.matches) : null;
     },
     advance: () => {
       const a = active, r = nextRow();
@@ -88,7 +99,7 @@
       played = selection.cursor;
       playUrl();
     },
-    changed: p => { playing = p; if (!p) playUrl(true); },
+    changed: p => { playing = playState.on = p; if (!p) playUrl(true); },
   });
   function play() {
     const a = active;

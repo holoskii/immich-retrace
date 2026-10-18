@@ -7,6 +7,7 @@
   // scroll inside themselves.
   import {onMount, untrack} from 'svelte';
   import {config} from '../config.svelte.ts';
+  import {hooks} from '../hooks.svelte.ts';
   import {library} from '../index/store.svelte.ts';
   import {lightboxPending, selection, writeUrl} from '../selection.svelte.ts';
   import {representativeRow} from '../map/route.ts';
@@ -66,10 +67,13 @@
     return () => clearTimeout(t);
   });
 
-  // The camera frames the area between the pill and the bottom of the map (the dock is below it); the right edge
-  // keeps the Follow / Fit buttons clear.
-  let pillBottom = $state(0);
-  const insets = $derived({t: Math.max(72, pillBottom + 16), r: 72, b: 24, l: 20});
+  // The camera frames the area between the pill (and the note under it, while shown) and the bottom of the map (the
+  // dock is below it); the right edge keeps the Follow / Fit buttons clear. Framing the whole trip keeps more room on
+  // the left and bottom: a cluster's bubble (~20 px radius) at the edge must not be cut in half.
+  let pillBottom = $state(0), noteH = $state(0);
+  const top = $derived(Math.max(72, pillBottom + (noteH ? noteH + 8 : 0) + 16));
+  const insets = $derived({t: top, r: 72, b: 24, l: 20});
+  const wholeInsets = $derived({t: top, r: 72, b: 32, l: 32});
 
   onMount(() => {
     document.documentElement.classList.add('phone');
@@ -87,7 +91,7 @@
         {#await mapView}
           <div class="placeholder" role="status">Loading map…</div>
         {:then {default: MapView}}
-          <MapView phone {covered} {insets} wholeInsets={insets} />
+          <MapView phone {covered} {insets} {wholeInsets} />
         {:catch e}
           {#if e instanceof NoWebGL}
             <div class="placeholder" role="status">This browser can't show the map: WebGL 2 is turned off or not supported.</div>
@@ -96,6 +100,7 @@
           {/if}
         {/await}
         <Pill bind:bottom={pillBottom} loading={!landed} />
+        {#if hooks.phoneMapNote}<hooks.phoneMapNote top={pillBottom} height={h => (noteH = h)} />{/if}
       </div>
       <Dock {active} {covered} {pulse} pick={() => show('trips')} />
     </div>

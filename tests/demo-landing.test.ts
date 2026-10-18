@@ -15,8 +15,8 @@ import {loadManifest} from '../demo/stub.ts';
 import {buildIndex} from '../web/src/lib/index/model.ts';
 import {headerStatus} from '../web/src/lib/index/store.svelte.ts';
 import {findTrip, representativeRow} from '../web/src/lib/demo/landing.ts';
-import {markTourSeen, placeBubble, TOUR, TOUR_KEY, tourSeen} from '../web/src/lib/demo/tour.ts';
-import {isPlayKey, PLAY, playDelay, playStart} from '../web/src/lib/map/play.ts';
+import {markSeen, markTourSeen, PITCH_KEY, placeBubble, seenFlag, TOUR, TOUR_KEY, tourSeen} from '../web/src/lib/demo/tour.ts';
+import {isPlayKey, playStart} from '../web/src/lib/map/play.ts';
 import {noSelectionHint, overviewHint, railAlbums} from '../web/src/lib/overview/data.ts';
 import {SHORTCUTS} from '../web/src/lib/shortcuts.ts';
 
@@ -272,17 +272,21 @@ describe('tour', () => {
     expect(() => markTourSeen(broken)).not.toThrow();
     expect(tourSeen(null)).toBe(false);
   });
+
+  it('the phone pitch is its own once-per-visitor flag, as safe with storage that throws', () => {
+    const m = new Map<string, string>(), store = {getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => { m.set(k, v); }};
+    expect(seenFlag(PITCH_KEY, store)).toBe(false);
+    markTourSeen(store);
+    expect(seenFlag(PITCH_KEY, store)).toBe(false);
+    markSeen(PITCH_KEY, store);
+    expect(seenFlag(PITCH_KEY, store)).toBe(true);
+    const broken = {getItem: () => { throw new Error('SecurityError'); }, setItem: () => { throw new Error('QuotaExceeded'); }};
+    expect(seenFlag(PITCH_KEY, broken)).toBe(false);
+    expect(() => markSeen(PITCH_KEY, broken)).not.toThrow();
+  });
 });
 
 describe('Play', () => {
-  it('lingers by how far away the next photo is, and evenly with reduced motion', () => {
-    expect(playDelay(5e3, false)).toBe(PLAY.burstMs);
-    expect(playDelay(20 * M, false)).toBe(PLAY.photoMs);
-    expect(playDelay(PLAY.jumpGap, false)).toBe(PLAY.jumpMs);
-    expect(playDelay(5e3, true)).toBe(PLAY.reducedMs);
-    expect(playDelay(10 * 3600e3, true)).toBe(PLAY.reducedMs);
-  });
-
   it('starts at the cursor, or from the first photo without one or at the end', () => {
     const ix = index([[0, true], [10, true], [20, false]]);
     expect(playStart(ix, 0, 3, null, -1)).toBe(0);

@@ -7,7 +7,7 @@
 // Any non-empty x-api-key is accepted. Nothing is ever written.
 
 import {stat} from 'node:fs/promises';
-import {createReadStream, readFileSync} from 'node:fs';
+import {createReadStream, existsSync, readFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {Readable} from 'node:stream';
 // Two demo users: 'me' is whoever the API key belongs to; 'friend' shares an album with them.
@@ -31,7 +31,7 @@ const noZone = (iso: string) => iso.replace(/Z$/, '');
 
 export interface StubOptions {
   manifest: DemoManifest;
-  /** Directory with <asset id>/{thumbnail.jpg,preview.jpg,video.mp4}. */
+  /** Directory with <asset id>/{thumbnail.webp (or an older thumbnail.jpg),preview.jpg,video.mp4}. */
   mediaDir: string;
 }
 
@@ -184,8 +184,11 @@ export function createStub({manifest, mediaDir}: StubOptions): (req: Request) =>
       if (m[2] === 'thumbnail') {
         const size = q.get('size') ?? 'thumbnail';
         if (!['thumbnail', 'preview', 'fullsize'].includes(size)) return fail(400, 'size must be one of: thumbnail, preview, fullsize');
-        // The demo has no originals: fullsize is the preview copy.
-        return file(join(mediaDir, asset.id, size === 'thumbnail' ? 'thumbnail.jpg' : 'preview.jpg'), 'image/jpeg', head, null);
+        // The demo has no originals: fullsize is the preview copy. Thumbnails are WebP (as Immich's own are); a media
+        // directory built before that still has JPEGs.
+        if (size !== 'thumbnail') return file(join(mediaDir, asset.id, 'preview.jpg'), 'image/jpeg', head, null);
+        const webp = join(mediaDir, asset.id, 'thumbnail.webp');
+        return existsSync(webp) ? file(webp, 'image/webp', head, null) : file(join(mediaDir, asset.id, 'thumbnail.jpg'), 'image/jpeg', head, null);
       }
       if (asset.kind !== 'video') return fail(404, 'Asset is not a video');
       return file(join(mediaDir, asset.id, 'video.mp4'), 'video/mp4', head, req.headers.get('range'));

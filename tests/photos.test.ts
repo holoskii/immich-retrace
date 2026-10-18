@@ -3,7 +3,7 @@
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import type {AssetColumns} from '../shared/api.ts';
 import {buildIndex} from '../web/src/lib/index/model.ts';
-import {centerOn, gridColumns, groupDays, layoutGrid, reveal, rowOf, visibleRows, type Layout} from '../web/src/lib/mobile/grid.ts';
+import {centerOn, gridColumns, groupDays, layoutGrid, requestRows, reveal, rowOf, visibleRows, type Layout} from '../web/src/lib/mobile/grid.ts';
 import {ThumbSet} from '../web/src/lib/mobile/thumbs.ts';
 import {loadedThumb, MediaQueue} from '../web/src/lib/lightbox/media.ts';
 
@@ -84,6 +84,18 @@ describe('grid layout', () => {
     expect(performance.now() - t).toBeLessThan(50);
     const [a, b] = visibleRows(B, 200_000 - 600, 200_000 + 800 + 600);
     expect((b - a) * B.cols).toBeLessThanOrEqual(60);
+  });
+});
+
+describe('requestRows', () => {
+  it('asks for the on-screen rows first, then the rendered ones nearest first, below before above', () => {
+    expect(requestRows(4, 7, 1, 10)).toEqual([4, 5, 6, 7, 3, 8, 2, 9, 1]);
+  });
+
+  it('in the demo: the on-screen rows and one row ahead in the direction of the scroll, no overscan', () => {
+    expect(requestRows(4, 7, 1, 10, 1, 1)).toEqual([4, 5, 6, 7]);
+    expect(requestRows(4, 7, 1, 10, 1, -1)).toEqual([4, 5, 6, 3]);
+    expect(requestRows(4, 7, 4, 7, 1, 1)).toEqual([4, 5, 6]); // nothing rendered past the screen
   });
 });
 

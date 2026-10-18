@@ -8,7 +8,8 @@
   import {selection, writeUrl} from '../selection.svelte.ts';
   import {cursorRow, densityBins, stepRow} from './route.ts';
   import {markScrub} from './scrub.ts';
-  import {isPlayKey, playDelay, playStart} from './play.ts';
+  import {isPlayKey, planFor, playDwell, playStart} from './play.ts';
+  import {playState} from './playing.svelte.ts';
   import {fDay, fMonthYear, fWeekday, fWhen} from './format.ts';
 
   /** `prominentPlay`: a larger, labelled Play button (the demo's landing). */
@@ -128,10 +129,13 @@
   /** The row the cursor at `c` is on (of several at one instant, the one it was put on). */
   const rowAt = (c: number) => cursorRow(active.ix, active.lo, active.hi, c, selection.pickIn(active));
 
+  /** Play's timing for the selection (play.ts, planned on the first ▶ and kept per selection). */
+  const planned = () => planFor(active.ix, active.lo, active.hi);
+
   function play() {
     const {ix, lo, hi} = active, start = playStart(ix, lo, hi, cursorIn, cursorIn == null ? -1 : rowAt(cursorIn));
     if (start == null) return;
-    playing = true;
+    playing = playState.on = true;
     // A jump back to the start is a seek (the camera snaps there), not a scrub.
     if (start >= 0) { selection.cursorTo(ix, start); playUrl(true); }
     next();
@@ -139,9 +143,9 @@
   /** Waits on the current photo, then steps to the one after whatever the cursor is on by then. */
   function next() {
     clearTimeout(timer);
-    const {ix, lo, hi} = active, c = selection.cursor;
-    const r = c == null ? -1 : stepRow(ix, lo, hi, c, rowAt(c), 1);
-    if (c == null || r < 0) { pause(); return; }
+    const ix = active.ix, c = selection.cursor;
+    const d = c == null ? null : playDwell(planned(), ix, c, rowAt(c), !!reducedMq?.matches);
+    if (d == null) { pause(); return; }
     timer = setTimeout(() => {
       const c2 = selection.cursor, r2 = c2 == null ? -1 : stepRow(active.ix, active.lo, active.hi, c2, rowAt(c2), 1);
       if (!playing || r2 < 0) { pause(); return; }
@@ -149,13 +153,13 @@
       selection.cursorTo(active.ix, r2);
       playUrl();
       next();
-    }, playDelay(ix.t[r] - c, !!reducedMq?.matches));
+    }, d);
   }
   /** `write`: put the final cursor in the URL (not when something else is taking it over). */
   function pause(write = true) {
     clearTimeout(timer);
     if (!playing) return;
-    playing = false;
+    playing = playState.on = false;
     if (write) playUrl(true);
   }
   const togglePlay = () => (playing ? pause() : play());
@@ -163,7 +167,7 @@
   // A new selection, or the lightbox opening, stops it (an index refresh under the same selection doesn't).
   $effect(() => { void selection.sel; untrack(() => pause(false)); });
   $effect(() => { if (selection.lightbox != null) untrack(() => pause(false)); });
-  $effect(() => () => clearTimeout(timer));
+  $effect(() => () => { clearTimeout(timer); if (playing) playState.on = false; });
 
   function onWindowKey(e: KeyboardEvent) {
     if (!isPlayKey(e) || selection.lightbox != null) return;

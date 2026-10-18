@@ -28,6 +28,8 @@
   import type {Insets} from './camera.ts';
   import {Inset} from './inset.ts';
   import {isScrub} from './scrub.ts';
+  import {landing, playState} from './playing.svelte.ts';
+  import {planFor, playAhead} from './play.ts';
   import TimeStrip from './TimeStrip.svelte';
 
   maplibregl.setWorkerUrl(workerUrl);
@@ -488,15 +490,21 @@
     }
   });
 
-  // New selection: back to the automatic mode, snap there (and again once its track arrives).
-  let selKey: unknown = null, snapOnTrack = false;
+  // New selection: back to the automatic mode, snap there (and again once its track arrives). The same selection
+  // applied again (Back or Forward re-applying the URL, as closing the lightbox does) is not a new one: the camera
+  // stays as it is.
+  let selKey: Selection | null = null, snapOnTrack = false;
   $effect(() => {
     if (!ready || !follower) return;
     const sel = selection.sel, bx = box;
     follower.box = bx;
-    if (sel === selKey) { follower.kick(); return; }
+    if (sel === selKey || (sel && selKey && sameSelection(sel, selKey))) { selKey = sel; follower.kick(); return; }
     selKey = sel;
-    untrack(() => camTo('select', false));
+    // The demo landing's trip is framed whole until the first ▶ or scrub (camNext `land` / `play`); once.
+    // By value: URL sync may have applied the landing's trip again before the map was ready.
+    const land = sel != null && landing.sel != null && sameSelection(sel, landing.sel);
+    if (land) landing.sel = null;
+    untrack(() => camTo(land ? 'land' : 'select', false));
     follower.mk = null;
     follower.snap();
     snapOnTrack = true;
@@ -515,7 +523,9 @@
     const c = cursor, prev = lastCursor;
     lastCursor = c;
     follower.cursor = c;
-    const seek = c != null && !isScrub() && (prev == null || Math.abs(c - prev) > FOLLOW.seekMs);
+    const scrub = isScrub();
+    if (scrub && c !== prev) untrack(() => handOver());
+    const seek = c != null && !scrub && (prev == null || Math.abs(c - prev) > FOLLOW.seekMs);
     if (seek) follower.snap(); else follower.kick();
   });
 
@@ -555,6 +565,13 @@
       follower.kick();
     }
   });
+
+  /** The landing's Fit becomes Follow on the first ▶ or scrub (nothing otherwise): the camera flies in. */
+  function handOver() {
+    const next = camNext(cam, 'play');
+    if (next.mode !== cam.mode) camTo('play');
+  }
+  $effect(() => { if (playState.on && ready) untrack(() => handOver()); });
 
   function camTo(ev: CamEvent, user = true) {
     cam = camNext(untrack(() => cam), ev);
@@ -612,7 +629,7 @@
   }
 
   // The pop-out photo (desktop; the phone's dock has its own card): the photo's thumbhash until its own thumbnail is
-  // in, never another photo's (CardImage: one load at a time, latest wins, paced in the demo).
+  // in, never another photo's (CardImage: one load at a time, latest wins, paced in the demo; Play prefetches).
   let cardV = $state(0);
   /** Why thumbnails fail (probed once, until one loads again): a missing permission shouldn't look like a blur. */
   let thumbIssue = $state<MediaFailure | null>(null), probing = false;
@@ -625,9 +642,14 @@
     },
   });
   $effect(() => () => card.dispose());
+  // Nothing while the lightbox covers the map (stepping it moves the cursor); while playing, the next photos prefetched.
   $effect(() => {
     const a = active, r = nearest;
-    card.want(!phone && a && r >= 0 ? thumbUrl(a.ix.id[r], a.ix.thumbhash[r]) : null);
+    card.want(!phone && a && r >= 0 && selection.lightbox == null ? thumbUrl(a.ix.id[r], a.ix.thumbhash[r]) : null);
+  });
+  $effect(() => {
+    const a = active, r = nearest;
+    card.ahead(!phone && a && r >= 0 && playState.on ? playAhead(planFor(a.ix, a.lo, a.hi), r, reduced).map(k => thumbUrl(a.ix.id[k], a.ix.thumbhash[k])) : []);
   });
   const cardSrc = $derived((void cardV, card.src));
   // Card note only for causes worth knowing (a missing file or an odd format just keeps the blur).
