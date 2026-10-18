@@ -12,7 +12,7 @@ function startup<T>(f: () => T): T {
     return f();
   } catch (err) {
     if (!(err instanceof ConfigError)) throw err;
-    console.error(`immich-retrace: ${err.message}. Usage: IMMICH_URL=http://immich-server:2283 IMMICH_API_KEY=… node server/main.ts (see README.md, Configuration).`);
+    console.error(`immich-retrace: ${err.message}. Usage: IMMICH_URL=http://immich-server:2283 IMMICH_API_KEY=… node server/main.ts (see DEPLOYMENT.md, Configuration).`);
     process.exit(1);
   }
 }

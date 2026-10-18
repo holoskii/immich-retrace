@@ -20,7 +20,8 @@ Immich does keeps an upstream PR possible.
 | `tests/` | vitest; server tests use a fake gate/Immich (`fetch` injected into `ImmichClient`) |
 | `e2e/` | Playwright, self-contained (own `package.json`; `node_modules`, browsers in `.browsers/`, WebKit's missing system libs in `.deps/` all gitignored; `e2e/setup.sh` installs without root). Projects `Pixel 7` (Chromium, real touches via CDP), `iPhone 15` (WebKit, synthetic touch pointer events: Linux WebKit is not iOS Safari and plays no H.264) and `Desktop Chrome`. Builds, then starts the demo stub on :2293 and the viewer on :8092 itself (`E2E_REUSE=1` uses ones already running). Needs `demo/data/media` |
 | `.env` | from `.env.example`; holds the API key (gitignored) |
-| `README.md` | user-facing docs (quick start, env table, security, troubleshooting); keep in sync with `server/config.ts` |
+| `README.md`, `DEPLOYMENT.md` | user-facing docs: the README is the pitch and the happy path; DEPLOYMENT.md has setup options, the env table, security and troubleshooting (keep it in sync with `server/config.ts` and the error texts) |
+| `.github/workflows/image.yml` | CI: tests, then the amd64 + arm64 image to `ghcr.io/<owner>/immich-retrace` (`latest` from main, `X.Y.Z` from tags) |
 | `sketches/template.html` | UI sketch source; the data (personal GPS) was injected at `/*__DATA__*/` and is not in the repo |
 
 ```bash
@@ -39,7 +40,7 @@ minute, `to` exclusive, after a cluster zoom) or `?album=<uuid>[&mode=range][&fr
 ## Decisions
 
 - No built-in login. Anyone who can reach the viewer sees the whole library the key can read; the
-  README tells operators to put auth on every path. Mobile: only the public demo gets a phone shell (below); owner mode on a phone keeps the desktop one. Code is MIT;
+  docs tell operators to put auth on every path. Mobile: only the public demo gets a phone shell (below); owner mode on a phone keeps the desktop one. Code is MIT;
   demo data keeps its per-file CC licences.
 - The demo lives in main: UI isolated in `web/src/lib/demo/` (lazy chunk) and `server/demo.ts`, dataset
   and `docker-compose.demo.yml` in the same repo. No long-lived demo branch.
@@ -198,7 +199,7 @@ browser ── reverse proxy with auth ── immich-retrace container (Node/TS,
   animated marker and photo pop-out. `MAP_STYLE_URL` is configurable; the default
   (`DEFAULT_MAP_STYLE_URL` in `shared/api.ts`) is OpenFreeMap dark (free, no key, attribution via
   the style's TileJSON).
-- Wake gates (an on-demand proxy that starts Immich, README → Wake gates): while Immich starts,
+- Wake gates (an on-demand proxy that starts Immich): while Immich starts,
   the gate answers every request (API and images too) with `200 text/html`, its loading page. The backend wakes Immich single-flight via `/api/server/ping`
   and checks `Content-Type` on every upstream response; other requests wait. The 60 s wait applies
   only once the loading page was seen; refused, DNS and non-Immich answers fail at once. Immich's

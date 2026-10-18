@@ -1,10 +1,9 @@
 # Generic deployment: the viewer on http://127.0.0.1:8080 of this host. Settings come from .env
 # (copy .env.example). The API key in .env reads the whole library and the viewer has no login of
-# its own: publish it only behind a reverse proxy with authentication (README → Security).
+# its own: publish it only behind a reverse proxy with authentication (DEPLOYMENT.md → Security).
 services:
   immich-retrace:
-    build: .
-    image: immich-retrace:latest
+    image: ghcr.io/holoskii/immich-retrace:latest   # or `build: .` in a clone, to build from source
     container_name: immich-retrace
     env_file:
       - .env

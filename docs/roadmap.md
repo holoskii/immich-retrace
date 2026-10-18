@@ -18,9 +18,8 @@ Everything that is still open. Decisions and architecture are in [ARCHITECTURE.m
 2. Phone demo on real devices: phase 4 of [mobile/demo-scope.md](mobile/demo-scope.md) (one iPhone,
    one cheap Android, the link opened from Telegram/WhatsApp).
 3. Verify shared albums end to end (see below).
-4. Release: a prebuilt multi-arch image on GHCR (the README's quick start pulls it instead of
-   building from source), a first tagged version, the public demo link and a GIF or video at the
-   top of the README. The author's launch checklist is in `docs/private/` (not in the repo).
+4. Release: a first tagged version (the image, the demo link and the video are done). The author's
+   launch checklist is in `docs/private/` (not in the repo).
 
 ## Demo
 
