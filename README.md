@@ -1,5 +1,11 @@
 # Retrace for Immich
 
+<p align="center">
+  <a href="https://immich-retrace-demo.holoskii.me"><img src="docs/media/retrace.webp" width="960"
+    alt="Pressing Play on a trip: the map follows the route photo by photo while the timeline above marks the day"></a>
+</p>
+<p align="center"><b><a href="https://immich-retrace-demo.holoskii.me">Try the live demo</a></b> (sample photos, no install)</p>
+
 A read-only companion web app for [Immich](https://immich.app) that shows where you were and when,
 reconstructed from your photos alone (no GPS tracker needed):
 
