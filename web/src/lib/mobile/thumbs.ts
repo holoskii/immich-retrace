@@ -1,4 +1,4 @@
-// The Photos grid's thumbnails: loaded through the media queue (rate-limited in the demo) into object URLs, so a cell's
+// The Photos grid's thumbnails: loaded through the media queue into object URLs, so a cell's
 // <img> makes no request of its own.
 import {registerLoaded, type MediaQueue} from '../lightbox/media.ts';
 
@@ -8,7 +8,7 @@ interface Held { src: string | null; failed: boolean; ctrl: AbortController }
  * Thumbnails a virtual grid wants. `want` names the cells rendered now, the ones on screen first: those not held are
  * requested (the on-screen ones ahead of everything waiting), a waiting or in-flight request no longer wanted (a
  * cell scrolled far away) is cancelled. Loaded thumbnails stay as object URLs, least recently wanted dropped first
- * beyond `max`, so scrolling back doesn't spend the demo's request budget again; the decoded images are only those
+ * beyond `max`, so scrolling back costs no request; the decoded images are only those
  * of the rendered cells. A failed load is kept while wanted (no retry loop) and tried again once it scrolled away.
  */
 export class ThumbSet {

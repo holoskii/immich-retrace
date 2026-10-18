@@ -93,7 +93,7 @@ export function planFor(ix: IndexColumns, lo: number, hi: number): PlayPlan {
 }
 
 /**
- * The photos worth fetching ahead while Play is on row r (the card's prefetch, within the demo's background share):
+ * The photos worth fetching ahead while Play is on row r (the card's prefetch):
  * those Play reaches between `lead` and `horizon` ms from now (sooner ones wouldn't arrive in time on a slow
  * network), the ones it lingers on longest first (the pause before a flight, an ordinary step: a burst photo is gone
  * in a moment; the last photo stays), at most `n`; the photo at the cursor first when it stays at least `lead`.

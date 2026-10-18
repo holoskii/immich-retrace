@@ -635,7 +635,7 @@
   }
 
   // The pop-out photo (desktop; the phone's dock has its own card): the photo's thumbhash until its own thumbnail is
-  // in, never another photo's (CardImage: one load at a time, latest wins, paced in the demo; Play prefetches).
+  // in, never another photo's (CardImage: one load at a time, latest wins; Play prefetches).
   let cardV = $state(0);
   /** Why thumbnails fail (probed once, until one loads again): a missing permission shouldn't look like a blur. */
   let thumbIssue = $state<MediaFailure | null>(null), probing = false;

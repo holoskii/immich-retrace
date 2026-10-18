@@ -47,7 +47,7 @@
     // Covered (another tab, the lightbox paging the cursor along): nothing to show, so nothing loaded.
     if (!untrack(() => lcpPending)) card.want(covered ? null : w);
   });
-  /** Play's prefetch (play.ts playAhead): the photos it lingers on next, in the background share of the demo's budget. */
+  /** Play's prefetch (play.ts playAhead): the photos it lingers on next (background loads). */
   $effect(() => {
     const a = active, r = nearest, p = plan;
     if (!playing || !a || !p || r < 0) { card.ahead([]); return; }

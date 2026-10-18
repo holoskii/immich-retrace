@@ -1,5 +1,5 @@
-import {describe, expect, it} from 'vitest';
-import {createApp} from '../server/app.ts';
+import {describe, expect, it, vi} from 'vitest';
+import {createApp, FailureLog} from '../server/app.ts';
 import {ImmichClient} from '../server/immich.ts';
 
 const ID = '0b7b5c7e-1f2a-4c3d-9e8f-123456789abc';
@@ -113,6 +113,27 @@ describe('upstream requests', () => {
 });
 
 describe('failures', () => {
+  it('logs failures without flooding: the first of each kind at once, then one count per period', async () => {
+    vi.useFakeTimers();
+    try {
+      const lines: string[] = [], log = new FailureLog(l => lines.push(l), 1000);
+      const {immich} = fakeImmich({respond: () => new Response(null, {status: 429})});
+      const app = createApp(immich, undefined, undefined, log);
+      for (let i = 0; i < 5; i++) expect((await app.request(`/api/assets/${ID}/thumbnail`)).status).toBe(502);
+      expect(lines).toEqual(['immich-retrace: 502 on /api/assets/:id/thumbnail: Immich returned 429.']);
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(lines.at(-1)).toBe('immich-retrace: in the last 1 s, also 4 x 502 on /api/assets/:id/thumbnail: Immich returned 429.');
+      await app.request(`/api/assets/${ID}/thumbnail`); // still failing: counted, not logged at once
+      expect(lines).toHaveLength(2);
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(lines).toHaveLength(3);
+      await vi.advanceTimersByTimeAsync(5000); // quiet: nothing more, and the next one is logged at once again
+      expect(lines).toHaveLength(3);
+      await app.request(`/api/assets/${ID}/thumbnail`);
+      expect(lines).toHaveLength(4);
+    } finally { vi.useRealTimers(); }
+  });
+
   it('maps an unknown asset (Immich 400) to 404', async () => {
     const {app} = fakeImmich();
     expect((await app.request(`/api/assets/00000000-0000-4000-8000-000000000000/thumbnail`)).status).toBe(404);

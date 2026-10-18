@@ -40,16 +40,52 @@ async function relay(res: Response, cacheControl = 'no-store') {
 const badRequest = (c: Context, error: string) => c.json({error, code: 'invalid'} satisfies ApiError, 400);
 
 /**
+ * Server-side failures (Immich unreachable, answering 5xx or 429, an internal error), logged without flooding: the
+ * first of each kind at once, the rest as one count per kind at most every `everyMs`. A dead Immich behind a busy
+ * page (or the public demo) would otherwise write a line per request. No client data is logged.
+ */
+export class FailureLog {
+  private counts = new Map<string, number>();
+  private timer: ReturnType<typeof setTimeout> | undefined;
+  private log: (line: string) => void;
+  private everyMs: number;
+  constructor(log: (line: string) => void = l => console.warn(l), everyMs = 60_000) { this.log = log; this.everyMs = everyMs; }
+
+  /** `first`: logs the first one of `key` in a period (default: the key itself). */
+  add(key: string, first: () => void = () => this.log(`immich-retrace: ${key}`)) {
+    const n = this.counts.get(key);
+    if (n === undefined) { this.counts.set(key, 0); first(); } else this.counts.set(key, n + 1);
+    if (!this.timer) this.arm();
+  }
+
+  private arm() { this.timer = setTimeout(() => this.flush(), this.everyMs); this.timer.unref?.(); }
+
+  private flush() {
+    this.timer = undefined;
+    const more = [...this.counts].filter(([, n]) => n > 0);
+    this.counts.clear();
+    if (!more.length) return;
+    this.log(`immich-retrace: in the last ${this.everyMs / 1000} s, also ${more.map(([k, n]) => `${n} x ${k}`).join('; ')}`);
+    for (const [k] of more) this.counts.set(k, 0); // still failing: the next one is counted, not logged at once
+    this.arm();
+  }
+}
+
+/**
  * `config`: the settings for /api/config, or a function answering them per request (demo mode resolves its trip).
  * `extend`: registers extra routes ahead of the /api catch-all (demo mode: server/demo.ts).
  */
-export function createApp(immich: ImmichClient, config: ViewerConfig | (() => Promise<ViewerConfig>) = configFromEnv({}), extend?: (app: Hono) => void) {
+export function createApp(immich: ImmichClient, config: ViewerConfig | (() => Promise<ViewerConfig>) = configFromEnv({}), extend?: (app: Hono) => void,
+  failures = new FailureLog()) {
   const app = new Hono();
 
   app.onError((err, c) => {
-    if (err instanceof HttpError) return c.json({error: err.message, code: err.code, missingPermission: err.missingPermission} satisfies ApiError, err.status);
+    if (err instanceof HttpError) {
+      if (err.status >= 500) failures.add(`${err.status} on ${c.req.routePath}: ${err.message}`);
+      return c.json({error: err.message, code: err.code, missingPermission: err.missingPermission} satisfies ApiError, err.status);
+    }
     if (c.req.raw.signal.aborted) return new Response(null, {status: 499}); // browser went away
-    console.error(err);
+    failures.add(`500 on ${c.req.routePath}: ${(err as Error)?.message}`, () => console.error(err));
     return c.json({error: 'Internal error.'} satisfies ApiError, 500);
   });
 

@@ -1,8 +1,8 @@
 <script lang="ts">
   // The Photos tab (a lazy chunk): the selection's photos and videos in time order, a virtualised grid of square
   // cells under sticky local-day headers (layout maths in grid.ts). Only the rows within about a screen of the
-  // viewport are in the DOM; their thumbnails come through the media queue (thumbs.ts) over the thumbhash (in the
-  // demo only the on-screen rows' and one row ahead's), and requests for rows scrolled away are cancelled. The cursor's photo is ringed. Entering the tab (or a new selection
+  // viewport are in the DOM; their thumbnails come through the media queue (thumbs.ts) over the thumbhash, on-screen
+  // rows first, and requests for rows scrolled away are cancelled. The cursor's photo is ringed. Entering the tab (or a new selection
   // while on it) scrolls to it once; scrolling never moves it. A tap puts the cursor on the photo and opens the
   // lightbox; the photo it pages to is kept in view under it, so closing lands there (the grid stays put otherwise).
   import {onMount, untrack} from 'svelte';
@@ -12,7 +12,6 @@
   import {fDuration, fWeekday, fWhen} from '../map/format.ts';
   import {thumbHashDataUrl} from '../thumbhash.ts';
   import {mediaQueue, thumbUrl} from '../lightbox/media.ts';
-  import {config} from '../config.svelte.ts';
   import {fNum} from '../albums.ts';
   import {explainAlbums} from '../failure.ts';
   import {tripName} from './format.ts';
@@ -63,21 +62,16 @@
   const urlOf = (r: number) => thumbUrl(active!.ix.id[r], active!.ix.thumbhash[r]);
   /** A rendered cell's thumbnail once loaded (re-read whenever one loads). */
   const srcOf = (r: number) => { void loaded; return thumbs.get(urlOf(r)); };
-  /** The on-screen grid rows, and the way the grid last scrolled (1: down the page). */
+  /** The on-screen grid rows. */
   const va = $derived(L ? visibleRows(L, top, top + viewH)[0] : 0);
   const vb = $derived(L ? visibleRows(L, top, top + viewH)[1] : 0);
-  let dir = $state<1 | -1>(1), lastTop = 0;
-  $effect(() => { const t = top; untrack(() => { if (t !== lastTop) dir = t > lastTop ? 1 : -1; lastTop = t; }); });
-  /**
-   * The thumbnails to ask for, on-screen rows first ([] while out of sight): then the rest of the rendered rows, nearest
-   * first; in the demo (a request budget) just one row ahead.
-   */
+  /** The thumbnails to ask for, on-screen rows first ([] while out of sight): then the rest of the rendered rows, nearest first. */
   function wanted(): [string[], number] {
     const a = active;
     if (!L || !a || rb <= ra || !requesting) return [[], 0];
     const list: string[] = [];
     let urgent = 0;
-    for (const i of requestRows(va, vb, ra, rb, config.demo ? 1 : null, dir)) {
+    for (const i of requestRows(va, vb, ra, rb)) {
       const end = Math.min(L.rowLo[i] + L.cols, L.days[L.rowDay[i]].hi);
       for (let r = L.rowLo[i]; r < end; r++) list.push(urlOf(r));
       if (i >= va && i < vb) urgent = list.length;
@@ -86,11 +80,11 @@
   }
   // Only while the grid is on screen: not on another tab, not under the lightbox (its previews come first).
   const requesting = $derived(shown && selection.lightbox == null);
-  // Requests for rows gone are cancelled at once; new ones are asked for once the rows settle (a fling passes rows by
-  // without spending the demo's request budget on them).
+  // Requests for rows gone are cancelled at once; new ones are asked for once the rows settle (100 ms: a fling passes
+  // rows by without requesting them).
   let wantTimer: ReturnType<typeof setTimeout> | undefined;
   $effect(() => {
-    void [L, active, ra, rb, va, vb, dir, viewH, requesting];
+    void [L, active, ra, rb, va, vb, viewH, requesting];
     untrack(() => {
       const [list, urgent] = wanted();
       thumbs.prune(list);

@@ -1,21 +1,13 @@
 // The image of a card that follows the time cursor (the phone dock's photo card, the desktop map's pop-out card):
-// one thumbnail at a time through the media queue, latest wins, paced so a scrub doesn't spend the demo's request
-// budget on photos the finger only passed over; during Play, the next few prefetched instead.
-import {config} from '../config.svelte.ts';
+// one thumbnail at a time through the media queue, back to back, latest wins (a scrub loads what the cursor is on when
+// the last load finishes, never a backlog of photos the finger passed over); during Play, the next few prefetched.
 import {registerLoaded, type MediaQueue} from './media.ts';
 
 export interface CardImageOptions {
-  /** A wanted photo the cursor rested on this long (ms) is loaded at once. */
+  /** A wanted photo the cursor rested on this long (ms): its load becomes explicit (first in the queue's line). */
   rest?: number;
-  /**
-   * While the cursor keeps moving, a load starts at most this often (ms); read before each start. 0: no pacing.
-   * Default: CARD_GAP_MS in the demo (its media rate limit), 0 elsewhere.
-   */
-  gap?: () => number;
   /** Loaded thumbnails kept (object URLs), so scrubbing back over them costs no request. */
   keep?: number;
-  /** While playing, a prefetch starts at most this often (ms); read before each. Default: CARD_AHEAD_MS in the demo. */
-  aheadGap?: () => number;
   /** A loaded thumbnail failed (its request or its decoding) / loaded. */
   onFail?: (url: string) => void;
   onLoad?: (url: string) => void;
@@ -36,21 +28,17 @@ async function prepareBlob(b: Blob) {
   } catch (e) { URL.revokeObjectURL(src); throw e; }
 }
 
-/**
- * The demo's pacing for a card's loads during a scrub, and for Play's prefetches: spread evenly rather than spent in the
- * first seconds and then nothing. Set when thumbnails shared the preview window (35 background starts / 20 s); they now
- * have their own (DEMO_MEDIA_WINDOWS.thumbnail, 180), so these are well inside it.
- */
-export const CARD_REST_MS = 120, CARD_GAP_MS = 500, CARD_AHEAD_MS = 600;
+/** How long the cursor rests on a photo before its load counts as explicit. */
+export const CARD_REST_MS = 120;
 
 interface Flight { ctrl: AbortController; started: boolean; explicit: boolean; ahead: boolean }
 
 /**
  * `want(url)` names the photo at the cursor; `src` is what to show: that photo's loaded thumbnail, or null (the card
- * shows the photo's thumbhash), never a photo for another moment. A load starts when the cursor rested `rest` ms on a
- * photo (an explicit load: it may use the queue's reserve, and a waiting one is promoted to it) or `gap` ms passed
- * since the last start (background), one at a time. While Play runs, `ahead(urls)` prefetches the photos Play will
- * linger on next instead (background, paced), and the card starts nothing of its own. A load superseded while still waiting in the queue is dropped, one already in flight finishes into the cache.
+ * shows the photo's thumbhash), never a photo for another moment. One load of its own at a time, the next for whatever
+ * is wanted once the last one is done (latest wins); once the cursor rested `rest` ms on a photo its load is explicit
+ * (a waiting one is promoted: first in the queue's line). While Play runs, `ahead(urls)` prefetches the photos Play
+ * will linger on next instead (background), and the card starts nothing of its own. A load superseded while still waiting in the queue is dropped, one already in flight finishes into the cache.
  * `changed` fires when `src` may have changed.
  */
 export class CardImage {
@@ -62,9 +50,6 @@ export class CardImage {
   private wanted: string | null = null;
   private aheadOf: string[] = [];
   private since = 0;
-  private lastStart = -Infinity;
-  private lastAhead = -Infinity;
-  private aheadTimer: ReturnType<typeof setTimeout> | undefined;
   private flights = new Map<string, Flight>();
   private broken = '';
   private timer: ReturnType<typeof setTimeout> | undefined;
@@ -73,7 +58,7 @@ export class CardImage {
   constructor(queue: Pick<MediaQueue, 'load' | 'prioritize'>, changed: () => void, opts: CardImageOptions = {}) {
     this.queue = queue; this.changed = changed;
     this.o = {
-      rest: CARD_REST_MS, gap: () => (config.demo ? CARD_GAP_MS : 0), aheadGap: () => (config.demo ? CARD_AHEAD_MS : 0), keep: 24, onFail: () => {}, onLoad: () => {}, now: () => performance.now(),
+      rest: CARD_REST_MS, keep: 24, onFail: () => {}, onLoad: () => {}, now: () => performance.now(),
       prepare: prepareBlob, revoke: u => URL.revokeObjectURL(u), ...opts,
     };
     // Lent to the lightbox: object URLs, and an adopted <img> URL only when versioned (`c=`: the relay lets the
@@ -100,27 +85,14 @@ export class CardImage {
 
   /**
    * While Play runs: the photos to have ready, most wanted first (play.ts playAhead); [] when it stops, so the card
-   * loads the photo it rests on itself again. Those not held are loaded in the background lane, at most one per
-   * `aheadGap` (Play calls this on every step; one no longer listed and still waiting is dropped).
+   * loads the photo it rests on itself again. Those not held are loaded at once, in the background lane (Play calls
+   * this on every step; one no longer listed and still waiting is dropped).
    */
   ahead(urls: string[]) {
     if (this.dead) return;
     this.aheadOf = urls;
     this.dropStale();
-    clearTimeout(this.aheadTimer);
-    this.aheadTimer = undefined;
-    const gap = this.o.aheadGap();
-    for (const u of urls) {
-      if (this.held.has(u) || this.flights.has(u) || u === this.broken) continue;
-      const t = this.o.now();
-      if (t - this.lastAhead < gap) {
-        // Cooling down: try again when it's over (a photo Play lingers on may wait for no further step).
-        this.aheadTimer = setTimeout(() => { this.aheadTimer = undefined; if (!this.dead) this.ahead(this.aheadOf); }, this.lastAhead + gap - t);
-        break;
-      }
-      this.lastAhead = t;
-      this.start(u, false, true);
-    }
+    for (const u of urls) if (!this.held.has(u) && !this.flights.has(u) && u !== this.broken) this.start(u, false, true);
     this.schedule();
   }
 
@@ -136,7 +108,6 @@ export class CardImage {
     this.unregister();
     this.dead = true;
     clearTimeout(this.timer);
-    clearTimeout(this.aheadTimer);
     for (const f of this.flights.values()) f.ctrl.abort();
     this.flights.clear();
     for (const h of this.held.values()) if (h.own) this.o.revoke(h.src);
@@ -159,15 +130,13 @@ export class CardImage {
     if (this.dead || !w || this.held.has(w) || w === this.broken || this.aheadOf.length) return;
     const t = this.o.now(), restAt = this.since + this.o.rest, f = this.flights.get(w);
     if (f) {
-      // Waiting in the queue (a scrub's paced load, or a prefetch): once the cursor rests on it, it is explicit.
+      // Waiting in the queue (a scrub's load, or a prefetch): once the cursor rests on it, it is explicit.
       if (f.started || f.explicit) return;
       if (t >= restAt) { f.explicit = true; this.queue.prioritize(f.ctrl.signal, true); } else this.timer = setTimeout(() => this.schedule(), restAt - t);
       return;
     }
-    // One load of its own at a time (it calls schedule again when done).
+    // One load of its own at a time (it calls schedule again when done): latest wins.
     for (const g of this.flights.values()) if (!g.ahead) return;
-    const at = Math.min(restAt, this.lastStart + this.o.gap());
-    if (t < at) { this.timer = setTimeout(() => this.schedule(), at - t); return; }
     this.start(w, t >= restAt, false);
     // Still waiting in the queue when the cursor comes to rest: promoted then.
     if (t < restAt) this.timer = setTimeout(() => this.schedule(), restAt - t);
@@ -178,7 +147,7 @@ export class CardImage {
     this.flights.set(url, f);
     this.queue.load(url, {
       signal: f.ctrl.signal, high: !ahead, explicit,
-      onStart: () => { f.started = true; if (!ahead) this.lastStart = this.o.now(); },
+      onStart: () => { f.started = true; },
     })
       .then(b => this.o.prepare(b))
       .then(src => {

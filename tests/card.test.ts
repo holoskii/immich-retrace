@@ -19,13 +19,13 @@ describe('CardImage', () => {
   beforeEach(() => { vi.useFakeTimers(); });
   afterEach(() => { vi.useRealTimers(); });
 
-  function setup({gap = 500, rest = 120, window = null as RateWindow | null, keep = 24} = {}) {
+  function setup({rest = 120, window = null as RateWindow | null, keep = 24} = {}) {
     const {f, calls} = fakeFetch();
     const q = new MediaQueue({concurrency: 6, window: () => window, fetch: f, now: () => Date.now()});
     const revoked: string[] = [], failed: string[] = [];
     let changes = 0;
     const card = new CardImage(q, () => changes++, {
-      rest, gap: () => gap, keep, now: () => Date.now(),
+      rest, keep, now: () => Date.now(),
       prepare: async b => `blob:${await b.text()}`, revoke: u => { revoked.push(u); }, onFail: u => { failed.push(u); },
     });
     /** Answers every request in flight. */
@@ -46,7 +46,7 @@ describe('CardImage', () => {
 
   it('lends what it holds to the lightbox (loadedThumb): its own loads and an adopted LCP image, until disposed', async () => {
     // URLs of its own: the other tests leave their cards (and so their registrations) undisposed.
-    const {card, calls, answerAll} = setup({gap: 0});
+    const {card, calls, answerAll} = setup();
     card.adopt('/lend-lcp?c=h', '/lend-lcp?c=h');
     card.adopt('/lend-nocache', '/lend-nocache');
     card.want('lend-a');
@@ -61,7 +61,7 @@ describe('CardImage', () => {
   });
 
   it('never shows another photo: a new want drops the src until its own thumbnail is in', async () => {
-    const {card, answerAll} = setup({gap: 0});
+    const {card, answerAll} = setup();
     card.want('a');
     await flush(); await answerAll();
     card.want('b');
@@ -70,20 +70,35 @@ describe('CardImage', () => {
     expect(card.src).toBe('blob:b');
   });
 
-  it('while the cursor keeps moving, starts at most one load per gap, then the one it rests on', async () => {
+  it('while the cursor keeps moving: one load at a time, back to back, each for the photo wanted when the last finished', async () => {
+    const {card, calls} = setup();
+    card.want('p0');
+    await flush();
+    expect(calls.map(c => c.url)).toEqual(['p0']);
+    card.want('p1'); card.want('p2'); // passed over while p0 is in flight
+    await flush();
+    expect(calls).toHaveLength(1);
+    calls[0].answer();
+    await flush();
+    expect(calls.map(c => c.url)).toEqual(['p0', 'p2']); // latest wins: p1 is never asked for
+    card.want('p3');
+    calls[1].answer();
+    await flush();
+    expect(calls.map(c => c.url)).toEqual(['p0', 'p2', 'p3']);
+    calls[2].answer();
+    await flush();
+    expect(card.src).toBe('blob:p3');
+  });
+
+  it('a 2 s scrub with quick answers loads as it goes, not paced, and ends on the photo it rests on', async () => {
     const {card, calls, answerAll} = setup();
-    // A 2 s scrub: a new photo every 50 ms, each answered quickly.
     for (let i = 0; i < 40; i++) {
       card.want(`p${i}`);
       await vi.advanceTimersByTimeAsync(25);
       await answerAll();
       await vi.advanceTimersByTimeAsync(25);
     }
-    expect(calls.length).toBeLessThanOrEqual(5);
-    // The finger rests on p39: loaded within `rest`.
-    await vi.advanceTimersByTimeAsync(120);
-    await answerAll();
-    expect(calls.at(-1)!.url).toBe('p39');
+    expect(calls.length).toBe(40);
     expect(card.src).toBe('blob:p39');
   });
 
@@ -121,7 +136,7 @@ describe('CardImage', () => {
   });
 
   it('keeps at most `keep` thumbnails, revoking the least recently wanted, never the wanted one', async () => {
-    const {card, answerAll, revoked} = setup({gap: 0, keep: 2});
+    const {card, answerAll, revoked} = setup({keep: 2});
     for (const u of ['a', 'b', 'c']) { card.want(u); await flush(); await answerAll(); }
     expect(revoked).toEqual(['blob:a']);
     card.want('b');
@@ -131,24 +146,14 @@ describe('CardImage', () => {
     expect(revoked.sort()).toEqual(['blob:a', 'blob:b', 'blob:c', 'blob:d']);
   });
 
-  it('a load on a photo the cursor rests on is explicit: it uses the reserve the grid can\'t', async () => {
-    const {card, calls, q} = setup({window: {events: 3, ms: 20_000, background: 1}});
-    void q.load('grid1'); void q.load('grid2');
+  it('a load waiting in the queue is promoted to explicit once the cursor rests on it: ahead of the grid', async () => {
+    const {card, calls, q} = setup({window: {events: 2, ms: 20_000}});
+    void q.load('grid1'); void q.load('grid2'); void q.load('grid3', {high: true});
     await flush();
-    card.want('a');
+    card.want('a'); // the window is full: waits, behind grid3
     await vi.advanceTimersByTimeAsync(120);
-    expect(calls.map(c => c.url)).toEqual(['grid1', 'a']);
-  });
-
-  it('a paced scrub load waiting for the background share is promoted once the cursor rests on it', async () => {
-    const {card, calls, q} = setup({gap: 0, rest: 1000, window: {events: 3, ms: 20_000, background: 1}});
-    void q.load('grid1');
-    await flush();
-    card.want('a'); // gap 0: started at once as a background load, which has to wait
-    await flush();
-    expect(calls.map(c => c.url)).toEqual(['grid1']);
-    await vi.advanceTimersByTimeAsync(1000);
-    expect(calls.map(c => c.url)).toEqual(['grid1', 'a']);
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(calls.map(c => c.url)).toEqual(['grid1', 'grid2', 'a', 'grid3']);
   });
 
   it('while playing: prefetches the photo at the cursor and the next ones, drops the passed ones, starts nothing itself', async () => {
@@ -170,33 +175,22 @@ describe('CardImage', () => {
     expect(calls.at(-1)!.url).toBe('p5');
   });
 
-  it('while playing in the demo: prefetches start at most one per aheadGap, spread out rather than all at once', async () => {
+  it('while playing: every listed photo not held starts at once, not paced; one dropped from the list is cancelled while waiting', async () => {
     const {f, calls} = fakeFetch();
-    const q = new MediaQueue({concurrency: 6, window: () => null, fetch: f, now: () => Date.now()});
-    const card = new CardImage(q, () => {}, {aheadGap: () => 600, now: () => Date.now(), prepare: async b => `blob:${await b.text()}`});
+    const q = new MediaQueue({concurrency: 2, window: () => null, fetch: f, now: () => Date.now()});
+    const card = new CardImage(q, () => {}, {now: () => Date.now(), prepare: async b => `blob:${await b.text()}`});
     card.ahead(['a', 'b', 'c']); card.want('p0');
     await flush();
-    expect(calls.map(c => c.url)).toEqual(['a']);
-    await vi.advanceTimersByTimeAsync(300);
-    card.ahead(['b', 'c', 'd']); card.want('p1');
+    expect(calls.map(c => c.url)).toEqual(['a', 'b']); // c waits for a free slot
+    card.ahead(['b', 'd']); // c dropped while waiting
+    calls[0].answer();
     await flush();
-    expect(calls.map(c => c.url)).toEqual(['a']);
-    // No step since (Play lingers on a photo): the cooldown's end still starts the most wanted one.
-    await vi.advanceTimersByTimeAsync(300);
-    expect(calls.map(c => c.url)).toEqual(['a', 'b']);
-    card.ahead(['d', 'c']); card.want('p2');
-    await flush();
-    expect(calls.map(c => c.url)).toEqual(['a', 'b']);
-    await vi.advanceTimersByTimeAsync(600);
-    expect(calls.map(c => c.url)).toEqual(['a', 'b', 'd']); // the most wanted one first
-    card.ahead([]); // stopped: no more prefetches
-    await vi.advanceTimersByTimeAsync(2000);
-    expect(calls.map(c => c.url).filter(u => u !== 'p2')).toEqual(['a', 'b', 'd']);
+    expect(calls.map(c => c.url)).toEqual(['a', 'b', 'd']);
     card.dispose();
   });
 
   it('a failed thumbnail is reported once and not retried while wanted', async () => {
-    const {card, calls, failed, answerAll} = setup({gap: 0});
+    const {card, calls, failed, answerAll} = setup();
     card.want('a');
     await flush(); await answerAll(404);
     await vi.advanceTimersByTimeAsync(1000);

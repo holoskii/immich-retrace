@@ -127,20 +127,11 @@ export function reveal(L: Layout, r: number, top: number, viewH: number) {
 
 /**
  * The grid rows whose thumbnails to ask for, in the order to ask: the on-screen rows va..vb-1 first, then the other
- * rendered rows ra..rb-1 nearest first (below before above). With `ahead` (the demo, under a request budget): only
- * that many rows past the screen, on the side the grid last scrolled towards (`dir`), so a scroll spends the budget
- * on what comes into view next rather than on overscan nobody may look at.
+ * rendered rows ra..rb-1 nearest first (below before above).
  */
-export function requestRows(va: number, vb: number, ra: number, rb: number, ahead: number | null = null, dir: 1 | -1 = 1): number[] {
+export function requestRows(va: number, vb: number, ra: number, rb: number): number[] {
   const out: number[] = [];
   for (let i = va; i < vb; i++) out.push(i);
-  if (ahead != null) {
-    for (let k = 1; k <= ahead; k++) {
-      const i = dir > 0 ? vb - 1 + k : va - k;
-      if (i >= ra && i < rb) out.push(i);
-    }
-    return out;
-  }
   for (let k = 1; va - k >= ra || vb - 1 + k < rb; k++) {
     if (vb - 1 + k < rb) out.push(vb - 1 + k);
     if (va - k >= ra) out.push(va - k);

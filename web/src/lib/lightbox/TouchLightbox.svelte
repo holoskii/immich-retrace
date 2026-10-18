@@ -99,7 +99,7 @@
   $effect(() => {
     if (cur && !cur.video && (held(cur.preview)?.error != null || broken[cur.id])) fail(cur.preview);
   });
-  // A preview still waiting after a moment (the demo's request budget, a slow network): a quiet "Loading…", so the
+  // A preview still waiting after a moment (a slow network, a 429 back-off): a quiet "Loading…", so the
   // blur doesn't read as the photo itself.
   let slow = $state(false);
   $effect(() => { void id; slow = false; const t = setTimeout(() => (slow = true), 600); return () => clearTimeout(t); });

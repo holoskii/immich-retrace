@@ -92,10 +92,8 @@ describe('requestRows', () => {
     expect(requestRows(4, 7, 1, 10)).toEqual([4, 5, 6, 7, 3, 8, 2, 9, 1]);
   });
 
-  it('in the demo: the on-screen rows and one row ahead in the direction of the scroll, no overscan', () => {
-    expect(requestRows(4, 7, 1, 10, 1, 1)).toEqual([4, 5, 6, 7]);
-    expect(requestRows(4, 7, 1, 10, 1, -1)).toEqual([4, 5, 6, 3]);
-    expect(requestRows(4, 7, 4, 7, 1, 1)).toEqual([4, 5, 6]); // nothing rendered past the screen
+  it('nothing rendered past the screen: just the on-screen rows', () => {
+    expect(requestRows(4, 7, 4, 7)).toEqual([4, 5, 6]);
   });
 });
 

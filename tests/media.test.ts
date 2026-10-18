@@ -114,43 +114,20 @@ describe('retryDelay', () => {
   });
 });
 
-describe('MediaQueue reserve', () => {
+describe('MediaQueue window', () => {
   beforeEach(() => { vi.useFakeTimers(); });
   afterEach(() => { vi.useRealTimers(); });
 
-  it('background loads use only their share of the window; explicit ones the rest, ahead of everything', async () => {
-    const {f, calls} = fakeFetch(), q = new MediaQueue({concurrency: 6, window: () => ({events: 4, ms: 1000, background: 2}), fetch: f, now: () => Date.now()});
-    for (const u of ['g1', 'g2', 'g3', 'g4']) void q.load(u, {high: true});
-    await flush();
-    expect(calls.map(c => c.url)).toEqual(['g1', 'g2']); // the background share is spent
-    void q.load('lb', {explicit: true});
-    void q.load('card', {explicit: true});
-    void q.load('lb2', {explicit: true});
-    await flush();
-    expect(calls.map(c => c.url)).toEqual(['g1', 'g2', 'lb', 'card']); // the reserve; then the window is full
-    await vi.advanceTimersByTimeAsync(1000);
-    expect(calls.map(c => c.url)).toEqual(['g1', 'g2', 'lb', 'card', 'lb2', 'g3']); // explicit first again
-  });
-
-  it('prioritize(…, true) lets a waiting background load (a neighbour now on show) use the reserve', async () => {
-    const {f, calls} = fakeFetch(), q = new MediaQueue({concurrency: 6, window: () => ({events: 3, ms: 1000, background: 1}), fetch: f, now: () => Date.now()});
-    const c = new AbortController();
-    void q.load('g1'); void q.load('g2'); void q.load('next', {signal: c.signal});
-    await flush();
-    expect(calls.map(x => x.url)).toEqual(['g1']);
-    q.prioritize(c.signal); // not explicit: still waits for the background share
-    await flush();
-    expect(calls.map(x => x.url)).toEqual(['g1']);
-    q.prioritize(c.signal, true);
-    await flush();
-    expect(calls.map(x => x.url)).toEqual(['g1', 'next']);
-  });
-
-  it('without a background share every start may be anyone\'s (the old behaviour)', async () => {
+  it('a full window holds every load until a start ages out; explicit ones then go first', async () => {
     const {f, calls} = fakeFetch(), q = new MediaQueue({concurrency: 6, window: () => ({events: 2, ms: 1000}), fetch: f, now: () => Date.now()});
-    for (const u of ['a', 'b', 'c']) void q.load(u);
+    for (const u of ['g1', 'g2', 'g3']) void q.load(u, {high: true});
     await flush();
-    expect(calls.map(x => x.url)).toEqual(['a', 'b']);
+    expect(calls.map(x => x.url)).toEqual(['g1', 'g2']);
+    void q.load('lb', {explicit: true});
+    await flush();
+    expect(calls.map(x => x.url)).toEqual(['g1', 'g2']); // no reserve: a ceiling, not pacing
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(calls.map(x => x.url)).toEqual(['g1', 'g2', 'lb', 'g3']);
   });
 });
 
@@ -182,17 +159,6 @@ describe('MediaQueue kinds', () => {
     expect(calls.map(c => c.url)).toEqual([P(1), T(1), T(2), T(3), P(2), T(4)]);
   });
 
-  it('keeps each kind\'s reserve for explicit loads of that kind', async () => {
-    const windows: Record<string, RateWindow> = {thumbnail: {events: 2, ms: 1000, background: 1}, preview: {events: 2, ms: 1000, background: 1}};
-    const {f, calls} = fakeFetch(), q = new MediaQueue({concurrency: 6, window: k => windows[k], fetch: f, now: () => Date.now()});
-    for (const u of [T(1), T(2), P(1), P(2)]) void q.load(u);
-    await flush();
-    expect(calls.map(c => c.url)).toEqual([T(1), P(1)]);
-    void q.load(T(9), {explicit: true}); void q.load(P(9), {explicit: true});
-    await flush();
-    expect(calls.map(c => c.url)).toEqual([T(1), P(1), T(9), P(9)]);
-  });
-
   it('a 429 pauses only its own kind', async () => {
     const {f, calls} = fakeFetch(), q = new MediaQueue({concurrency: 1, window: () => null, fetch: f, now: () => Date.now()});
     void q.load(P(1)); void q.load(P(2)); void q.load(T(1));
@@ -207,13 +173,14 @@ describe('MediaQueue kinds', () => {
     expect(calls.map(c => c.url)).toEqual([P(1), T(1), P(1)]);
   });
 
-  it('the demo windows stay under the proxy\'s per-IP limits (240 thumbnails, 60 previews per 20 s)', () => {
+  it('the demo ceilings stay under the proxy\'s per-IP limits (600 thumbnails, 400 heavy media per 20 s), well above an active visitor', () => {
     const {thumbnail: t, preview: p} = DEMO_MEDIA_WINDOWS;
     expect(t.ms).toBe(20_000); expect(p.ms).toBe(20_000);
-    expect(t.events).toBeLessThanOrEqual(240 - 30);
-    expect(p.events).toBeLessThanOrEqual(60 - 10);
-    expect(t.background!).toBeLessThan(t.events);
-    expect(p.background!).toBeLessThan(p.events);
+    expect(t.events).toBeLessThanOrEqual(600 - 100);
+    expect(p.events).toBeLessThanOrEqual(400 - 100);
+    // The busiest 20 s measured (docs/demo-hardening.md): 291 thumbnails, 190 previews; ceilings ≥ 1.5x that.
+    expect(t.events).toBeGreaterThanOrEqual(291 * 1.5);
+    expect(p.events).toBeGreaterThanOrEqual(190 * 1.5);
   });
 });
 
