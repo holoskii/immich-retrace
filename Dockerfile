@@ -1,4 +1,7 @@
-FROM node:24-alpine AS build
+# The build stage runs on the build machine's platform even for an arm64 image: its output (the web
+# build and production node_modules) is plain JS, so no emulation is needed. A dependency with
+# native code in production would break that: build it per target platform then.
+FROM --platform=$BUILDPLATFORM node:24-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
