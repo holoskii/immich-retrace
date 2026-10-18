@@ -13,9 +13,9 @@
 // followed within a year or two. Without a home "away" is unknown.
 // Confidence: when fewer than half the candidates could be judged on "away" (little GPS, no home), points rest on the
 // share and the name alone; then `confident` is false and every candidate passes (the tab says "albums", not "trips").
-import type {AlbumSummary} from '../../../../shared/api.ts';
-import type {IndexColumns} from '../index/model.ts';
-import {DAY, HOUR} from './data.ts';
+import type {AlbumSummary} from '../../../shared/api.ts';
+import type {IndexColumns} from './index/model.ts';
+import {DAY, HOUR} from './albums.ts';
 
 /** Longest span a trip can have, in days; the folder albums include year-spanning ones (`2026_Camera`). */
 export const TRIP_DAYS = 45;

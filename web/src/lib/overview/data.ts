@@ -1,11 +1,12 @@
 // Pure helpers behind the overview: per-day histogram, pixel sampling, counts, album rail, viewport math.
 // Everything here is computed once per index (histogram, prefixes) or is O(width) per frame.
-import type {AlbumSummary, IndexManifest} from '../../../../shared/api.ts';
+import type {IndexManifest} from '../../../../shared/api.ts';
 import type {IndexColumns} from '../index/model.ts';
 
-export const DAY = 86400e3;
-export const HOUR = 3600e3;
-export const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
+import {albumLabel, clamp, countRows, DAY, fDay, fNum, HOUR, railAlbums, type RailAlbum} from '../albums.ts';
+
+// Shared with the map, the demo and the phone shell (albums.ts); re-exported for the overview's modules.
+export {albumLabel, clamp, countRows, DAY, fDay, fNum, HOUR, railAlbums, type RailAlbum};
 
 /**
  * Counts per LOCAL calendar day over [t0, t0 + nd·DAY). Times on this axis are local wall time
@@ -142,33 +143,7 @@ export function smooth(a: Float32Array): Float32Array {
   return r;
 }
 
-// ---- exact counts over index rows (readout) ----
-
-const prefixes = new WeakMap<IndexColumns, {v: Uint32Array; g: Uint32Array}>();
-
-/** Photos / videos / with-GPS among rows lo..hi-1; O(1) after one O(n) prefix pass per index. */
-export function countRows(ix: IndexColumns, lo: number, hi: number) {
-  let p = prefixes.get(ix);
-  if (!p) {
-    const v = new Uint32Array(ix.n + 1), g = new Uint32Array(ix.n + 1);
-    for (let r = 0; r < ix.n; r++) { v[r + 1] = v[r] + ix.video[r]; g[r + 1] = g[r] + ix.gps[r]; }
-    prefixes.set(ix, p = {v, g});
-  }
-  lo = clamp(lo, 0, ix.n); hi = clamp(hi, lo, ix.n);
-  const videos = p.v[hi] - p.v[lo];
-  return {photos: hi - lo - videos, videos, gps: p.g[hi] - p.g[lo]};
-}
-
 // ---- album rail ----
-
-export type RailAlbum = AlbumSummary & {start: number; end: number};
-
-/** Albums with a date span, oldest first; only those `keep` accepts when given (trips: `Trips.isTrip` in trips.ts). */
-export function railAlbums(albums: AlbumSummary[], keep?: (a: AlbumSummary) => boolean): RailAlbum[] {
-  return albums
-    .filter((a): a is RailAlbum => a.start != null && a.end != null && a.count > 0 && (!keep || keep(a)))
-    .sort((a, b) => a.start - b.start || a.end - b.end);
-}
 
 /** The how-to line under the timeline; the album bars are mentioned only while some are on screen. */
 export const overviewHint = (bars: boolean) =>
@@ -178,8 +153,6 @@ export const overviewHint = (bars: boolean) =>
 export const noSelectionHint = (bars: boolean, picker: string) =>
   `No selection: drag on the timeline${bars ? ', click an album bar,' : ''} or pick from ${picker}`;
 
-/** Display name: drops a leading `YYYY_` / `YYYY_MM_` (or legacy `YYYY-MM_`) folder prefix. */
-export const albumLabel = (name: string) => name.replace(/^\d{4}([-_]\d\d)?_/, '') || name;
 
 /**
  * Greedy lane packing over items sorted by x0; `x1` should already include the label width.
@@ -267,11 +240,9 @@ export const snapDay = (t: number) => Math.round(t / DAY) * DAY;
 // ---- formatting (read as UTC: the axis, album dates and labels are local wall time read as UTC, see `toLocal`) ----
 
 const fmt = (o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat('en-GB', {timeZone: 'UTC', ...o});
-const F_DAY = fmt({day: 'numeric', month: 'short', year: 'numeric'}), F_MON = fmt({month: 'short'}), F_DM = fmt({day: 'numeric', month: 'short'});
-export const fDay = (t: number) => F_DAY.format(t);
+const F_MON = fmt({month: 'short'}), F_DM = fmt({day: 'numeric', month: 'short'});
 export const fMonth = (t: number) => F_MON.format(t);
 export const fDayMonth = (t: number) => F_DM.format(t);
-export const fNum = (n: number) => Math.round(n).toLocaleString('en-US').replace(/,/g, ' ');
 
 /**
  * Calendar length of [t0, t1) (axis times, read as UTC): "2y 3m 14d", "5d", or hours under two days ("30h", a cluster zoom).

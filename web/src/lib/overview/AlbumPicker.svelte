@@ -3,7 +3,7 @@
   // The first tab says "trips" only when the trip heuristic (trips.ts) is confident; otherwise "albums" (the short ones).
   import type {AlbumSummary} from '../../../../shared/api.ts';
   import {albumLabel, DAY, fDay, fNum, railAlbums, type RailAlbum} from './data.ts';
-  import {AWAY_KM, TRIP_DAYS, tripReason, type Trips} from './trips.ts';
+  import {AWAY_KM, TRIP_DAYS, tripReason, type Trips} from '../trips.ts';
 
   /**
    * `error`: why the album list couldn't be (re)loaded; `loaded`: the list is final (not still on its way).

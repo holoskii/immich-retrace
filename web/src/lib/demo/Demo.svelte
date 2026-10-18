@@ -2,14 +2,11 @@
   // Demo mode (DEMO=1 on the server), loaded as its own chunk only then: the banner with the pitch and
   // the way to the project, the landing (a curated trip, cursor on a representative photo, Follow on,
   // nothing playing), the coach mark once per visitor, and the About & credits panel.
-  import {onMount, untrack} from 'svelte';
+  import {onMount} from 'svelte';
   import type {DemoConfig} from '../../../../shared/demo.ts';
   import {hooks} from '../hooks.svelte.ts';
-  import {library} from '../index/store.svelte.ts';
   import {selection} from '../selection.svelte.ts';
-  import {pickAlbum} from '../actions.ts';
-  import {railAlbums} from '../overview/data.ts';
-  import {findTrip, representativeRow} from './landing.ts';
+  import {landOnTrip} from './land.svelte.ts';
   import {TOUR, tourSeen} from './tour.ts';
   import {demoUi} from './ui.svelte.ts';
   import About from './About.svelte';
@@ -20,16 +17,7 @@
   let {config, landing}: {config: DemoConfig; landing: boolean} = $props();
 
   // Landing: once the URL (empty) is applied and the albums are in, open the trip the way a click on its bar would.
-  let landed = false;
-  $effect(() => {
-    if (!landing || landed || !selection.urlApplied || !library.albumsLoaded) return;
-    landed = true;
-    untrack(() => {
-      if (selection.touched) return; // the visitor was quicker (even if they cleared it again)
-      const a = findTrip(railAlbums(library.albums), config.trip);
-      if (a) pickAlbum(a, {history: 'replace', cursor: act => representativeRow(act.ix, act.lo, act.hi)});
-    });
-  });
+  landOnTrip({trip: () => config.trip, landing: () => landing});
 
   // The core app's extension points (hooks.svelte.ts): the `?` overlay's buttons, per-photo credits in the
   // lightbox, the album picker as "Try another trip".

@@ -2,9 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="dark">
   <title>Retrace for Immich</title>
+  <!-- use-credentials: the manifest request carries the cookies, so it also loads behind an auth proxy. -->
+  <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <!-- The shell paints before any script or stylesheet arrives; colours mirror src/app.css (--ground, --muted). -->
   <style>
     html, body, #app { height: 100%; margin: 0; }

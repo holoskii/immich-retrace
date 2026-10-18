@@ -28,3 +28,12 @@ test('the desktop lightbox on a fine pointer', async ({page}) => {
   await expect(dialog).toBeVisible();
   expect(lb()).toBe(shown);
 });
+
+test('a desktop gets the desktop shell, not the phone one', async ({page}) => {
+  await page.addInitScript(() => { try { localStorage.setItem('immich-retrace.demo.tour-seen', '1'); } catch { /* */ } });
+  await page.goto('/');
+  await expect(page.locator('.card[role=button]')).toBeAttached({timeout: 20_000});
+  await expect(page.locator('header canvas').first()).toBeVisible();
+  await expect(page.getByRole('tablist', {name: 'Views'})).toHaveCount(0);
+  await expect(page.locator('.pill')).toHaveCount(0);
+});

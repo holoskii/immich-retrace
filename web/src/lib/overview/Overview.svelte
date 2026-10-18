@@ -11,7 +11,7 @@
   import {hooks} from '../hooks.svelte.ts';
   import {selName} from '../nav.ts';
   import AlbumPicker from './AlbumPicker.svelte';
-  import {tripsOf} from './trips.ts';
+  import {tripsOf} from '../trips.ts';
   import Help from '../Help.svelte';
   import {
     clamp, countRows, albumLabel, fLength, DAY, daysFromIndex, daysFromMonths, defaultView, dragTo, fDay, fNum, hitGrip, noSelectionHint, overviewHint, railAlbums,

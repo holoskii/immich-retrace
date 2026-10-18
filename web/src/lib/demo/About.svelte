@@ -49,7 +49,7 @@
 
 <style>
   dialog {
-    width: min(620px, calc(100vw - 32px)); max-height: calc(100vh - 64px); padding: 0;
+    width: min(620px, calc(100vw - 32px)); max-height: calc(100vh - 64px); max-height: calc(100dvh - 64px); padding: 0;
     background: #0B0C0E; color: var(--ink2); border: 1px solid var(--line); border-radius: 8px;
     box-shadow: 0 16px 48px rgba(0, 0, 0, .6); font-size: 13px; line-height: 1.55;
   }

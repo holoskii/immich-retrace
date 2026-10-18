@@ -23,11 +23,11 @@ loadMapView().catch(() => {});
 const phone = matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) <= 500;
 
 /**
- * The shell's chunk. A desktop starts it at once; a phone first needs the config (only the demo has a phone shell).
- * The phone shell: `import('./lib/mobile/MobileShell.svelte')` (phase 2); until then the desktop shell.
+ * The shell's chunk. A desktop starts it at once; a phone first needs the config: only the demo has a phone shell
+ * (lib/mobile/), an owner's phone keeps the desktop one.
  */
 async function shell(): Promise<{default: Component<ShellProps>}> {
-  if (phone && (await config).demo) return import('./App.svelte');
+  if (phone && (await config).demo) return import('./lib/mobile/MobileShell.svelte');
   return import('./App.svelte');
 }
 

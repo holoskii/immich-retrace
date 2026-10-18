@@ -1,7 +1,7 @@
 import {describe, expect, it} from 'vitest';
 import type {AlbumSummary} from '../shared/api.ts';
 import {buildIndex} from '../web/src/lib/index/model.ts';
-import {classifyTrips, homes, km, placeIn, tripReason, tripsOf} from '../web/src/lib/overview/trips.ts';
+import {classifyTrips, homes, km, placeIn, tripReason, tripsOf} from '../web/src/lib/trips.ts';
 
 const D = (s: string) => Date.parse(s + 'T00:00:00Z');
 const DAY = 86400e3;

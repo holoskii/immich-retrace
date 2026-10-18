@@ -1,7 +1,7 @@
 // Names for selections in navigation UI (Back button, breadcrumb).
 import {library} from './index/store.svelte.ts';
-import {albumLabel, fDay, railAlbums} from './overview/data.ts';
-import {tripsOf} from './overview/trips.ts';
+import {albumLabel, fDay, railAlbums} from './albums.ts';
+import {tripsOf} from './trips.ts';
 import {fromLocal, toLocal, type Selection} from './selection.svelte.ts';
 
 export const DAY = 86400e3;

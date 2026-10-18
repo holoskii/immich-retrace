@@ -6,8 +6,9 @@
 // The stub (demo/stub.ts) stays a plain Immich stand-in; the credits come from the manifest here.
 
 import {readFileSync} from 'node:fs';
+import {join} from 'node:path';
 import {gzipSync} from 'node:zlib';
-import type {Hono} from 'hono';
+import type {Context, Hono} from 'hono';
 import type {ApiError, ViewerConfig} from '../shared/api.ts';
 import {REPO_URL, type DemoConfig, type DemoCredit} from '../shared/demo.ts';
 import {ConfigError, urlSetting} from './config.ts';
@@ -46,7 +47,7 @@ export function demoFromEnv(env: Record<string, string | undefined>, load = load
   return {
     config, credits,
     viewer: base => ({...base, immichPublicUrl: null, demo: config}),
-    routes: app => demoRoutes(app, credits),
+    routes: app => demoRoutes(app, credits, env.WEB_DIR?.trim() || 'dist/web'),
   };
 }
 
@@ -61,13 +62,22 @@ export interface ManifestAsset {
   commonsUrl: string;
   takenAt: string;
   modifications: string;
+  /** For the link preview's image (optional: older manifests and test fixtures lack them). */
+  thumbhash?: string | null;
+  width?: number;
+  height?: number;
 }
+
+/** The link preview's photo: a wide view from the default trip (San Juan de la Peña, CC BY 4.0). */
+export const OG_ASSET_TITLE = 'File:San Juan de la Peña 06.jpg';
 
 export interface DemoCredits {
   get(id: string): DemoCredit | undefined;
   /** The full credits as an HTML page (GET /credits), and gzipped (it is ~700 kB). */
   html: string;
   htmlGz: Uint8Array;
+  /** The photo for link previews (og:image): OG_ASSET_TITLE, else the first wide CC BY photo; null without one. */
+  og: {id: string; thumbhash: string | null; credit: string} | null;
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -116,7 +126,10 @@ ${rows}
 </tbody></table>
 </body></html>
 `;
-  return {get: id => byId.get(id), html, htmlGz: gzipSync(html)};
+  const wide = (a: ManifestAsset) => a.kind === 'photo' && (a.width ?? 0) > (a.height ?? 0) * 1.3;
+  const ogAsset = assets.find(a => a.title === OG_ASSET_TITLE) ?? sorted.find(a => wide(a) && a.license === 'CC BY 4.0') ?? null;
+  const og = ogAsset ? {id: ogAsset.id, thumbhash: ogAsset.thumbhash ?? null, credit: `Photo: ${ogAsset.author}, ${ogAsset.license}, via Wikimedia Commons`} : null;
+  return {get: id => byId.get(id), html, htmlGz: gzipSync(html), og};
 }
 
 /** Reads the manifest at startup; a missing or broken file stops the server with one line (main.ts). */
@@ -144,8 +157,53 @@ export function acceptsGzip(header: string | undefined): boolean {
   return star;
 }
 
-/** GET /api/demo/credits/:id (one asset's attribution, JSON) and GET /credits (all of them, a page). */
-export function demoRoutes(app: Hono, credits: DemoCredits) {
+/**
+ * The page's origin for absolute og: URLs: the Host header (only a plain host[:port]), the scheme from the proxy's
+ * X-Forwarded-Proto (Caddy sets it) or the request. Null for anything odd: the tags then go without the image.
+ */
+export function publicOrigin(url: string, host: string | undefined, proto: string | undefined): string | null {
+  if (!host || !/^[a-z0-9.-]+(:\d{1,5})?$/i.test(host)) return null;
+  const p = proto?.split(',')[0].trim().toLowerCase();
+  return `${p === 'https' || p === 'http' ? p : new URL(url).protocol.slice(0, -1)}://${host}`;
+}
+
+/**
+ * index.html with the demo's link preview (Open Graph + Twitter card) before </head>. Demo only: a normal deployment
+ * sits behind auth, where chat apps never see the page, and a preview of the sample data would misdescribe a private
+ * library. The image is the demo's own preview of a sample photo, credited in the description (CC BY 4.0 §3).
+ */
+export function withLinkPreview(page: string, origin: string | null, og: DemoCredits['og']) {
+  const title = 'Retrace for Immich: live demo';
+  const desc = 'Your trips, retraced from where your photos were taken: the route on a map, played back with the photos along it. '
+    + 'No tracker, nothing but Immich.' + (og ? ` ${og.credit}.` : '');
+  const tags = [
+    ['og:type', 'website'], ['og:site_name', 'Retrace for Immich'], ['og:title', title], ['og:description', desc],
+    ...(origin ? [['og:url', origin + '/']] : []),
+    ...(origin && og ? [
+      ['og:image', `${origin}/api/assets/${og.id}/thumbnail?${new URLSearchParams({size: 'preview', ...(og.thumbhash ? {c: og.thumbhash} : {})})}`],
+      ['og:image:alt', 'A valley in the Pyrenees, one of the sample photos of the demo trip'],
+    ] : []),
+  ].map(([k, v]) => `<meta property="${k}" content="${esc(v)}">`);
+  tags.push(`<meta name="twitter:card" content="${origin && og ? 'summary_large_image' : 'summary'}">`, `<meta name="description" content="${esc(desc)}">`);
+  return page.replace('</head>', `  ${tags.join('\n  ')}\n</head>`);
+}
+
+/**
+ * GET /api/demo/credits/:id (one asset's attribution, JSON), GET /credits (all of them, a page), and the app's page
+ * (/ and /index.html from `webDir`) with the link preview tags.
+ */
+export function demoRoutes(app: Hono, credits: DemoCredits, webDir?: string) {
+  if (webDir) {
+    const page = (c: Context) => {
+      let html: string;
+      try { html = readFileSync(join(webDir, 'index.html'), 'utf8'); } catch { return c.notFound(); }
+      const origin = publicOrigin(c.req.url, c.req.header('host'), c.req.header('x-forwarded-proto'));
+      c.header('cache-control', 'no-cache');
+      return c.html(withLinkPreview(html, origin, credits.og));
+    };
+    app.get('/', page);
+    app.get('/index.html', page);
+  }
   app.get('/api/demo/credits/:id', c => {
     const id = c.req.param('id');
     if (!UUID.test(id)) return c.json({error: 'Invalid asset id.', code: 'invalid'} satisfies ApiError, 400);

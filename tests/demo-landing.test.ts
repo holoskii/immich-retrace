@@ -7,7 +7,7 @@ import {join} from 'node:path';
 import type {AlbumSummary, AssetColumns} from '../shared/api.ts';
 import {REPO_URL, type DemoCredit} from '../shared/demo.ts';
 import {ConfigError, configFromEnv} from '../server/config.ts';
-import {acceptsGzip, DEFAULT_DEMO_TRIP, demoCredits, demoFlag, demoFromEnv, fileTitle, loadDemoCredits, type ManifestAsset} from '../server/demo.ts';
+import {acceptsGzip, DEFAULT_DEMO_TRIP, demoCredits, demoFlag, demoFromEnv, demoRoutes, fileTitle, loadDemoCredits, OG_ASSET_TITLE, publicOrigin, withLinkPreview, type ManifestAsset} from '../server/demo.ts';
 import {createApp} from '../server/app.ts';
 import {ImmichClient} from '../server/immich.ts';
 import {gunzipSync} from 'node:zlib';
@@ -139,6 +139,41 @@ describe('demo credits (server)', () => {
       expect(c.modifications.length).toBeGreaterThan(0);
     }
     expect(fileTitle('File:Statue of King Philip IV of Spain (Bernini) 02.jpg')).toBe('Statue of King Philip IV of Spain (Bernini) 02');
+  });
+
+  it('serves the page with a link preview: a credited sample photo, absolute URLs, escaped', async () => {
+    const m = loadManifest(), credits = demoCredits(m.assets);
+    expect(credits.og?.id).toBe(m.assets.find(x => x.title === OG_ASSET_TITLE)!.id);
+    expect(credits.og?.credit).toBe('Photo: Kent Wang, CC BY 4.0, via Wikimedia Commons');
+    const dir = mkdtempSync(join(tmpdir(), 'demo-web-'));
+    try {
+      writeFileSync(join(dir, 'index.html'), '<!doctype html><html><head><title>Retrace</title></head><body></body></html>');
+      const app = createApp(immich, configFromEnv({}), a => demoRoutes(a, credits, dir));
+      const res = await app.request('/', {headers: {host: 'demo.example', 'x-forwarded-proto': 'https'}});
+      expect(res.headers.get('cache-control')).toBe('no-cache');
+      const html = await res.text();
+      expect(html).toContain('<meta property="og:title" content="Retrace for Immich: live demo">');
+      expect(html).toContain('<meta property="og:url" content="https://demo.example/">');
+      expect(html).toMatch(new RegExp(`<meta property="og:image" content="https://demo\\.example/api/assets/${credits.og!.id}/thumbnail\\?size=preview&amp;c=`));
+      expect(html).toContain('Kent Wang, CC BY 4.0');
+      expect(html.indexOf('og:title')).toBeLessThan(html.indexOf('</head>'));
+      // A strange Host gets no absolute URLs at all.
+      const odd = await (await app.request('/index.html', {headers: {host: 'x"><script>'}})).text();
+      expect(odd).not.toContain('og:image');
+      expect(odd).not.toContain('<script>');
+    } finally {
+      rmSync(dir, {recursive: true, force: true});
+    }
+  });
+
+  it('builds the origin from a plain Host and the proxy scheme only', () => {
+    expect(publicOrigin('http://x/', 'demo.example', 'https')).toBe('https://demo.example');
+    expect(publicOrigin('http://x/', 'localhost:8092', undefined)).toBe('http://localhost:8092');
+    expect(publicOrigin('http://x/', 'a.b', 'https, http')).toBe('https://a.b');
+    expect(publicOrigin('http://x/', 'a.b', 'gopher')).toBe('http://a.b');
+    expect(publicOrigin('http://x/', 'a b', 'https')).toBeNull();
+    expect(publicOrigin('http://x/', undefined, 'https')).toBeNull();
+    expect(withLinkPreview('<head></head>', null, null)).toContain('twitter:card" content="summary"');
   });
 
   it('stops at startup when the manifest is missing or broken', () => {

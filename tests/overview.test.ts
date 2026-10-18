@@ -10,7 +10,7 @@ import {
 import {library} from '../web/src/lib/index/store.svelte.ts';
 import type {AlbumSummary} from '../shared/api.ts';
 import {dayAround, fDays, zoomSpan} from '../web/src/lib/nav.ts';
-import {shortAlbum} from '../web/src/lib/overview/trips.ts';
+import {shortAlbum} from '../web/src/lib/trips.ts';
 
 const D = (s: string) => Date.parse(s + 'T00:00:00Z');
 const H = 3600e3;

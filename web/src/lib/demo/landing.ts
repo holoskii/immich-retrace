@@ -1,6 +1,6 @@
 // Demo landing (pure): which trip a visit without a link opens, and which photo the cursor starts on.
 import type {IndexColumns} from '../index/model.ts';
-import type {RailAlbum} from '../overview/data.ts';
+import type {RailAlbum} from '../albums.ts';
 
 /** Lower case, accents dropped: "San Sebastián" matches "san sebastian". */
 const fold = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim();

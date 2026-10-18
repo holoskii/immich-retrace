@@ -17,7 +17,7 @@
   import {thumbHashDataUrl} from '../thumbhash.ts';
   import {mediaQueue, thumbUrl} from '../lightbox/media.ts';
   import {dayAround, fDays, selName, zoomName, zoomSpan} from '../nav.ts';
-  import {countRows, DAY, fNum} from '../overview/data.ts';
+  import {countRows, DAY, fNum} from '../albums.ts';
   import {fDay, fDuration, fFullDay, fSpan, fWhen} from './format.ts';
   import {clusterVisits, cursorRow, gpsBounds, pinsGeoJSON, positionAt, routeGeoJSON, segmentRoute, typicalOffset, type PinProps, type Visit} from './route.ts';
   import {binFixes, boxOf, buildTrack, mercX, mercY, type Track} from './camera.ts';
@@ -36,10 +36,14 @@
   const EMPTY: FeatureCollection = {type: 'FeatureCollection', features: []};
 
   /**
-   * Space the follow camera keeps clear around its frame, following / framing the whole selection (a phone's
-   * floating title and dock); default FOLLOW.pad / wholePad on every side.
+   * `insets` / `wholeInsets`: space the follow camera keeps clear around its frame, following / framing the whole
+   * selection (a phone's floating title and dock); default FOLLOW.pad / wholePad on every side.
+   * `phone` (the phone shell): the map and its camera only. No zoom buttons, legend, inset, hover tips, pop-out card,
+   * time strip or visits menu (the shell has its own pill, card and dock); Follow / Fit as 44 px buttons on the right
+   * edge; a tap picks the nearest pin (seek) or cluster (zoom in) within 22 px. `covered`: another tab or the
+   * lightbox is over the map: no camera frames until it shows again (then a resize and a snap).
    */
-  let {insets, wholeInsets}: {insets?: Insets; wholeInsets?: Insets} = $props();
+  let {insets, wholeInsets, phone = false, covered = false}: {insets?: Insets; wholeInsets?: Insets; phone?: boolean; covered?: boolean} = $props();
 
   let el = $state<HTMLDivElement>();
   let markerEl = $state<HTMLDivElement>();
@@ -116,7 +120,7 @@
 
   function create(container: HTMLDivElement, style: string) {
     const m = new maplibregl.Map({
-      container, style, center: [0, 20], zoom: 1.4, attributionControl: {compact: true},
+      container, style, center: [0, 20], zoom: 1.4, attributionControl: phone ? false : {compact: true},
       // 3× screens would triple the fill cost for detail nobody sees on a moving map.
       pixelRatio: Math.min(devicePixelRatio || 1, 2),
       dragRotate: false, pitchWithRotate: false, fadeDuration: reduced ? 0 : 300,
@@ -124,14 +128,16 @@
     map = m;
     m.touchZoomRotate.disableRotation();
     m.keyboard.disableRotation();
-    m.addControl(new maplibregl.NavigationControl({showCompass: false}), 'top-right');
+    // Phone: pinch and double-tap zoom; the bottom-right corner is the Follow / Fit buttons'.
+    if (phone) m.addControl(new maplibregl.AttributionControl({compact: true}), 'bottom-left');
+    else m.addControl(new maplibregl.NavigationControl({showCompass: false}), 'top-right');
     // The default style references a sprite image it doesn't ship ("capital"): blank instead of a warning per tile.
     m.setMissingStyleImageResolver(id => { if (!m.hasImage(id)) m.addImage(id, {width: 1, height: 1, data: new Uint8Array(4)}); });
     m.on('webglcontextlost', () => { lost = true; if (follower) follower.stopped = true; });
     m.on('webglcontextrestored', () => {
       const resume = () => {
         lost = false;
-        if (follower) { follower.stopped = false; follower.snap(); }
+        if (follower) { follower.stopped = covered; follower.snap(); }
       };
       // MapLibre restores a loaded style itself, but drops one that was still loading when the context went
       // (maplibre-gl-js#8690): load it again ('load', and so our layers, hasn't happened yet then).
@@ -205,6 +211,7 @@
         'circle-stroke-color': '#101215', 'circle-stroke-width': 1.5,
       }});
 
+    if (phone) { m.on('click', e => tapNear(m, e.point)); return; }
     for (const id of ['clusters', 'pin']) {
       m.on('mouseenter', id, () => (m.getCanvas().style.cursor = 'pointer'));
       m.on('mouseleave', id, () => { m.getCanvas().style.cursor = ''; hoverSeq++; hoverKey = ''; tip = null; });
@@ -249,6 +256,35 @@
       if (!a || ix !== a.ix || p.r < a.lo || p.r >= a.hi) return;
       selection.cursorTo(a.ix, p.r);
     });
+  }
+
+  /**
+   * Phone: a tap anywhere within 22 px of a pin or cluster counts (the dots are ~10 px). The nearest pin seeks (the
+   * cursor goes there, `at` replaced); otherwise the nearest cluster zooms in, as MapLibre's own examples do.
+   */
+  function tapNear(m: MlMap, p: {x: number; y: number}) {
+    const R = 22, a = active, ix = pinsOf;
+    if (!a || !ix || ix !== a.ix) return;
+    let pin: {r: number; d: number} | null = null, cl: {f: MapGeoJSONFeature; d: number} | null = null;
+    for (const f of m.queryRenderedFeatures([[p.x - R, p.y - R], [p.x + R, p.y + R]], {layers: ['pin', 'clusters']})) {
+      if (f.properties.g !== gen) continue;
+      const q = m.project((f.geometry as Point).coordinates as [number, number]), d = Math.hypot(q.x - p.x, q.y - p.y);
+      if (d > R) continue;
+      if (f.layer.id === 'pin') { const r = (f.properties as PinProps).r; if (r >= a.lo && r < a.hi && (!pin || d < pin.d)) pin = {r, d}; }
+      else if (!cl || d < cl.d) cl = {f, d};
+    }
+    if (pin) {
+      selection.cursorTo(a.ix, pin.r);
+      writeUrl('replace', selection.cursor);
+      return;
+    }
+    if (!cl) return;
+    const g = gen, center = (cl.f.geometry as Point).coordinates as [number, number];
+    (m.getSource('pins') as GeoJSONSource).getClusterExpansionZoom(cl.f.properties.cluster_id as number).then(zoom => {
+      if (g !== gen) return;
+      toManual();
+      if (reduced) m.jumpTo({center, zoom}); else m.easeTo({center, zoom, duration: 500});
+    }, () => { /* cluster gone (data replaced) */ });
   }
 
   /** The selection a zoom to [t0, t1] would make (whole hours within the current span, inside the current album if any). */
@@ -429,6 +465,19 @@
   });
 
   $effect(() => { if (follower) { follower.reduced = reduced; follower.kick(); } });
+  // Phone: nothing drawn under another tab or the lightbox; back on show, the size is checked and the camera snaps.
+  $effect(() => {
+    const c = covered;
+    if (!ready || !follower || !map) return;
+    untrack(() => {
+      if (!follower || !map) return;
+      follower.stopped = c || lost;
+      if (c || lost) return;
+      map.resize();
+      map.triggerRepaint();
+      follower.snap();
+    });
+  });
   $effect(() => {
     const i = insets, w = wholeInsets;
     if (!ready || !follower || (!i && !w)) return;
@@ -601,7 +650,7 @@
 </script>
 
 <svelte:window onkeydown={e => { if (e.key === 'Escape' && menu && !e.defaultPrevented && selection.lightbox == null) { e.preventDefault(); menu = null; } }} />
-<div class="mapview">
+<div class="mapview" class:phone style:--top="{insets?.t ?? 0}px">
   <div class="mapwrap" bind:clientWidth={wrapW} bind:clientHeight={wrapH}>
     <div class="map" class:dim={!!active && !gpsCount} bind:this={el}></div>
 
@@ -682,7 +731,7 @@
       </div>
     {/if}
 
-    {#if legend && gpsCount}
+    {#if legend && gpsCount && !phone}
       <div class="legend">
         <div class="ramp" style:background="linear-gradient(90deg, {RAMP.map(([k, c]) => `${c} ${k * 100}%`).join(', ')})"></div>
         <div class="ends"><span>{legend.from}</span><span>{legend.to}</span></div>
@@ -691,7 +740,20 @@
       </div>
     {/if}
 
-    {#if ready && (box || !selection.sel)}
+    {#if ready && phone && box}
+      <div class="pmodes" role="group" aria-label="Camera">
+        <button class:on={mode === 'follow'} class:paused aria-pressed={mode === 'follow'}
+          aria-label={mode === 'follow' ? 'Following the time cursor' : paused ? 'Follow paused: the map was moved. Follow again' : 'Follow the time cursor'}
+          onclick={() => camTo(mode === 'follow' ? 'unfollow' : 'follow')}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2" /><path d="M12 2.5v4M12 17.5v4M2.5 12h4M17.5 12h4" /><circle cx="12" cy="12" r="7.5" fill="none" /></svg>
+          <span>{paused ? 'Paused' : 'Follow'}</span>
+        </button>
+        <button class:on={mode === 'whole'} aria-pressed={mode === 'whole'} aria-label="Fit: frame the whole trip" onclick={() => camTo('fit')}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" fill="none" /></svg>
+          <span>Fit</span>
+        </button>
+      </div>
+    {:else if ready && !phone && (box || !selection.sel)}
       <div class="modes" role="group" aria-label="Camera">
         {#if box}
           <button class="follow" class:on={mode === 'follow'} class:paused aria-pressed={mode === 'follow'}
@@ -704,12 +766,12 @@
       </div>
     {/if}
 
-    {#if showInset}
+    {#if showInset && !phone}
       <canvas class="inset" bind:this={insetCv}
         style:width="{INSET_W}px" style:height="{INSET_H}px" aria-hidden="true"></canvas>
     {/if}
 
-    {#if tip && pinsOf}
+    {#if tip && pinsOf && !phone}
       {@const ix = pinsOf}
       {@const hash = thumbHashDataUrl(ix.thumbhash[tip.row])}
       <div class="tip" bind:offsetWidth={tipW} bind:offsetHeight={tipH}
@@ -730,7 +792,7 @@
     {/if}
   </div>
 
-  {#if active}
+  {#if active && !phone}
     <TimeStrip {active} {offset} prominentPlay={!!config.demo} />
   {/if}
 </div>
@@ -739,7 +801,7 @@
 <div hidden>
   <div bind:this={markerEl}><div class="marker {pos?.kind ?? ''}">
     <div class="dot"></div>
-    {#if active && nearest >= 0}
+    {#if active && nearest >= 0 && !phone}
       {@const ix = active.ix}
       {@const r = nearest}
       {@const hash = thumbHashDataUrl(ix.thumbhash[r])}
@@ -768,6 +830,19 @@
   .map { position: absolute; inset: 0; background: var(--ground); }
 
   .map.dim { opacity: .35; }
+
+  /* Phone: notices below the floating pill; Follow / Fit stacked at the right edge, low (the thumb's arc). */
+  .phone .notice { top: var(--top); max-width: calc(100% - 24px); white-space: normal; text-align: center; border-radius: 14px; }
+  .pmodes { position: absolute; right: 12px; bottom: 14px; z-index: 2; display: grid; gap: 8px; }
+  .pmodes button {
+    width: 48px; height: 48px; display: grid; place-items: center; align-content: center; gap: 1px; padding: 0;
+    background: rgba(11, 12, 14, .88); border: 1px solid var(--line); border-radius: 12px; color: var(--ink2);
+    font: 500 10px var(--f-body); cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  .pmodes svg { width: 20px; height: 20px; fill: currentColor; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+  .pmodes button.on { color: var(--ink); border-color: var(--photo); background: rgba(40, 30, 16, .92); }
+  .pmodes button.paused { color: var(--photo-hi); border-color: rgba(232, 166, 78, .5); }
+  .pmodes button:focus-visible { outline: 2px solid var(--photo-hi); outline-offset: 2px; }
   .notice:is(.nogps, .err) { pointer-events: auto; display: flex; gap: 12px; align-items: center; }
   .notice.err { color: var(--ink); }
   .notice button, .state button {
