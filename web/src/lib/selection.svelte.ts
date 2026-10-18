@@ -1,7 +1,8 @@
 // What is selected and where the time cursor is: the contract between the overview (stage 3,
 // writes the selection, owns URL sync) and the map + scrubber (stage 4, reads it, writes the cursor).
-import type {IndexColumns, LibraryIndex} from './index/model.ts';
+import {sliceIndex, type IndexColumns, type LibraryIndex} from './index/model.ts';
 import {library} from './index/store.svelte.ts';
+import {nearParam, parseNear, placeRows, type Circle} from './place.ts';
 
 /**
  * Times are UTC instants (epoch ms); `t1` is exclusive. Whole-day selections (brush, URL days, albums, a pin's day)
@@ -13,14 +14,42 @@ export type Selection =
    * members: the album's own assets (may include ones outside the library index); range: everything in its date span.
    * `sub`: t0/t1 were narrowed inside the album (a map cluster zoom); members are clipped to them then.
    */
-  | {kind: 'album'; albumId: string; mode: 'members' | 'range'; t0: number; t1: number; sub?: true};
+  | {kind: 'album'; albumId: string; mode: 'members' | 'range'; t0: number; t1: number; sub?: true}
+  /**
+   * The library's photos in [t0, t1) taken within `r` metres of lat/lon (a map cluster's "only photos here"): a subset,
+   * not a span, so `active` is an index of just those rows (`placeIndex`), like album members.
+   */
+  | ({kind: 'place'; t0: number; t1: number} & Circle);
 
 /** A selection to return to (zoom stack): what was selected (null: nothing, the whole library), the cursor, its name for Back. */
 export interface Crumb { sel: Selection | null; cursor: number | null; cursorId: string | null; label: string }
 
-export const sameSelection = (a: Selection | null, b: Selection | null) =>
-  a === b || (!!a && !!b && a.kind === b.kind && a.t0 === b.t0 && a.t1 === b.t1
-    && (a.kind === 'range' || (b.kind === 'album' && a.albumId === b.albumId && a.mode === b.mode && !!a.sub === !!b.sub)));
+export const sameSelection = (a: Selection | null, b: Selection | null) => {
+  if (a === b) return true;
+  if (!a || !b || a.kind !== b.kind || a.t0 !== b.t0 || a.t1 !== b.t1) return false;
+  if (a.kind === 'album') return b.kind === 'album' && a.albumId === b.albumId && a.mode === b.mode && !!a.sub === !!b.sub;
+  if (a.kind === 'place') return b.kind === 'place' && a.lat === b.lat && a.lon === b.lon && a.r === b.r;
+  return true;
+};
+
+/** Place indexes per library index (a refreshed library is a new object: its places are built again). */
+const places = new WeakMap<LibraryIndex, Map<string, LibraryIndex>>();
+const PLACES_KEPT = 8;
+/**
+ * The rows of a place selection as their own index, sorted by t. Cached by the selection's value, so Back/Forward
+ * onto it (a new object from the URL) reuses the slice; `rows`: the same rows, already filtered (the map's menu).
+ */
+export function placeIndex(s: Extract<Selection, {kind: 'place'}>, lib: LibraryIndex, rows?: ArrayLike<number>): LibraryIndex {
+  let m = places.get(lib);
+  if (!m) places.set(lib, m = new Map());
+  const key = `${nearParam(s)}|${s.t0}|${s.t1}`;
+  let ix = m.get(key);
+  if (ix) { m.delete(key); m.set(key, ix); return ix; }
+  ix = sliceIndex(lib, rows ?? placeRows(lib, s, s.t0, s.t1));
+  m.set(key, ix);
+  if (m.size > PLACES_KEPT) m.delete(m.keys().next().value!);
+  return ix;
+}
 
 /** The selected assets: rows lo..hi-1 of `ix`, which is sorted by t. */
 export interface Active { ix: LibraryIndex; lo: number; hi: number; t0: number; t1: number }
@@ -79,6 +108,7 @@ class SelectionStore {
       return {ix: m.ix, lo: 0, hi: n, t0: n ? Math.min(s.t0, m.ix.t[0]) : s.t0, t1: n ? Math.max(s.t1, m.ix.t[n - 1] + 1) : s.t1};
     }
     if (!lib) return null;
+    if (s.kind === 'place') { const ix = placeIndex(s, lib); return {ix, lo: 0, hi: ix.n, t0: s.t0, t1: s.t1}; }
     return {ix: lib, lo: lowerBound(lib.t, s.t0), hi: lowerBound(lib.t, s.t1), t0: s.t0, t1: s.t1};
   });
 
@@ -177,6 +207,7 @@ export const albumSpan = (a: {start: number; end: number}, ix: IndexColumns | nu
 //   ?album=<uuid>[&mode=range]            album, members by default
 //   from/to may also be 2026-08-01T14:00Z (UTC to the minute, `to` exclusive): a map cluster zoom
 //   ?album=<uuid>&from=…&to=…             album narrowed to that span (map cluster zoom)
+//   ?near=<lat>,<lon>,<m>&from=…&to=…     place: library photos within <m> metres in that span (a cluster's "only photos here")
 //   &at=<epoch ms>                        cursor (optional)
 //   &lb=<asset id>                        open lightbox (optional; written from selection.lightboxId by every writeUrl)
 const day = (s: string | null) => (s && /^\d{4}-\d{2}-\d{2}$/.test(s) ? Date.parse(s + 'T00:00:00Z') : NaN);
@@ -205,12 +236,14 @@ export function selectionFromUrl(q: URLSearchParams, albums: {id: string; start:
     return {kind: 'album', albumId: a.id, mode, t0, t1};
   }
   const sp = span(q, ix);
-  return sp ? {kind: 'range', t0: sp[0], t1: sp[1]} : null;
+  if (!sp) return null;
+  const near = parseNear(q.get('near'));
+  return near ? {kind: 'place', ...near, t0: sp[0], t1: sp[1]} : {kind: 'range', t0: sp[0], t1: sp[1]};
 }
 
 const isoDay = (t: number) => new Date(t).toISOString().slice(0, 10);
 const isoMin = (t: number) => new Date(t).toISOString().slice(0, 16) + 'Z';
-const URL_KEYS = ['from', 'to', 'album', 'mode', 'at', 'lb'];
+const URL_KEYS = ['from', 'to', 'album', 'mode', 'near', 'at', 'lb'];
 
 /**
  * `base` with the selection keys replaced. `at` is written only when it lies inside the selection.
@@ -221,7 +254,8 @@ export function selectionToQuery(sel: Selection | null, at: number | null, base 
   for (const k of URL_KEYS) q.delete(k);
   if (!sel) return q;
   if (sel.kind === 'album') { q.set('album', sel.albumId); if (sel.mode === 'range') q.set('mode', 'range'); }
-  if (sel.kind === 'range' || sel.sub) {
+  if (sel.kind === 'place') q.set('near', nearParam(sel));
+  if (sel.kind !== 'album' || sel.sub) {
     // Whole local days stay readable; anything finer (a cluster zoom) is written to the minute, in UTC. Days only
     // when they read back to the same instants (not always so on a day the offset changes).
     const l0 = toLocal(sel.t0, ix), l1 = toLocal(sel.t1, ix);

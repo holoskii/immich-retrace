@@ -1,8 +1,9 @@
 // Names for selections in navigation UI (Back button, breadcrumb).
 import {library} from './index/store.svelte.ts';
-import {albumLabel, fDay, railAlbums} from './albums.ts';
+import {albumLabel, fDay, fNum, railAlbums} from './albums.ts';
 import {tripsOf} from './trips.ts';
-import {fromLocal, toLocal, type Selection} from './selection.svelte.ts';
+import {placeOf} from './map/route.ts';
+import {fromLocal, placeIndex, toLocal, type Selection} from './selection.svelte.ts';
 
 export const DAY = 86400e3;
 const HOUR = 3600e3, MIN = 60e3;
@@ -13,8 +14,15 @@ export const fDays = (t0: number, t1: number) => {
   return a === b ? a : `${a} → ${b}`;
 };
 
-/** A selection's display name: the zoom label if it has one, else the album name, else its days. */
+/**
+ * A selection's display name: the zoom label if it has one, else the album name, else its days. A place gets its
+ * current count after the label (or after its own place name, for a link opened cold).
+ */
 export function selName(sel: Selection | null, label?: string | null) {
+  if (sel?.kind === 'place' && library.index) {
+    const ix = placeIndex(sel, library.index);
+    return placeName(label || zoomName(null, sel.t0, sel.t1 - 1, placeOf(ix, Array.from({length: ix.n}, (_, i) => i))), ix.n);
+  }
   if (label) return label;
   if (!sel) return 'all photos';
   if (sel.kind === 'album') {
@@ -23,6 +31,9 @@ export function selName(sel: Selection | null, label?: string | null) {
   }
   return fDays(sel.t0, sel.t1);
 }
+
+/** A place selection's name: "Pamplona · 23 photos" (the count is the selection's own, which may differ from a cluster's). */
+export const placeName = (name: string, n: number) => `${name || 'This place'} · ${fNum(n)} ${n === 1 ? 'photo' : 'photos'}`;
 
 /**
  * Name for a zoom into instants [t0, t1] from `sel`: "Album › place". The album is the selected one, or else the

@@ -13,13 +13,15 @@
   import type {LibraryIndex} from '../index/model.ts';
   import {library, phaseText} from '../index/store.svelte.ts';
   import {explainIndex, explainMedia, probeMedia, retryLibrary, type MediaFailure} from '../failure.ts';
-  import {lowerBound, sameSelection, selection, toLocal, writeUrl, type Selection} from '../selection.svelte.ts';
+  import {lowerBound, placeIndex, sameSelection, selection, toLocal, writeUrl, type Selection} from '../selection.svelte.ts';
   import {thumbHashDataUrl} from '../thumbhash.ts';
   import {mediaQueue, thumbUrl} from '../lightbox/media.ts';
-  import {dayAround, fDays, selName, zoomName, zoomSpan} from '../nav.ts';
+  import {CardImage} from '../lightbox/card.ts';
+  import {dayAround, fDays, placeName, selName, zoomName, zoomSpan} from '../nav.ts';
+  import {enclosingCircle, fRadius, placeRows} from '../place.ts';
   import {countRows, DAY, fNum} from '../albums.ts';
   import {fDay, fDuration, fFullDay, fSpan, fWhen} from './format.ts';
-  import {clusterVisits, cursorRow, gpsBounds, pinsGeoJSON, positionAt, routeGeoJSON, segmentRoute, typicalOffset, type PinProps, type Visit} from './route.ts';
+  import {clusterVisits, cursorRow, gpsBounds, pinsGeoJSON, placeOf, positionAt, routeGeoJSON, segmentRoute, typicalOffset, type PinProps, type Visit} from './route.ts';
   import {binFixes, boxOf, buildTrack, mercX, mercY, type Track} from './camera.ts';
   import type {TrackRequest} from './camera.worker.ts';
   import {camNext, FOLLOW, Follower, type CamEvent, type CamState} from './follow.ts';
@@ -70,8 +72,13 @@
   /** Hover / click requests in flight; bumped to cancel them. */
   let hoverSeq = 0, hoverKey = '', clickSeq = 0;
   let cardH = $state(160);
-  /** Visit chooser after a click on a cluster the user was at more than once. */
-  let menu = $state<{x: number; y: number; visits: Visit[]; expand: () => void; off: number} | null>(null);
+  /**
+   * Chooser after a click on a cluster: `here` (only the photos at this place, a place selection), `all` (everything
+   * from the first visit to the last, with how many items), one row per visit, and "just zoom the map in". See `clusterMenu`.
+   */
+  let menu = $state<{x: number; y: number; visits: Visit[]; here: Here | null; all: Visit | null; expand: () => void; off: number} | null>(null);
+  /** "Only photos here": the place selection, its rows of the library, its name (no count) and first photo's time. */
+  interface Here { sel: Extract<Selection, {kind: 'place'}>; rows: Int32Array; name: string; t: number }
   let tipW = $state(162), tipH = $state(150), wrapW = $state(0), wrapH = $state(0);
 
   const active = $derived(selection.active);
@@ -240,9 +247,9 @@
         const leaves = await src.getClusterLeaves(cid, Infinity, 0);
         if (!live()) return;
         const [lo, hi] = a && a.ix === ix ? [a.lo, a.hi] : libRows ?? [0, ix.n];
-        const visits = clusterVisits(ix, lo, hi, leaves.map(l => (l.properties as PinProps).r)).filter(v => narrows(v.t0, v.t1));
-        if (visits.length > 1) { menu = {x: e.point.x, y: e.point.y, visits, expand, off: a ? offset : 0}; return; }
-        if (visits.length === 1) { zoomTo(visits[0]); return; }
+        const c = clusterMenu(ix, lo, hi, leaves.map(l => (l.properties as PinProps).r));
+        if (c.visits.length > 1 || c.here) { menu = {x: e.point.x, y: e.point.y, ...c, expand, off: a ? offset : 0}; return; }
+        if (c.visits.length === 1) { zoomTo(c.visits[0]); return; }
       } catch { /* no leaves: just expand */ }
       if (live()) void expand();
     });
@@ -290,17 +297,65 @@
   /** The selection a zoom to [t0, t1] would make (whole hours within the current span, inside the current album if any). */
   function zoomSel(t0: number, t1: number): Selection {
     const s = selection.sel, [d0, d1] = zoomSpan(t0, t1, s ? [s.t0, s.t1] : null);
-    return s?.kind === 'album' ? {...s, t0: d0, t1: d1, sub: true} : {kind: 'range', t0: d0, t1: d1};
+    return s?.kind === 'album' ? {...s, t0: d0, t1: d1, sub: true} : s?.kind === 'place' ? {...s, t0: d0, t1: d1} : {kind: 'range', t0: d0, t1: d1};
   }
   /** Whether zooming to [t0, t1] would narrow the current selection at all. */
   function narrows(t0: number, t1: number) {
     const s = selection.sel, z = zoomSel(t0, t1);
     return !s || ((z.t0 > s.t0 || z.t1 < s.t1) && !sameSelection(s, z));
   }
+  /**
+   * What a cluster click can offer, from its leaf rows of `ix` (rows lo..hi-1 are the pins' range):
+   * - `visits`: the visits that would narrow the selection in time;
+   * - `all`: with several visits, the period from the first to the last, everything in between included (`n`: all
+   *   its items, not only this place's);
+   * - `here`: only the library's photos within the cluster's smallest enclosing circle in that period. Offered with
+   *   several visits, or when a time zoom would mostly show other places: with one visit (or none that narrows), the
+   *   time zoom stays the one-click default unless more GPS photos in its span lie outside the cluster than in it.
+   */
+  function clusterMenu(ix: LibraryIndex, lo: number, hi: number, leafRows: number[]) {
+    const every = clusterVisits(ix, lo, hi, leafRows), visits = every.filter(v => narrows(v.t0, v.t1));
+    let all: Visit | null = null, here: Here | null = null;
+    if (!every.length) return {visits, all, here};
+    const first = every[0].t0, last = every[every.length - 1].t1, z = zoomSel(first, last);
+    if (visits.length > 1 && narrows(first, last)) {
+      all = {t0: first, t1: last, n: lowerBound(ix.t, z.t1, lo, hi) - lowerBound(ix.t, z.t0, lo, hi),
+        place: every.every(w => w.place === every[0].place) ? every[0].place : ''};
+    }
+    const lib = library.index, s = selection.sel, leaf = new Set(leafRows.filter(r => r >= lo && r < hi));
+    const circle = enclosingCircle([...leaf].map(r => [ix.lat[r], ix.lon[r]]));
+    if (!lib || !circle) return {visits, all, here};
+    const sel: Here['sel'] = {kind: 'place', ...circle, t0: z.t0, t1: z.t1};
+    if (sameSelection(s, sel)) return {visits, all, here};
+    if (visits.length <= 1) {
+      // GPS photos the time zoom would show that aren't in this cluster.
+      let away = 0;
+      for (let r = lowerBound(ix.t, z.t0, lo, hi), e = lowerBound(ix.t, z.t1, lo, hi); r < e; r++) if (ix.gps[r] && !leaf.has(r)) away++;
+      if (away <= leaf.size) return {visits, all, here};
+    }
+    const rows = placeRows(lib, sel, sel.t0, sel.t1);
+    if (!rows.length) return {visits, all, here};
+    here = {sel, rows, name: zoomName(s, first, last, placeOf(lib, rows)), t: lib.t[rows[0]]};
+    return {visits, all, here};
+  }
+  /** "Only photos here": the place selection (a zoom; Back returns), cursor on its first photo. */
+  function zoomHere(h: Here) {
+    menu = null;
+    const lib = library.index;
+    if (!lib) return;
+    placeIndex(h.sel, lib, h.rows);
+    narrowed(h.sel, placeName(h.name, h.rows.length), `only the photos within ${fRadius(h.sel.r)} of this spot, ${fDays(h.sel.t0, h.sel.t1)}`);
+    // The level's name without the count: selName adds the place's current one (a library refresh can change it).
+    selection.zoomInto(h.sel, h.name || 'This place', h.t);
+    selection.cursorId = lib.id[h.rows[0]];
+    writeUrl('commit', h.t);
+  }
   function zoomTo(v: {t0: number; t1: number; n: number; place: string}) {
     menu = null;
-    const z = zoomSel(v.t0, v.t1), label = zoomName(selection.sel, v.t0, v.t1, v.place) || `${v.n} photos`;
-    narrowed(z, label, fDays(z.t0, z.t1));
+    const z = zoomSel(v.t0, v.t1), name = zoomName(selection.sel, v.t0, v.t1, v.place);
+    // A place narrowed in time: selName adds the count (to the name, or to the place's own name without one).
+    const label = z.kind === 'place' ? name : name || `${v.n} photos`;
+    narrowed(z, selName(z, label), fDays(z.t0, z.t1));
     selection.zoomInto(z, label, v.t0);
     writeUrl('commit', v.t0);
   }
@@ -556,48 +611,25 @@
     mpt = {x: p.x, y: p.y, w: c.clientWidth, h: c.clientHeight};
   }
 
-  // The pop-out photo: the thumbhash until the first thumbnail is in, then the last loaded thumbnail
-  // stays up until the next one has decoded. One load in flight (through the media queue), latest wins:
-  // scrubbing never flashes back to the blur or to an empty frame.
-  /** `src`: an object URL of the loaded thumbnail, revoked when the next one replaces it. */
-  let shown = $state<{id: string; url: string; src: string} | null>(null);
-  let want: {id: string; url: string} | null = null, loading = false, broken = '';
-  /** Cancels the load in flight when the map goes away. */
-  const cardLoads = new AbortController();
-  $effect(() => () => { cardLoads.abort(); if (shown) URL.revokeObjectURL(shown.src); });
+  // The pop-out photo (desktop; the phone's dock has its own card): the photo's thumbhash until its own thumbnail is
+  // in, never another photo's (CardImage: one load at a time, latest wins, paced in the demo).
+  let cardV = $state(0);
   /** Why thumbnails fail (probed once, until one loads again): a missing permission shouldn't look like a blur. */
   let thumbIssue = $state<MediaFailure | null>(null), probing = false;
-  $effect(() => {
-    const a = active, r = nearest;
-    want = a && r >= 0 ? {id: a.ix.id[r], url: thumbUrl(a.ix.id[r], a.ix.thumbhash[r])} : null;
-    pump();
-  });
-  function show(next: {id: string; url: string; src: string} | null) {
-    const old = untrack(() => shown);
-    shown = next;
-    if (old && old.src !== next?.src) URL.revokeObjectURL(old.src);
-  }
-  function pump() {
-    const w = want;
-    // A thumbnail that failed: its own thumbhash (the card's background), not the previous photo.
-    if (w && w.url === broken) { show(null); return; }
-    if (loading || !w || w.url === untrack(() => shown?.url)) return;
-    loading = true;
-    let src = '';
-    mediaQueue.load(w.url, {signal: cardLoads.signal, high: true}).then(blob => {
-      src = URL.createObjectURL(blob);
-      const img = new Image();
-      img.src = src;
-      return img.decode();
-    }).then(() => { show({...w, src}); thumbIssue = null; }, () => {
-      if (src) URL.revokeObjectURL(src);
-      if (cardLoads.signal.aborted) return;
-      broken = w.url;
+  const card = new CardImage(mediaQueue, () => cardV++, {
+    onLoad: () => { thumbIssue = null; },
+    onFail: url => {
       if (thumbIssue || probing) return;
       probing = true;
-      void probeMedia(w.url).then(k => { thumbIssue = k; }).finally(() => { probing = false; });
-    }).finally(() => { loading = false; if (!cardLoads.signal.aborted) pump(); });
-  }
+      void probeMedia(url).then(k => { thumbIssue = k; }).finally(() => { probing = false; });
+    },
+  });
+  $effect(() => () => card.dispose());
+  $effect(() => {
+    const a = active, r = nearest;
+    card.want(!phone && a && r >= 0 ? thumbUrl(a.ix.id[r], a.ix.thumbhash[r]) : null);
+  });
+  const cardSrc = $derived((void cardV, card.src));
   // Card note only for causes worth knowing (a missing file or an odd format just keeps the blur).
   const thumbNote = $derived(thumbIssue === 'permission' ? 'no thumbnails: the API key needs asset.view'
     : thumbIssue === 'unavailable' || thumbIssue === 'network' || thumbIssue === 'signed-out' ? explainMedia(thumbIssue, false).text : '');
@@ -720,8 +752,21 @@
 
     {#if menu}
       <div class="menu" role="menu" aria-label="Visits to this place" {@attach n => n.querySelector('button')?.focus()}
-        style:left="{Math.max(8, Math.min(menu.x + 8, wrapW - 250))}px" style:top="{Math.max(8, Math.min(menu.y + 8, wrapH - 40 - 30 * (menu.visits.length + 2)))}px">
-        <div class="mh">{menu.visits.length} visits here</div>
+        style:left="{Math.max(8, Math.min(menu.x + 8, wrapW - 250))}px"
+        style:top="{Math.max(8, Math.min(menu.y + 8, wrapH - 40 - 30 * (menu.visits.length + 2 + (menu.here ? 1 : 0) + (menu.all ? 1 : 0))))}px">
+        {#if menu.here}
+          {@const h = menu.here}
+          <button role="menuitem" class="all" onclick={() => zoomHere(h)} title="Only the photos taken within {fRadius(h.sel.r)} of this spot, {fDays(h.sel.t0, h.sel.t1)}">
+            <span>Only photos here</span><span class="mut">{fNum(h.rows.length)}</span>
+          </button>
+        {/if}
+        {#if menu.all}
+          {@const all = menu.all}
+          <button role="menuitem" class="all" onclick={() => zoomTo(all)} title="Everything from the first visit to the last, other places in between included">
+            <span>Everything in this period</span><span class="mut">{fVisit(all, menu.off)} · {fNum(all.n)}</span>
+          </button>
+        {/if}
+        {#if menu.visits.length}<div class="mh" class:split={!!(menu.here || menu.all)}>{menu.visits.length} {menu.visits.length === 1 ? 'visit' : 'visits'} here</div>{/if}
         {#each menu.visits as v (v.t0)}
           <button role="menuitem" onclick={() => zoomTo(v)}>
             <span>{fVisit(v, menu.off)}</span><span class="mut">{v.n}{v.place ? ` · ${v.place}` : ''}</span>
@@ -808,7 +853,7 @@
       <div class="card {cardSide}" style:top="{cardTop}px" bind:offsetHeight={cardH} {@attach cardActions}
         role="button" tabindex="0" title="Open in the lightbox" aria-label="Open {fWhen(ix.t[r], ix.off[r])} in the lightbox">
         <div class="ph" style:background-image={hash ? `url(${hash})` : undefined}>
-          {#if shown}<img src={shown.src} alt="" />{/if}
+          {#if cardSrc}<img src={cardSrc} alt="" />{/if}
           {#if ix.video[r]}<span class="vid">{fDuration(ix.dur[r])}</span>{/if}
         </div>
         <strong>{fWhen(ix.t[r], ix.off[r])}</strong>
@@ -916,6 +961,8 @@
   }
   .menu button:hover { background: var(--raised); }
   .menu .mut { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .menu .all { color: var(--photo-hi); }
+  .menu .mh.split { border-top: 1px solid var(--line); margin-top: 2px; padding-top: 6px; }
   .menu .sec { color: var(--ink2); border-top: 1px solid var(--line); border-radius: 0 0 4px 4px; margin-top: 2px; }
   .tip .hint { color: var(--photo-hi); margin-top: 2px; }
 

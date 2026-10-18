@@ -8,7 +8,7 @@
   import {onMount, untrack} from 'svelte';
   import {library} from '../index/store.svelte.ts';
   import {sameSelection, selection, type Selection} from '../selection.svelte.ts';
-  import {cursorRow} from '../map/route.ts';
+  import {cursorRow, placeOf} from '../map/route.ts';
   import {fDuration, fWeekday, fWhen} from '../map/format.ts';
   import {thumbHashDataUrl} from '../thumbhash.ts';
   import {mediaQueue, thumbUrl} from '../lightbox/media.ts';
@@ -24,8 +24,9 @@
   const active = $derived(selection.active);
   const count = $derived(active ? active.hi - active.lo : 0);
   const name = $derived.by(() => {
-    const s = selection.sel, a = s?.kind === 'album' ? library.albums.find(x => x.id === s.albumId) : null;
-    return a ? tripName(a.name) : 'Selected dates';
+    const s = selection.sel, a = s?.kind === 'album' ? library.albums.find(x => x.id === s.albumId) : null, p = s?.kind === 'place' ? active : null;
+    // A place (a `near=` link from the desktop): its most common city or country.
+    return a ? tripName(a.name) : p ? placeOf(p.ix, Array.from({length: p.hi - p.lo}, (_, i) => p.lo + i)) || 'This place' : 'Selected dates';
   });
 
   const membersError = $derived(selection.sel?.kind === 'album' && selection.membersLoad?.albumId === selection.sel.albumId ? selection.membersLoad.error : null);

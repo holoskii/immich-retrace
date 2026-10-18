@@ -354,7 +354,8 @@
   const readout = $derived.by(() => {
     const d = draft, s = selection.sel, l = selSpan;
     if (!l || (!d && !s)) return null;
-    const name = selection.zoomLabel && !d ? selection.zoomLabel : s?.kind === 'album' && !d ? (album ? albumLabel(album.name) : 'Album') : null;
+    const name = d ? null : s?.kind === 'place' ? selName(s, selection.zoomLabel) : selection.zoomLabel
+      ? selection.zoomLabel : s?.kind === 'album' ? (album ? albumLabel(album.name) : 'Album') : null;
     const head = `${fDay(l[0])} → ${fDay(l[1] - 1)} · ${fLength(l[0], l[1])}`;
     const lib = library.index;
     const a = d ? (lib ? {ix: lib, lo: lowerBound(lib.t, fromLocal(d[0])), hi: lowerBound(lib.t, fromLocal(d[1]))} : null) : selection.active;

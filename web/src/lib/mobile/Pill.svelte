@@ -6,6 +6,7 @@
   import {config} from '../config.svelte.ts';
   import {demoUi} from '../demo/ui.svelte.ts';
   import {DAY, fNum} from '../albums.ts';
+  import {placeOf} from '../map/route.ts';
   import {fDayRange, tripName} from './format.ts';
   import {shareLink} from './share.ts';
 
@@ -25,7 +26,12 @@
     const s = selection.sel;
     return s?.kind === 'album' ? library.albums.find(a => a.id === s.albumId) ?? null : null;
   });
-  const name = $derived(album ? tripName(album.name) : selection.sel ? 'Selected dates' : 'Retrace');
+  /** A place (a `near=` link from the desktop): its most common city or country. */
+  const placeName = $derived.by(() => {
+    const a = selection.sel?.kind === 'place' ? selection.active : null;
+    return a ? placeOf(a.ix, Array.from({length: a.hi - a.lo}, (_, i) => a.lo + i)) || 'This place' : null;
+  });
+  const name = $derived(album ? tripName(album.name) : placeName ?? (selection.sel ? 'Selected dates' : 'Retrace'));
   const line2 = $derived.by(() => {
     const s = selection.sel, a = selection.active, parts: string[] = [];
     if (s) {

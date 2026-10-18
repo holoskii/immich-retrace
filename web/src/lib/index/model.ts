@@ -61,6 +61,26 @@ export function buildIndex(months: AssetColumns[]): LibraryIndex {
   return withLookup(c);
 }
 
+/**
+ * The rows `rows` of `ix` (ascending, so the result stays sorted by t) as an index of their own: a selection that is
+ * a subset of the library (a place) keeps `{ix, lo, hi}` contiguous this way, as album members do.
+ */
+export function sliceIndex(ix: IndexColumns, rows: ArrayLike<number>): LibraryIndex {
+  const n = rows.length;
+  const c: IndexColumns = {
+    n, id: new Array(n), t: new Float64Array(n), off: new Float32Array(n), video: new Uint8Array(n),
+    dur: new Float64Array(n), lat: new Float64Array(n), lon: new Float64Array(n), gps: new Uint8Array(n),
+    thumbhash: new Array(n), ratio: new Float32Array(n), city: new Array(n), country: new Array(n),
+  };
+  for (let i = 0; i < n; i++) {
+    const r = rows[i];
+    c.id[i] = ix.id[r]; c.t[i] = ix.t[r]; c.off[i] = ix.off[r]; c.video[i] = ix.video[r]; c.dur[i] = ix.dur[r];
+    c.lat[i] = ix.lat[r]; c.lon[i] = ix.lon[r]; c.gps[i] = ix.gps[r];
+    c.thumbhash[i] = ix.thumbhash[r]; c.ratio[i] = ix.ratio[r]; c.city[i] = ix.city[r]; c.country[i] = ix.country[r];
+  }
+  return withLookup(c);
+}
+
 /** Local wall-clock time of a row as epoch ms (read it with getUTC*); for calendar days, not ordering. */
 export const localTime = (ix: IndexColumns, r: number) => ix.t[r] + ix.off[r] * 3600e3;
 
