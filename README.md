@@ -6,6 +6,8 @@
 </p>
 <p align="center"><b><a href="https://immich-retrace-demo.holoskii.me">Try the live demo</a></b> (sample photos, no install)</p>
 
+https://github.com/user-attachments/assets/08ff7afe-58c6-4d4d-be16-06faf7102174
+
 A read-only companion web app for [Immich](https://immich.app) that shows where you were and when,
 reconstructed from your photos alone (no GPS tracker needed):
 
@@ -190,8 +192,8 @@ npm run dev:web     # Vite dev server, proxies /api to :8080
 ```
 
 Layout: `server/` (Hono on Node 24, run as TypeScript), `web/` (Svelte 5 + MapLibre GL),
-`shared/api.ts` (the viewer's own API types), `tests/`. Project notes and decisions:
-[AGENTS.md](AGENTS.md).
+`shared/api.ts` (the viewer's own API types), `tests/`. Code layout, design decisions and
+Immich API notes: [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## License
 

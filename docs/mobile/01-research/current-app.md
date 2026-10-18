@@ -3,7 +3,7 @@
 Retrace today is a single desktop screen (Layout L-A): demo banner → overview (bar + all-years
 strip + zoomed wave + album rail + hint row) → map (fills the rest) with a time strip under it.
 The lightbox is a full-screen overlay. There are no width breakpoints anywhere. Source: `web/src`,
-decisions in `AGENTS.md`. Screenshots (public demo only) in `../screens/`.
+decisions in `ARCHITECTURE.md`. Screenshots (public demo only) in `../screens/`.
 
 ## Views and interactions
 

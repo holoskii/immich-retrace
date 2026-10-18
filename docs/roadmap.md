@@ -1,6 +1,6 @@
 # Roadmap
 
-Everything that is still open. Decisions and architecture are in [AGENTS.md](../AGENTS.md).
+Everything that is still open. Decisions and architecture are in [ARCHITECTURE.md](../ARCHITECTURE.md).
 
 ## Next
 

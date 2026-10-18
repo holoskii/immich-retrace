@@ -1,5 +1,5 @@
 // Versioned adapter for Immich v3's internal timeline endpoints (marked internal upstream; shapes
-// verified against v3.1.0 server dist, see AGENTS.md). Converts them into shared/api.ts shapes.
+// verified against v3.1.0 server dist, see ARCHITECTURE.md). Converts them into shared/api.ts shapes.
 
 import {HttpError, type ImmichClient} from './immich.ts';
 import type {AlbumMembers, AlbumSummary, AssetColumns, MonthColumns} from '../shared/api.ts';

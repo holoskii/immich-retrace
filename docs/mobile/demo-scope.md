@@ -6,7 +6,7 @@ The current plan for Retrace on a phone. It supersedes the "Replay + Photos" rec
 **Status (2026-10):** phases 0–3 are built and on main, followed by a two-reviewer UI pass (Codex and
 Opus) fixed in three batches: Play paced to about 45 s per trip, landing on the whole trip, a phone
 pitch line, early trip loading, a short-screen desktop layout, a product Open Graph image. Phase 4
-(real devices) is open. How it works now is in [AGENTS.md](../../AGENTS.md) (phone shell, Play and
+(real devices) is open. How it works now is in [ARCHITECTURE.md](../../ARCHITECTURE.md) (phone shell, Play and
 demo decisions); this page stays the original scope.
 
 **Who it is for:** demo visitors who open a shared link on a phone. Goal: they see a trip play

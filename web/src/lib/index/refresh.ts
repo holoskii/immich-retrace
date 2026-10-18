@@ -4,7 +4,7 @@ import type {KV} from './idb.ts';
 import {buildIndex, columnsOf, withLookup, type IndexColumns, type LibraryIndex} from './model.ts';
 
 /**
- * `signed-out`: the viewer's own session (Authelia) expired; nothing is wrong with the library.
+ * `signed-out`: the viewer's own session (its auth proxy) expired; nothing is wrong with the library.
  * `network`: the viewer's backend didn't answer at all. `outdated`: the backend speaks another schema.
  */
 export type FailureCode = ApiError['code'] | 'signed-out' | 'network' | 'outdated';
@@ -88,7 +88,7 @@ async function getJson<T>(ctx: Ctx, path: string): Promise<T> {
   const {signal} = ctx;
   const f = ctx.fetch ?? globalThis.fetch.bind(globalThis), delays = ctx.delays ?? DELAYS;
   for (let attempt = 0; ; attempt++) {
-    // An expired Authelia session redirects to its login page; following it would just yield HTML.
+    // An expired auth-proxy session redirects to its login page; following it would just yield HTML.
     let res: Response;
     try { res = await f(path, {signal, redirect: 'manual'}); } catch (e) {
       if (signal?.aborted) throw e;
