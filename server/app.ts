@@ -39,8 +39,11 @@ async function relay(res: Response, cacheControl = 'no-store') {
 
 const badRequest = (c: Context, error: string) => c.json({error, code: 'invalid'} satisfies ApiError, 400);
 
-/** `extend`: registers extra routes ahead of the /api catch-all (demo mode: server/demo.ts). */
-export function createApp(immich: ImmichClient, config: ViewerConfig = configFromEnv({}), extend?: (app: Hono) => void) {
+/**
+ * `config`: the settings for /api/config, or a function answering them per request (demo mode resolves its trip).
+ * `extend`: registers extra routes ahead of the /api catch-all (demo mode: server/demo.ts).
+ */
+export function createApp(immich: ImmichClient, config: ViewerConfig | (() => Promise<ViewerConfig>) = configFromEnv({}), extend?: (app: Hono) => void) {
   const app = new Hono();
 
   app.onError((err, c) => {
@@ -55,9 +58,9 @@ export function createApp(immich: ImmichClient, config: ViewerConfig = configFro
     return c.json({viewer: 'ok', immich: immich.state});
   });
 
-  app.get('/api/config', c => {
+  app.get('/api/config', async c => {
     c.header('cache-control', 'no-store');
-    return c.json(config);
+    return c.json(typeof config === 'function' ? await config() : config);
   });
 
   // Hono routes HEAD through these GET handlers; it is sent upstream as HEAD, without Range.

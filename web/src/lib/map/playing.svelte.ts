@@ -11,3 +11,9 @@ export const playState = $state({on: false});
  * (once: the same selection applied again, or the landing's entry come back to, is not a landing).
  */
 export const landing: {sel: Selection | null} = {sel: null};
+
+/**
+ * The desktop map has shown a selection fully once: idle, its tiles loaded (MapView). The demo's coach mark waits for
+ * it, so it never explains a blank map. Set once per page.
+ */
+export const mapShown = $state({on: false});

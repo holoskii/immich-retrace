@@ -1,6 +1,7 @@
 // Names for selections in navigation UI (Back button, breadcrumb).
 import {library} from './index/store.svelte.ts';
-import {albumLabel, fDay, fNum, railAlbums} from './albums.ts';
+import {albumLabel, fDay, fNum, nameHasDates, railAlbums, tripName} from './albums.ts';
+import {hooks} from './hooks.svelte.ts';
 import {tripsOf} from './trips.ts';
 import {placeOf} from './map/route.ts';
 import {fromLocal, placeIndex, toLocal, type Selection} from './selection.svelte.ts';
@@ -27,9 +28,17 @@ export function selName(sel: Selection | null, label?: string | null) {
   if (!sel) return 'all photos';
   if (sel.kind === 'album') {
     const a = library.albums.find(x => x.id === sel.albumId);
-    if (a) return albumLabel(a.name);
+    if (a) return shortName(a);
   }
   return fDays(sel.t0, sel.t1);
+}
+
+/**
+ * An album's name in navigation (Back, a zoom's "Album › place", the map's notice): without the dates it ends with
+ * ("San Sebastián to Huesca, 6–10 Sep 2024" → "San Sebastián to Huesca"), which the readout and the span show already.
+ */
+export function shortName(a: {name: string; start: number | null; end: number | null}) {
+  return a.start != null && a.end != null && nameHasDates(a.name, a.start, a.end) ? tripName(a.name) : albumLabel(a.name);
 }
 
 /** A place selection's name: "Pamplona · 23 photos" (the count is the selection's own, which may differ from a cluster's). */
@@ -45,9 +54,9 @@ export function zoomName(sel: Selection | null, t0: number, t1: number, place: s
     // Album dates are local calendar days (midnight read as UTC): compare in local time, through the end of the last day.
     const l0 = toLocal(t0), l1 = toLocal(t1);
     let best = Infinity;
-    for (const b of railAlbums(library.albums, tripsOf(library.albums, library.index).isTrip)) if (b.start <= l0 && b.end + DAY > l1 && b.end - b.start < best) { a = b; best = b.end - b.start; }
+    for (const b of railAlbums(library.albums, tripsOf(library.albums, library.index, hooks.allTrips).isTrip)) if (b.start <= l0 && b.end + DAY > l1 && b.end - b.start < best) { a = b; best = b.end - b.start; }
   }
-  const name = a ? albumLabel(a.name) : '';
+  const name = a ? shortName(a) : '';
   return name && place ? `${name} › ${place}` : name || place;
 }
 

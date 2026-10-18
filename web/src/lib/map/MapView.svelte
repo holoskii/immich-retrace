@@ -28,7 +28,7 @@
   import type {Insets} from './camera.ts';
   import {Inset} from './inset.ts';
   import {isScrub} from './scrub.ts';
-  import {landing, playState} from './playing.svelte.ts';
+  import {landing, mapShown, playState} from './playing.svelte.ts';
   import {planFor, playAhead} from './play.ts';
   import TimeStrip from './TimeStrip.svelte';
 
@@ -72,7 +72,8 @@
   let pinsOf = $state.raw<LibraryIndex | null>(null);
   /** Hover / click requests in flight; bumped to cancel them. */
   let hoverSeq = 0, hoverKey = '', clickSeq = 0;
-  let cardH = $state(160);
+  /** The pop-out card's height (measured; starts at its usual one, so placing it first doesn't shift it). */
+  let cardH = $state(171);
   /**
    * Chooser after a click on a cluster: `here` (only the photos at this place, a place selection), `all` (everything
    * from the first visit to the last, with how many items), one row per visit, and "just zoom the map in". See `clusterMenu`.
@@ -101,7 +102,8 @@
   const bins = $derived(active ? binFixes(active.ix, active.lo, active.hi) : null);
   const box = $derived(bins ? boxOf(bins) : null);
   let track = $state.raw<Track | null>(null);
-  const showInset = $derived(!!box && mode !== 'whole');
+  /** The whole-trip inset, while following; not on a short map (under INSET_MIN_H), where it would cover the route. */
+  const INSET_MIN_H = 350;
 
   onMount(() => {
     const mq = matchMedia('(prefers-reduced-motion: reduce)');
@@ -176,6 +178,8 @@
       m.on('click', e => { if (!m.queryRenderedFeatures(e.point, {layers: ['clusters']}).length) { menu = null; clickSeq++; } });
       // jumpTo() resets MapLibre's gesture handlers: hold the camera while a pointer is down on the map.
       m.getCanvasContainer().addEventListener('pointerdown', () => { if (follower) follower.held = true; });
+      const shown = () => { if (selection.active && m.areTilesLoaded()) { mapShown.on = true; m.off('idle', shown); } };
+      m.on('idle', shown);
       failed = null;
       ready = true;
     });
@@ -427,7 +431,9 @@
   // Data: only when the selection (or, without one, the library or its visible period) changes. Never per frame.
   $effect(() => {
     if (!ready || !map || lost) return;
-    const a = active, r = route, lib = library.index, m = map;
+    // The library is read only without a selection: its arrival must not re-set a selection's data (the landing's
+    // trip is on the map before the index is in).
+    const a = active, r = route, m = map;
     const pins = m.getSource('pins') as GeoJSONSource | undefined, lines = m.getSource('route') as GeoJSONSource, gaps = m.getSource('gaps') as GeoJSONSource;
     if (!pins || !lines || !gaps) return;
     tip = null; hoverSeq++; hoverKey = ''; clickSeq++;
@@ -439,7 +445,7 @@
       pinsOf = a.ix;
     } else {
       lines.setData(EMPTY); gaps.setData(EMPTY);
-      const lr = libRows, all = !selection.sel && lib && lr;
+      const lib = library.index, lr = libRows, all = !selection.sel && lib && lr;
       pins.setData(all ? pinsGeoJSON(lib, lr[0], lr[1], g) : EMPTY);
       pinsOf = all ? lib : null;
       // The visible period moved somewhere the map isn't showing at all: go there.
@@ -678,15 +684,20 @@
     pos.kind === 'after' ? 'after last GPS fix' :
     pos.kind === 'interp' ? 'estimated position' : '');
 
-  // Local days, like the overview's readout.
-  const legend = $derived(active ? {from: fFullDay(toLocal(active.t0), 0), to: fFullDay(toLocal(active.t1 - 1), 0)} : null);
+  // Local days, like the overview's readout; one day once.
+  const legend = $derived.by(() => {
+    if (!active) return null;
+    const from = fFullDay(toLocal(active.t0), 0), to = fFullDay(toLocal(active.t1 - 1), 0);
+    return {from, to: to === from ? null : to};
+  });
 
   // First-run states, centred over the map: nothing to show yet (loading or failed), an empty
   // library, or a library where nothing has GPS. With a library shown, a failed refresh is a notice.
   const libGps = $derived(library.index ? countRows(library.index, 0, library.index.n).gps : 0);
   const panel = $derived.by(() => {
     const ix = library.index;
-    if (!ix) return library.status === 'error' ? 'error' : 'loading';
+    // A selection that needs no index (the landing's album members) is shown while the index loads.
+    if (!ix) return library.status === 'error' ? 'error' : active ? null : 'loading';
     if (!ix.n) return library.status === 'ready' ? 'empty' : null;
     return !libGps && !selection.sel ? 'nogps' : null;
   });
@@ -803,7 +814,7 @@
     {#if legend && gpsCount && !phone}
       <div class="legend">
         <div class="ramp" style:background="linear-gradient(90deg, {RAMP.map(([k, c]) => `${c} ${k * 100}%`).join(', ')})"></div>
-        <div class="ends"><span>{legend.from}</span><span>{legend.to}</span></div>
+        <div class="ends"><span>{legend.from}</span>{#if legend.to}<span>{legend.to}</span>{/if}</div>
         <div class="key"><span class="dash"></span>no GPS in between</div>
         <div class="key counts"><i class="sw gps"></i>{fNum(gpsCount)} with location <i class="sw nogps"></i>{fNum(active!.hi - active!.lo - gpsCount)} without</div>
       </div>
@@ -835,7 +846,7 @@
       </div>
     {/if}
 
-    {#if showInset && !phone}
+    {#if box && mode !== 'whole' && wrapH >= INSET_MIN_H && !phone}
       <canvas class="inset" bind:this={insetCv}
         style:width="{INSET_W}px" style:height="{INSET_H}px" aria-hidden="true"></canvas>
     {/if}
@@ -868,7 +879,7 @@
 
 <!-- Re-parented into the map by maplibregl.Marker, which owns that element's classes: style the inner div. -->
 <div hidden>
-  <div bind:this={markerEl}><div class="marker {pos?.kind ?? ''}">
+  <div bind:this={markerEl}><div class="marker {pos?.kind ?? ''}" class:whole={mode === 'whole'}>
     <div class="dot"></div>
     {#if active && nearest >= 0 && !phone}
       {@const ix = active.ix}
@@ -1019,6 +1030,12 @@
   .marker.interp .dot { background: rgba(16, 18, 21, .55); border-color: var(--ink); border-width: 2px; }
   /* Between runs / outside GPS span: unknown, dashed and grey. */
   .marker:is(.gap, .before, .after) .dot { background: rgba(16, 18, 21, .55); border: 2px dashed var(--ink2); opacity: .9; }
+  /* Framing the whole trip (Fit, the demo landing): a ring around the spot, hollow, so a stop's cluster count under
+     it stays readable. */
+  .marker.whole .dot {
+    left: -16px; top: -16px; width: 32px; height: 32px; background: none; border: 2px solid var(--photo-hi);
+    box-shadow: 0 0 0 1.5px rgba(6, 7, 8, .7), inset 0 0 0 1.5px rgba(6, 7, 8, .7);
+  }
 
   .card {
     position: absolute; width: 172px; display: grid; gap: 1px; padding: 6px 6px 7px;

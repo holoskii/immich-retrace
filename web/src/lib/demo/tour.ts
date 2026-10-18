@@ -8,13 +8,14 @@ export interface TourStep {
   text: string;
 }
 
+/** Play first (what the visitor came for), then the photo, then the overview for exploring further. */
 export const TOUR: TourStep[] = [
-  {target: 'canvas.main', title: 'The timeline',
-    text: 'Every bar is a day of photos. Drag across it to pick any dates; the coloured bars under it are albums.'},
-  {target: '.strip .track', title: 'Travel through time',
-    text: 'Drag along this strip, or press Play: the map follows the route the photos left behind.'},
+  {target: '.strip .play', title: 'Replay the trip',
+    text: 'Press Play (or Space): the photos play back one by one and the map flies along the route they left.'},
   {target: '.marker .card', title: 'The photo at that moment',
-    text: 'The photo nearest the time cursor, where it was taken. Click it to open the photo with its place and credits.'},
+    text: 'The photo at the time cursor, where it was taken. Click it to open it full size, with its place and credits.'},
+  {target: 'canvas.main', title: 'Any trip, any dates',
+    text: 'Every bar is a day of photos: drag across it to pick dates. The coloured bars under it are albums; “Try another trip” lists them.'},
 ];
 
 export interface Box { x: number; y: number; w: number; h: number }

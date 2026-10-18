@@ -457,6 +457,63 @@ describe('store', () => {
     expect(lib.index!.idToRow.has('foreign-1')).toBe(false);
   });
 
+  it('prefetched members (a landing) stand in for the index\'s offsets and serve membersOf without a second fetch', async () => {
+    const kv = await freshKV(), api = fakeApi(), lib = store(kv, api);
+    lib.prefetchMembers('alb-1');
+    expect(lib.earlyPending).toBe(true);
+    lib.prefetchMembers('alb-1'); // one at a time
+    await vi.waitFor(() => expect(lib.earlyPending).toBe(false));
+    expect(lib.early?.ix?.n).toBe(3);
+    expect(lib.index).toBeNull();
+    expect(lib.offsets).toBe(lib.early!.ix); // local days before the index is in
+    await lib.load();
+    expect(lib.offsets).toBe(lib.index);
+    const ix = await lib.membersOf('alb-1');
+    expect(ix).toBe(lib.early!.ix);
+    expect(api.calls.filter(c => c.endsWith('/assets'))).toHaveLength(1);
+    // Cached as a normal fetch would be.
+    await vi.waitFor(async () => expect((await libraryCache(kv).members('lib-a', 'alb-1'))?.version).toBe('v1'));
+  });
+
+  it('prefetched members of another version, or a failed prefetch, fall back to the usual fetch', async () => {
+    const stale = fakeApi({override: p => (p.endsWith('/assets') ? json({id: 'alb-1', version: 'v0', columns: members()}) : undefined)});
+    let lib = store(await freshKV(), stale);
+    lib.prefetchMembers('alb-1');
+    await vi.waitFor(() => expect(lib.early?.version).toBe('v0'));
+    vi.stubGlobal('fetch', fakeApi().fetch);
+    await lib.load();
+    expect(await lib.membersOf('alb-1')).not.toBe(lib.early!.ix);
+    const down = fakeApi({override: p => (p.endsWith('/assets') ? json({error: 'x', code: 'upstream'}, 502) : undefined)});
+    lib = store(await freshKV(), down);
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    lib.prefetchMembers('alb-1');
+    await vi.waitFor(() => expect(lib.earlyPending).toBe(false));
+    expect(lib.early).toMatchObject({albumId: 'alb-1', ix: null});
+    expect(lib.offsets).toBeNull();
+  });
+
+  it('prefetched members go with the library: invalidated (key rejected) or cleared, and a late answer is dropped', async () => {
+    let lib = store(await freshKV(), fakeApi());
+    lib.prefetchMembers('alb-1');
+    await vi.waitFor(() => expect(lib.early?.ix).toBeTruthy());
+    await lib.invalidate();
+    expect([lib.early, lib.offsets]).toEqual([null, null]);
+    lib = store(await freshKV(), fakeApi({delay: p => (p.endsWith('/assets') ? 50 : 1)}));
+    lib.prefetchMembers('alb-1');
+    await lib.invalidate();
+    await tick(80);
+    expect([lib.early, lib.earlyPending]).toEqual([null, false]);
+    // Another library on a later load (a new key): dropped; on a first visit they are kept (they are its own).
+    const kv = await freshKV();
+    lib = store(kv, fakeApi());
+    lib.prefetchMembers('alb-1');
+    await lib.load();
+    expect(lib.early?.ix).toBeTruthy();
+    vi.stubGlobal('fetch', fakeApi({library: 'lib-b'}).fetch);
+    await lib.load();
+    expect(lib.early).toBeNull();
+  });
+
   it('a redirect (viewer session expired) is signed-out: error shown, nothing purged', async () => {
     const kv = await freshKV(), lib = store(kv, fakeApi());
     await lib.load();

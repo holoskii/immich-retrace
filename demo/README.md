@@ -87,7 +87,7 @@ Settings, read by `server/demo.ts` (a normal deployment never reads them):
 | Variable | Default | What |
 |---|---|---|
 | `DEMO` | off | `1` turns demo mode on. Anything but 1/0/true/false/yes/no/on/off stops the server. Demo mode also requires `IMMICH_API_KEY=demo` (the stub), so a real `.env` can't end up public. |
-| `DEMO_TRIP` | `San Sebastián to Huesca` | The trip a visit without a link opens: an album id, or part of its name (case and accents ignored). No match: the album with the most items. |
+| `DEMO_TRIP` | `San Sebastián to Huesca` | The trip a visit without a link opens: an album id, or part of its name (case and accents ignored). No match: the album with the most items. The server resolves it to the album's id once (from the stub's album list, at startup) and sends that in `/api/config` (`demo.album`), so the browser can fetch the trip's photos at once. |
 | `REPO_URL` | `REPO_URL` in `shared/demo.ts` (a placeholder until the repository is public) | Where "Get it for your Immich" and the About panel link to. |
 | `DEMO_MANIFEST` | `demo/manifest.json` | The dataset manifest, for the credits. Read at startup; a missing file stops the server. |
 
@@ -96,15 +96,29 @@ What changes (everything else is the normal app):
   (Fit), with the cursor on the photo Play's first flight leaves from (a landscape photo with GPS),
   route, strip and photo card visible (`web/src/lib/demo/landing.ts`). Nothing plays until Play is
   pressed; the first ▶ turns Follow on and flies in. A link with a query opens what it says.
+  It doesn't wait for the library index: `main.ts` fetches the trip's members as soon as the config names
+  the album (`library.prefetchMembers`), and the landing opens once they and the album list are in
+  (~1.4 s on throttled 4G, was ~3.5 s). Their local offsets stand in for the index's until it arrives
+  (`library.offsets`); the overview draws the trip's period directly (no default 12 months first).
+- Desktop: every album up to 45 days is a trip (`hooks.allTrips`), as on the phone: the home heuristic
+  (`web/src/lib/trips.ts`) takes Lisbon, where the sample photos of 2026 were taken, for home, so
+  "Lisbon & Queluz" would otherwise be missing from the rail and "Try another trip".
 - Phone: a one-line pitch under the trip's name, once per visitor (gone after the first ▶ or ✕).
-- Banner: "Demo · sample data", the pitch line, the dataset credit with "About & credits", and
-  "Get it for your Immich →".
-- Coach mark: three steps (timeline → time strip → photo card), once per visitor
+- Banner: one line (the pitch is cut first): "Demo · sample data", the pitch, "About & photo credits"
+  (the dataset credit is in About and the link's tooltip), and "Get it for your Immich →". Its height is
+  reserved (`App.svelte`) while the chunk loads, so nothing below shifts.
+- Coach mark: three steps (Play / Space → photo card → timeline and other trips), once per visitor,
+  started only once the map has shown the trip (idle, tiles loaded: `mapShown` in `map/playing.svelte.ts`),
+  not while playing or over the lightbox, and not at all once the visitor has pressed Play themselves
   (`localStorage` key `immich-retrace.demo.tour-seen`; blocked storage just shows it again). Esc,
   "Skip tour" or "Done" end it; the `?` overlay has "Show the 3-step tour again" and "About this demo".
 - About & credits panel: what the app is, MIT licence, the dataset credit and licences, what the
   demo changed, no endorsement, as-is; links to `/credits`, a page generated from the manifest with
   every file, its licence, Commons page and modifications.
+- Link preview (Open Graph, `/` only): `web/public/og.jpg`, 1200×630, ~90 kB, a picture of the demo
+  landing (route, marker, photo card) with the name and pitch. Regenerate it with `node demo/og-image.mjs`
+  against a running demo viewer (`BASE`, default :8092; e2e browsers). The card's photo
+  (`OG_ASSET_TITLE`, CC BY-SA 4.0) is credited in the image and the description.
 - Lightbox: per-photo credit (author, licence link, Commons file page, the asset's
   `modifications`) from `GET /api/demo/credits/:id`.
 - Hidden: the ⋯ menu (clear cache, refresh state), month counters while loading, "Open in
@@ -115,7 +129,7 @@ What changes (everything else is the normal app):
 Code layout (kept separate so the demo can move out): demo-only UI is in `web/src/lib/demo/` and loads as its
 own chunk only when `/api/config` says `demo` (`App.svelte`); it plugs into the app through
 `web/src/lib/hooks.svelte.ts` (the `?` overlay's extra buttons, a lightbox panel slot, the album
-picker's label) and `selection.albumRequest` (open an album as a bar click would). The server side is
+picker's label, every short album a trip) and `actions.ts` `pickAlbum` (open an album as a bar click would). The server side is
 `server/demo.ts`, wired by one call in `server/main.ts`; its types are in `shared/demo.ts`.
 
 The stub accepts any non-empty API key. It implements only what `server/immich.ts` and

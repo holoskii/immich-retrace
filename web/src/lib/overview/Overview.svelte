@@ -9,16 +9,16 @@
   import {back, clearSelection as clear, onAlbumPick, pickAlbum, setMode} from '../actions.ts';
   import {config} from '../config.svelte.ts';
   import {hooks} from '../hooks.svelte.ts';
-  import {selName} from '../nav.ts';
+  import {selName, shortName} from '../nav.ts';
   import AlbumPicker from './AlbumPicker.svelte';
   import {tripsOf} from '../trips.ts';
-  import {nameHasDates, tripName} from '../albums.ts';
+  import {nameHasDates} from '../albums.ts';
   import Help from '../Help.svelte';
   import {
     clamp, countRows, albumLabel, readoutSpan, DAY, daysFromIndex, daysFromMonths, defaultView, dragTo, fDay, fNum, hitGrip, noSelectionHint, overviewHint, railAlbums,
     snapDay, viewAround, viewToShow, zoomAt, type Grip, type Span,
   } from './data.ts';
-  import {CTX, drawContext, drawMain, MAIN, type RailHit} from './draw.ts';
+  import {CTX as CTX_TALL, CTX_SHORT, drawContext, drawMain, MAIN as MAIN_TALL, MAIN_SHORT, SHORT_VIEWPORT, type RailHit} from './draw.ts';
 
   let ctxCv = $state<HTMLCanvasElement>(), mainCv = $state<HTMLCanvasElement>();
   let size = $state(0);
@@ -35,11 +35,23 @@
   let barsShown = $state(false);
   /** The public demo: no cache housekeeping or month counters in the bar. */
   const demo = $derived(!!config.demo);
+  /**
+   * A short window (SHORT_VIEWPORT, e.g. 1280×720): a lower wave and strip, and no hint line (its colour key moves into
+   * the readout), so the map keeps about half the height.
+   */
+  let short = $state(false);
+  $effect(() => {
+    const mq = matchMedia(SHORT_VIEWPORT), on = () => (short = mq.matches);
+    on();
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  });
+  const CTX = $derived(short ? CTX_SHORT : CTX_TALL), MAIN = $derived(short ? MAIN_SHORT : MAIN_TALL);
 
   // Histogram once per index (or per manifest while the first index builds).
   const days = $derived(library.index ? daysFromIndex(library.index) : library.provisional ? daysFromMonths(library.provisional) : null);
   const dom = $derived<Span | null>(days ? [days.t0, days.t0 + days.nd * DAY] : null);
-  const trips = $derived(tripsOf(library.albums, library.index));
+  const trips = $derived(tripsOf(library.albums, library.index, hooks.allTrips));
   const rail = $derived(railAlbums(library.albums, trips.isTrip));
   /**
    * The brush while it is dragged (or moved by held keys), on the axis. The selection itself — and so the whole map:
@@ -57,11 +69,13 @@
 
   /** The default view as last set; while `view` is still this one (untouched), a new histogram reframes it. */
   let auto: Span | null = null;
-  // Default viewport (`defaultView`: the last ~12 months of photos); re-clamped when the domain changes (provisional → real).
+  // Default viewport: around the selection when there already is one (a landing opened before the histogram was in),
+  // else `defaultView` (the last ~12 months of photos); re-clamped when the domain changes (provisional → real). Not
+  // while a landing may still pick something (main.ts): its trip is drawn directly, not after a default period.
   $effect(() => {
-    if (!days || !dom) return;
-    const v = untrack(() => view);
-    if (!v || v === auto) { view = auto = defaultView(days); return; }
+    if (!days || !dom || selection.awaitingLanding) return;
+    const v = untrack(() => view), s = untrack(() => selSpan);
+    if (!v || v === auto) { view = auto = s ? viewAround(s[0], s[1], dom[0], dom[1]) : defaultView(days); return; }
     const span = Math.min(v[1] - v[0], dom[1] - dom[0]), v0 = clamp(v[0], dom[0], dom[1] - span);
     if (v0 !== v[0] || v0 + span !== v[1]) view = [v0, v0 + span];
   });
@@ -118,13 +132,13 @@
     const cur = selection.cursor;
     const st = {days, view, sel: selSpan, cursor: hoverT ?? (cur == null ? null : toLocal(cur)), albums: rail, activeAlbum: album?.id ?? null, hoverAlbum, focus};
     void size;
-    const ext = strip;
+    const ext = strip, ctxG = CTX, mainG = MAIN;
     if (!ctxCv || !mainCv || !st.view || !ext) return;
     const c = ctxCv, m = mainCv, v = st.view;
     cancelAnimationFrame(raf);
     raf = requestAnimationFrame(() => {
-      drawContext(c, st.days, ext, v, st.sel);
-      hits = drawMain(m, {...st, view: v});
+      drawContext(c, st.days, ext, v, st.sel, ctxG);
+      hits = drawMain(m, {...st, view: v}, mainG);
       barsShown = hits.length > 0;
     });
   });
@@ -355,13 +369,9 @@
   const readout = $derived.by(() => {
     const d = draft, s = selection.sel, l = selSpan;
     if (!l || (!d && !s)) return null;
-    // A zoom's "Album › place": the album without the dates its name ends with (the span says the zoom's own).
-    const zoomed = (l: string) => {
-      const i = l.indexOf(' › '), head = l.slice(0, i), b = i < 0 ? null : library.albums.find(x => albumLabel(x.name) === head);
-      return b && b.start != null && b.end != null && nameHasDates(b.name, b.start, b.end) ? tripName(b.name) + l.slice(i) : l;
-    };
-    const name = d ? null : s?.kind === 'place' ? zoomed(selName(s, selection.zoomLabel)) : selection.zoomLabel
-      ? zoomed(selection.zoomLabel) : s?.kind === 'album' ? (album ? albumLabel(album.name) : 'Album') : null;
+    // A zoom's "Album › place" names the album without the dates its name ends with (nav.ts shortName).
+    const name = d ? null : s?.kind === 'place' ? selName(s, selection.zoomLabel) : selection.zoomLabel
+      || (s?.kind === 'album' ? (album ? (s.sub ? shortName(album) : albumLabel(album.name)) : 'Album') : null);
     // A whole album whose name ends with its dates ("…, 6–10 Sep 2024"): they aren't repeated.
     const named = !d && s?.kind === 'album' && !s.sub && !selection.zoomLabel && !!album && album.start != null && album.end != null
       && nameHasDates(album.name, album.start, album.end);
@@ -412,7 +422,7 @@
           title={neighbors.next ? `Next album: ${neighbors.next.name}` : 'No later album'} aria-label="Next album">›</button>
       {/if}
     </div>
-    <div class="readout mono" aria-live="polite">
+    <div class="readout mono" class:one={short && !membersLoad?.error} aria-live="polite">
       {#if readout}
         {#if readout.name}<b>{readout.name}</b>{' · '}{/if}{readout.head} ·
         {#if readout.gps == null && membersLoad?.error}
@@ -422,6 +432,11 @@
         {:else if readout.gps == null}<span class="ink2">{selection.sel?.kind === 'album' && selection.sel.mode === 'members' ? 'loading members…' : '…'}</span>
         {:else}<i class="sw gps"></i>{readout.gps} with location · <i class="sw nogps"></i>{readout.nogps} without{/if}
       {:else}
+        <!-- A short window has no hint line: its colour key comes here. -->
+        {#if short}
+          {#if days?.provisional}<span class="ink2"><i class="sw pending"></i>counting</span> ·
+          {:else}<span class="ink2"><i class="sw gps"></i>with location <i class="sw nogps"></i>without</span> ·{/if}
+        {/if}
         <span class="muted">{noSelectionHint(barsShown, hooks.albumPickerLabel ? `“${hooks.albumPickerLabel}”` : 'Albums')}</span>
       {/if}
     </div>
@@ -482,6 +497,7 @@
     onkeydown={onKey} onkeyup={onKeyUp}
     onfocus={() => (focus = true)} onblur={() => { focus = false; if (draft) commitDraft(); else writeUrl('commit'); }}
   ></canvas>
+  {#if !short}
   <div class="hint">
     <span class="key">
       {#if days?.provisional}<i class="sw pending"></i>counting (location not known yet)
@@ -489,6 +505,7 @@
     </span>
     <span class="plain">{overviewHint(barsShown)} · scroll to zoom · <kbd>?</kbd> all shortcuts</span>
   </div>
+  {/if}
 
   {#if tip}
     <div class="tip" style:left="{tip.x + 14}px" style:top="{tip.y + 14}px"><strong>{tip.title}</strong><span>{tip.text}</span></div>
@@ -501,6 +518,8 @@
   /* A small basis: a long readout wraps inside its own box rather than pushing the status onto a row of its own. */
   .readout { color: var(--ink); flex: 1 1 280px; min-width: 0; font-size: 12px; }
   .readout b { font-weight: 500; color: var(--photo-hi); }
+  /* A short window: one line, cut with an ellipsis, so the bar keeps its height when the selection changes. */
+  .readout.one { flex-basis: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
   .ink2 { color: var(--ink2); }
   /* Colour key swatches: the counts and labels stay in text colours, the swatch carries the encoding. */

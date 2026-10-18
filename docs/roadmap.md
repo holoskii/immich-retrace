@@ -92,7 +92,7 @@ Smaller known gaps:
   hover-only, brush grips are small.
 - Per-user mode: each user's own API key kept server-side behind an HttpOnly session.
 - Server-side tile cache (only helps across devices; the browser already caches tiles for 31 days).
-- Demo: "Lisbon & Queluz, Jan 2026" scores as home (the photographer lives there from 2026). Swap
-  it if the demo should show six trips.
+- Demo: "Lisbon & Queluz, Jan 2026" scores as home for the trip heuristic (the photographer lives there
+  from 2026); the demo lists every short album as a trip (`hooks.allTrips`), so it shows anyway.
 - Demo: the dataset is Europe only. For wider coverage, a Flickr CC BY travel photostream would
   work but needs a Flickr API key.

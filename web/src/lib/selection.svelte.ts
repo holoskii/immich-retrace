@@ -25,8 +25,14 @@ export type Selection =
 /** A selection to return to (zoom stack): what was selected (null: nothing, the whole library), the cursor, its name for Back. */
 export interface Crumb { sel: Selection | null; cursor: number | null; cursorId: string | null; label: string }
 
+/**
+ * Whether two selections are the same one. A whole album (not narrowed) is its album and mode: its instants follow
+ * from the album's days and the offsets they were converted with (the landing's members before the index, the index
+ * after), which needn't agree to the millisecond.
+ */
 export const sameSelection = (a: Selection | null, b: Selection | null) => {
   if (a === b) return true;
+  if (a?.kind === 'album' && b?.kind === 'album' && !a.sub && !b.sub) return a.albumId === b.albumId && a.mode === b.mode;
   if (!a || !b || a.kind !== b.kind || a.t0 !== b.t0 || a.t1 !== b.t1) return false;
   if (a.kind === 'album') return b.kind === 'album' && a.albumId === b.albumId && a.mode === b.mode && !!a.sub === !!b.sub;
   if (a.kind === 'place') return b.kind === 'place' && a.lat === b.lat && a.lon === b.lon && a.r === b.r;
@@ -88,6 +94,11 @@ class SelectionStore {
   urlApplied = $state(false);
   /** Something has been selected since the page loaded, even if cleared again (a landing must not override that). */
   touched = $state(false);
+  /**
+   * A landing may still open something (main.ts: no link, and the deployment may be the demo): the overview holds its
+   * default view meanwhile. Cleared once the landing has settled (or there is none to wait for).
+   */
+  awaitingLanding = $state(false);
   /** Open lightbox: a row of `active.ix` (←/→ walks active.lo..hi-1). Stage 5 owns the UI; the map card opens it. */
   lightbox = $state<number | null>(null);
 
@@ -98,8 +109,10 @@ class SelectionStore {
   });
 
   active = $derived.by((): Active | null => {
-    const s = this.sel, lib = library.index;
+    const s = this.sel;
     if (!s) return null;
+    // Members first, without reading the index: its arrival must not make a new `active` (the map would re-set its
+    // data and rebuild the camera track for the landing's trip).
     if (s.kind === 'album' && s.mode === 'members') {
       const m = this.members;
       if (!m || m.albumId !== s.albumId) return null;
@@ -108,6 +121,7 @@ class SelectionStore {
       const n = m.ix.n;
       return {ix: m.ix, lo: 0, hi: n, t0: n ? Math.min(s.t0, m.ix.t[0]) : s.t0, t1: n ? Math.max(s.t1, m.ix.t[n - 1] + 1) : s.t1};
     }
+    const lib = library.index;
     if (!lib) return null;
     if (s.kind === 'place') { const ix = placeIndex(s, lib); return {ix, lo: 0, hi: ix.n, t0: s.t0, t1: s.t1}; }
     return {ix: lib, lo: lowerBound(lib.t, s.t0), hi: lowerBound(lib.t, s.t1), t0: s.t0, t1: s.t1};
@@ -182,25 +196,26 @@ export function offsetIn(ix: IndexColumns | null, t: number | null) {
   return ix.off[j];
 }
 
-/** Local offset (hours) of the library asset nearest to t; 0 without an index. */
-export const offsetNear = (t: number | null) => offsetIn(library.index, t);
+/** Local offset (hours) of the library asset nearest to t (`library.offsets`); 0 without an index. */
+export const offsetNear = (t: number | null) => offsetIn(library.offsets, t);
 
 const HOUR = 3600e3, DAY = 86400e3;
 /**
  * The overview, its labels and the URL's days speak local calendar days, as the wave bins by them and the map and
  * lightbox show local times; selections hold UTC instants. `toLocal`: instant → local wall time read as UTC (the
  * overview axis), with the offset of the nearest library photo. `fromLocal` is its inverse (the offset looked up
- * at the instant it lands on). Without an index both are the identity.
+ * at the instant it lands on). Before the index is in, a landing's prefetched album stands in (`library.offsets`);
+ * without either both are the identity.
  */
-export const toLocal = (t: number, ix: IndexColumns | null = library.index) => t + offsetIn(ix, t) * HOUR;
-export const fromLocal = (l: number, ix: IndexColumns | null = library.index) => l - offsetIn(ix, l - offsetIn(ix, l) * HOUR) * HOUR;
+export const toLocal = (t: number, ix: IndexColumns | null = library.offsets) => t + offsetIn(ix, t) * HOUR;
+export const fromLocal = (l: number, ix: IndexColumns | null = library.offsets) => l - offsetIn(ix, l - offsetIn(ix, l) * HOUR) * HOUR;
 
 /**
  * An album's span as instants. Immich's album startDate/endDate are local calendar days (max/min of
  * `localDateTime::date`, midnight read as UTC; server/src/repositories/album.repository.ts `getMetadataForIds`),
  * so the span runs to the end of the last day.
  */
-export const albumSpan = (a: {start: number; end: number}, ix: IndexColumns | null = library.index): [number, number] =>
+export const albumSpan = (a: {start: number; end: number}, ix: IndexColumns | null = library.offsets): [number, number] =>
   [fromLocal(a.start, ix), fromLocal(a.end + DAY, ix)];
 
 // URL format (stage 3 owns writing it via writeUrl(): replaceState while dragging, pushState on release):
@@ -223,9 +238,9 @@ function span(q: URLSearchParams, ix: IndexColumns | null): [number, number] | n
 
 /**
  * Reads a selection from the URL. Album t0/t1 come from the album list, so albums resolve once it is loaded.
- * `ix`: the library, for local days (the index is in before the URL is applied, `urlReady`).
+ * `ix`: the rows giving local offsets (`library.offsets`; the index is in before a URL with state is applied, `urlReady`).
  */
-export function selectionFromUrl(q: URLSearchParams, albums: {id: string; start: number | null; end: number | null}[], ix: IndexColumns | null = library.index): Selection | null {
+export function selectionFromUrl(q: URLSearchParams, albums: {id: string; start: number | null; end: number | null}[], ix: IndexColumns | null = library.offsets): Selection | null {
   const album = q.get('album');
   if (album) {
     const a = albums.find(x => x.id === album);
@@ -253,7 +268,7 @@ export const hasViewerState = (q: URLSearchParams) => URL_KEYS.some(k => q.has(k
  * `base` with the selection keys replaced. `at` is written only when it lies inside the selection.
  * Range days are local (`toLocal`): t0 → its day, exclusive t1 → the day before.
  */
-export function selectionToQuery(sel: Selection | null, at: number | null, base = new URLSearchParams(), ix: IndexColumns | null = library.index): URLSearchParams {
+export function selectionToQuery(sel: Selection | null, at: number | null, base = new URLSearchParams(), ix: IndexColumns | null = library.offsets): URLSearchParams {
   const q = new URLSearchParams(base);
   for (const k of URL_KEYS) q.delete(k);
   if (!sel) return q;
@@ -337,8 +352,11 @@ export function applyUrl(albums: {id: string; start: number | null; end: number 
 /**
  * Whether the URL can be applied: the index is in, and an `album` in it is either in the list or
  * the list has finished loading (or failing) — with no albums at all it resolves to no selection.
+ * A URL without viewer state needs neither (it selects nothing): applied at once, so a landing can open its trip
+ * before the index is in.
  */
 export function urlReady(q: URLSearchParams, hasIndex: boolean, albums: {id: string}[], albumsLoaded: boolean) {
+  if (!hasViewerState(q)) return true;
   if (!hasIndex) return false;
   const album = q.get('album');
   return !album || albumsLoaded || albums.some(a => a.id === album);

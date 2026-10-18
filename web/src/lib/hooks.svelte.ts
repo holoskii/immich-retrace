@@ -19,6 +19,11 @@ class Hooks {
   phoneMapNote = $state.raw<Component<{top: number; height: (h: number) => void}> | null>(null);
   /** The album picker's button text in place of "Albums", shown emphasised. */
   albumPickerLabel = $state<string | null>(null);
+  /**
+   * Every album up to 45 days is a trip (the rail, the picker's first tab, zoom names), as on the phone's Trips tab:
+   * the demo, whose albums are all trips but whose sample library makes its last city look like home (trips.ts).
+   */
+  allTrips = $state(false);
 }
 
 export const hooks = new Hooks();

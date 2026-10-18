@@ -49,6 +49,7 @@ test('the toolbar readout: an album named with its dates doesn’t repeat them; 
   const album = new URL(page.url()).searchParams.get('album');
   await page.goto(`/?album=${album}&from=2024-09-09T10:00Z&to=2024-09-09T12:00Z`);
   await expect(readout).toContainText(/9 Sept 2024 · 2h/, {timeout: 20_000});
+  await expect(readout).toContainText('San Sebastián to Huesca · 9 Sept 2024'); // the album's own dates not repeated
   await expect(readout).not.toContainText('→');
   // One row of controls plus at most a wrapped readout: never a third row.
   expect((await page.locator('.bar').boundingBox())!.height).toBeLessThanOrEqual(40);

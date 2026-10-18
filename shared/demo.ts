@@ -10,6 +10,12 @@ export const REPO_URL = 'https://github.com/OWNER/immich-retrace';
 export interface DemoConfig {
   /** The trip a visit without a link opens: an album id, or a part of its name (case and accents ignored). */
   trip: string;
+  /**
+   * `trip` resolved by the server (`matchTrip` over the album list): the album's id, so a landing can fetch its members
+   * at once instead of waiting for the library index. Null when the list couldn't be read in time: the browser then
+   * resolves `trip` itself from its own album list.
+   */
+  album: string | null;
   /** The project's home (REPO_URL). */
   repoUrl: string;
 }
@@ -24,4 +30,20 @@ export interface DemoCredit {
   /** The file's page on Wikimedia Commons. */
   commonsUrl: string;
   modifications: string;
+}
+
+/** Lower case, accents dropped: "San Sebastián" matches "san sebastian". */
+const fold = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim();
+
+/**
+ * The album `want` names (DEMO_TRIP) among `albums` (those with dates and items): its id, or else the first album
+ * whose name contains it (case and accents ignored). Without a match: the album with the most items, so the demo
+ * still opens on a trip. Shared by the server (DemoConfig.album) and the browser's fallback.
+ */
+export function matchTrip<A extends {id: string; name: string; count: number}>(albums: A[], want: string): A | null {
+  const byId = albums.find(a => a.id === want);
+  if (byId) return byId;
+  const w = fold(want);
+  const named = w ? albums.find(a => fold(a.name).includes(w)) : undefined;
+  return named ?? albums.reduce<A | null>((best, a) => (!best || a.count > best.count ? a : best), null);
 }

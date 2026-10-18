@@ -1,7 +1,7 @@
-import type {AlbumSummary, IndexManifest} from '../../../../shared/api.ts';
+import type {AlbumMembers, AlbumSummary, IndexManifest} from '../../../../shared/api.ts';
 import {openKV} from './idb.ts';
-import {withLookup, type LibraryIndex} from './model.ts';
-import {albumMembers, ApiFailure, fetchAlbums, libraryCache, refreshIndex, type LibraryCache} from './refresh.ts';
+import {albumMembers, ApiFailure, fetchAlbums, fetchMembers, libraryCache, refreshIndex, type LibraryCache} from './refresh.ts';
+import {buildIndex, withLookup, type IndexColumns, type LibraryIndex} from './model.ts';
 
 /** cached: showing the last snapshot, manifest pending · building: no index yet · refreshing: snapshot shown, new one loading. */
 export type Status = 'cached' | 'building' | 'refreshing' | 'ready' | 'error';
@@ -60,6 +60,17 @@ export class LibraryStore {
   /** null when idle (ready, error). `attempt` counts the 503 retries while waiting. */
   phase = $state<Phase | null>(null);
   attempt = $state(0);
+  /**
+   * One album's members fetched ahead of everything (`prefetchMembers`: the demo landing's trip, at t0): `ix` null when
+   * that failed. Until the index is in, its offsets stand in for the library's (`offsets`).
+   */
+  early = $state.raw<{albumId: string; version: string; ix: LibraryIndex | null} | null>(null);
+  /** A `prefetchMembers` is in flight. */
+  earlyPending = $state(false);
+  /** `early` as fetched, for the cache. */
+  #earlyRaw?: AlbumMembers;
+  /** Bumped when the library is invalidated or cleared: a prefetch still in flight is dropped. */
+  #earlyGen = 0;
   #lib?: string;
   #cache?: Promise<LibraryCache>;
   #run?: Run;
@@ -68,6 +79,31 @@ export class LibraryStore {
   constructor(open = () => openKV().then(libraryCache)) { this.#open = open; }
 
   #getCache() { return this.#cache ??= this.#open(); }
+
+  /**
+   * The rows whose local offsets convert instants to local days (`toLocal`, `albumSpan`): the library index, or before
+   * it is in the prefetched album's members, so a landing can open its trip with the right days.
+   */
+  get offsets(): IndexColumns | null { return this.index ?? this.early?.ix ?? null; }
+
+  /**
+   * Fetches album `albumId`'s members now, without the album list or the index (a landing that knows its album from
+   * the config). `membersOf` uses them when the list's version matches; a failure only means the usual path later.
+   */
+  prefetchMembers(albumId: string, fetchFn?: typeof fetch) {
+    if (this.earlyPending || this.early?.albumId === albumId) return;
+    this.earlyPending = true;
+    const gen = this.#earlyGen;
+    fetchMembers({fetch: fetchFn}, albumId).then(
+      m => { if (gen === this.#earlyGen) { this.#earlyRaw = m; this.early = {albumId, version: m.version, ix: buildIndex([m.columns])}; } },
+      e => { console.warn('album members:', e); if (gen === this.#earlyGen) this.early = {albumId, version: '', ix: null}; },
+    ).finally(() => { if (gen === this.#earlyGen) this.earlyPending = false; });
+  }
+
+  /** Forgets the prefetched members (the key was rejected, the cache cleared): nothing of the old library stays. */
+  #dropEarly() {
+    this.#earlyGen++; this.early = null; this.#earlyRaw = undefined; this.earlyPending = false;
+  }
 
   // The one place to narrow what is shown (owner, shared library) once that is needed.
   #show(ix: LibraryIndex | null) { this.index = ix; }
@@ -107,7 +143,12 @@ export class LibraryStore {
         onManifest: m => {
           if (!current()) return;
           this.phase = 'loading';
-          if (m.library !== this.#lib) { this.#reset(); this.#lib = m.library; }
+          if (m.library !== this.#lib) {
+            // Another library than the one shown (a new key or URL): its prefetched members go too. Not on a first
+            // visit (no library yet), where they are this one's.
+            if (this.#lib !== undefined) this.#dropEarly();
+            this.#reset(); this.#lib = m.library;
+          }
           if (!this.index) this.provisional = m.months;
           this.status = this.index ? 'refreshing' : 'building';
         },
@@ -140,7 +181,7 @@ export class LibraryStore {
   async invalidate() {
     const cache = await this.#getCache(), lib = this.#lib ?? await cache.last();
     await this.#stop();
-    this.#lib = undefined; this.#reset();
+    this.#lib = undefined; this.#reset(); this.#dropEarly();
     if (lib) await cache.purge(lib);
   }
 
@@ -174,7 +215,7 @@ export class LibraryStore {
   async clearCache() {
     await this.#stop();
     await (await this.#getCache()).clear();
-    this.#lib = undefined; this.#reset();
+    this.#lib = undefined; this.#reset(); this.#dropEarly();
     return this.load();
   }
 
@@ -183,7 +224,13 @@ export class LibraryStore {
    * A failure (also 'auth': the key may just lack album.read) is the caller's to show; the library stays.
    */
   async membersOf(albumId: string): Promise<LibraryIndex> {
-    const album = this.albums.find(a => a.id === albumId);
+    const album = this.albums.find(a => a.id === albumId), e = this.early;
+    if (album && e?.albumId === albumId && e.ix && e.version === album.version) {
+      // Prefetched (a landing): cached like a fetch through the usual path, once the library is known.
+      const lib = this.#lib, raw = this.#earlyRaw;
+      if (lib && raw) void this.#getCache().then(c => c.setMembers(lib, raw));
+      return e.ix;
+    }
     if (!album || !this.#lib) throw new Error('This album isn’t in the album list.');
     return albumMembers({cache: await this.#getCache(), signal: this.#run?.ac.signal}, this.#lib, album);
   }

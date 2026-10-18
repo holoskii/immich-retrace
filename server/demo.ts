@@ -1,6 +1,6 @@
 // Demo mode (DEMO=1): everything the server does differently for the public demo, in one place.
 // main.ts wires it with one call (demoFromEnv); with DEMO unset nothing here runs or is routed.
-// - ViewerConfig.demo for the browser (the trip to land on, the project link), no "Open in Immich".
+// - ViewerConfig.demo for the browser (the trip to land on and its album id, the project link), no "Open in Immich".
 // - Attribution for the demo dataset in demo/manifest.json (Kent Wang via Wikimedia Commons, CC BY 4.0
 //   or CC BY-SA 4.0 per file): GET /api/demo/credits/:id for the lightbox, GET /credits for all of it.
 // The stub (demo/stub.ts) stays a plain Immich stand-in; the credits come from the manifest here.
@@ -9,9 +9,11 @@ import {readFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {gzipSync} from 'node:zlib';
 import type {Context, Hono} from 'hono';
-import type {ApiError, ViewerConfig} from '../shared/api.ts';
-import {REPO_URL, type DemoConfig, type DemoCredit} from '../shared/demo.ts';
+import type {AlbumSummary, ApiError, ViewerConfig} from '../shared/api.ts';
+import {matchTrip, REPO_URL, type DemoConfig, type DemoCredit} from '../shared/demo.ts';
+import {fetchAlbums} from './adapter.ts';
 import {ConfigError, urlSetting} from './config.ts';
+import type {ImmichClient} from './immich.ts';
 
 /** The default trip (DEMO_TRIP): a road trip with four stops, GPS on nearly every photo, and video clips. */
 export const DEFAULT_DEMO_TRIP = 'San Sebastián to Huesca';
@@ -25,10 +27,14 @@ export function demoFlag(raw: string | undefined): boolean {
 }
 
 export interface DemoMode {
-  config: DemoConfig;
+  /** DEMO_TRIP and REPO_URL as set (DemoConfig.album is resolved per request, see `viewer`). */
+  config: Omit<DemoConfig, 'album'>;
   credits: DemoCredits;
-  /** The viewer config with the demo's part: demo settings on, no Immich link (the assets are in a stub). */
-  viewer(base: ViewerConfig): ViewerConfig;
+  /**
+   * The viewer config with the demo's part (createApp's config): demo settings on, no Immich link (the assets are in
+   * a stub), and the trip's album id from `immich`'s album list (`tripResolver`; the lookup starts now).
+   */
+  viewer(base: ViewerConfig, immich: ImmichClient): () => Promise<ViewerConfig>;
   /** Registers the demo's routes (createApp's `extend`). */
   routes(app: Hono): void;
 }
@@ -42,12 +48,42 @@ export interface DemoMode {
 export function demoFromEnv(env: Record<string, string | undefined>, load = loadDemoCredits): DemoMode | null {
   if (!demoFlag(env.DEMO)) return null;
   if (env.IMMICH_API_KEY?.trim() !== 'demo') throw new ConfigError('DEMO=1 needs IMMICH_API_KEY=demo: the demo is public, so it only runs against the demo stub');
-  const config: DemoConfig = {trip: env.DEMO_TRIP?.trim() || DEFAULT_DEMO_TRIP, repoUrl: urlSetting(env, 'REPO_URL') ?? REPO_URL};
+  const config = {trip: env.DEMO_TRIP?.trim() || DEFAULT_DEMO_TRIP, repoUrl: urlSetting(env, 'REPO_URL') ?? REPO_URL};
   const credits = load(env.DEMO_MANIFEST?.trim() || 'demo/manifest.json');
   return {
     config, credits,
-    viewer: base => ({...base, immichPublicUrl: null, demo: config}),
+    viewer: (base, immich) => {
+      const album = tripResolver(signal => fetchAlbums(immich, signal), config.trip);
+      void album();
+      return async () => ({...base, immichPublicUrl: null, demo: {...config, album: await album()}});
+    },
     routes: app => demoRoutes(app, credits, env.WEB_DIR?.trim() || 'dist/web'),
+  };
+}
+
+/** How long a /api/config waits for the album list before answering without the trip's id. */
+export const TRIP_WAIT_MS = 1500;
+
+/**
+ * DEMO_TRIP's album id (shared/demo.ts matchTrip over the albums with dates), looked up once and kept: the demo's
+ * albums don't change while it runs. A lookup still running after `waitMs` answers null for that call (it goes on
+ * for the next); a failed one answers null and is tried again on the next call.
+ */
+export function tripResolver(list: (signal: AbortSignal) => Promise<AlbumSummary[]>, trip: string, waitMs = TRIP_WAIT_MS) {
+  let found: string | null = null;
+  let pending: Promise<string | null> | null = null;
+  return async (): Promise<string | null> => {
+    if (found) return found;
+    pending ??= list(AbortSignal.timeout(60_000)).then(albums => {
+      found = matchTrip(albums.filter(a => a.start != null && a.end != null && a.count > 0), trip)?.id ?? null;
+      return found;
+    }).catch(e => {
+      console.warn(`demo: the album list for DEMO_TRIP failed (${(e as Error).message}); the browser picks the trip itself`);
+      return null;
+    }).finally(() => { pending = null; });
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const late = new Promise<null>(ok => { timer = setTimeout(() => ok(null), waitMs); });
+    try { return await Promise.race([pending, late]); } finally { clearTimeout(timer); }
   };
 }
 
@@ -62,22 +98,24 @@ export interface ManifestAsset {
   commonsUrl: string;
   takenAt: string;
   modifications: string;
-  /** For the link preview's image (optional: older manifests and test fixtures lack them). */
-  thumbhash?: string | null;
-  width?: number;
-  height?: number;
 }
 
-/** The link preview's photo: a wide view from the default trip (San Juan de la Peña, CC BY 4.0). */
-export const OG_ASSET_TITLE = 'File:San Juan de la Peña 06.jpg';
+/**
+ * The link preview image: a static 1200×630 picture of the demo itself (web/public/og.jpg, made from the real landing
+ * by demo/og-image.mjs: the trip's route on the map, the position marker and the photo card), served from the app.
+ */
+export const OG_IMAGE = {path: '/og.jpg', width: 1200, height: 630,
+  alt: 'Retrace for Immich: a road trip from San Sebastián to Huesca on a dark map, its stops and a photo of the trip'};
+/** The CC photo on the preview image's card (Kent Wang, CC BY-SA 4.0): credited in the preview's description. */
+export const OG_ASSET_TITLE = 'File:Flemingi Omenaldia. Homenaje a Fleming 02.jpg';
 
 export interface DemoCredits {
   get(id: string): DemoCredit | undefined;
   /** The full credits as an HTML page (GET /credits), and gzipped (it is ~700 kB). */
   html: string;
   htmlGz: Uint8Array;
-  /** The photo for link previews (og:image): OG_ASSET_TITLE, else the first wide CC BY photo; null without one. */
-  og: {id: string; thumbhash: string | null; credit: string} | null;
+  /** The credit for the photo on the link preview image (OG_ASSET_TITLE); null when the manifest lacks it. */
+  og: {credit: string} | null;
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -126,9 +164,8 @@ ${rows}
 </tbody></table>
 </body></html>
 `;
-  const wide = (a: ManifestAsset) => a.kind === 'photo' && (a.width ?? 0) > (a.height ?? 0) * 1.3;
-  const ogAsset = assets.find(a => a.title === OG_ASSET_TITLE) ?? sorted.find(a => wide(a) && a.license === 'CC BY 4.0') ?? null;
-  const og = ogAsset ? {id: ogAsset.id, thumbhash: ogAsset.thumbhash ?? null, credit: `Photo: ${ogAsset.author}, ${ogAsset.license}, via Wikimedia Commons`} : null;
+  const ogAsset = assets.find(a => a.title === OG_ASSET_TITLE);
+  const og = ogAsset ? {credit: `Photo in the preview: ${ogAsset.author}, ${ogAsset.license}, via Wikimedia Commons`} : null;
   return {get: id => byId.get(id), html, htmlGz: gzipSync(html), og};
 }
 
@@ -170,7 +207,7 @@ export function publicOrigin(url: string, host: string | undefined, proto: strin
 /**
  * index.html with the demo's link preview (Open Graph + Twitter card) before </head>. Demo only: a normal deployment
  * sits behind auth, where chat apps never see the page, and a preview of the sample data would misdescribe a private
- * library. The image is the demo's own preview of a sample photo, credited in the description (CC BY 4.0 §3).
+ * library. The image is a picture of the demo (OG_IMAGE); its sample photo is credited in the description (CC §3).
  */
 export function withLinkPreview(page: string, origin: string | null, og: DemoCredits['og']) {
   const title = 'Retrace for Immich: live demo';
@@ -179,12 +216,12 @@ export function withLinkPreview(page: string, origin: string | null, og: DemoCre
   const tags = [
     ['og:type', 'website'], ['og:site_name', 'Retrace for Immich'], ['og:title', title], ['og:description', desc],
     ...(origin ? [['og:url', origin + '/']] : []),
-    ...(origin && og ? [
-      ['og:image', `${origin}/api/assets/${og.id}/thumbnail?${new URLSearchParams({size: 'preview', ...(og.thumbhash ? {c: og.thumbhash} : {})})}`],
-      ['og:image:alt', 'A valley in the Pyrenees, one of the sample photos of the demo trip'],
+    ...(origin ? [
+      ['og:image', origin + OG_IMAGE.path], ['og:image:type', 'image/jpeg'],
+      ['og:image:width', String(OG_IMAGE.width)], ['og:image:height', String(OG_IMAGE.height)], ['og:image:alt', OG_IMAGE.alt],
     ] : []),
   ].map(([k, v]) => `<meta property="${k}" content="${esc(v)}">`);
-  tags.push(`<meta name="twitter:card" content="${origin && og ? 'summary_large_image' : 'summary'}">`, `<meta name="description" content="${esc(desc)}">`);
+  tags.push(`<meta name="twitter:card" content="${origin ? 'summary_large_image' : 'summary'}">`, `<meta name="description" content="${esc(desc)}">`);
   return page.replace('</head>', `  ${tags.join('\n  ')}\n</head>`);
 }
 

@@ -23,10 +23,26 @@ function pending(ctx: CanvasRenderingContext2D): CanvasPattern | string {
   return hatch ?? C.muted;
 }
 
-/** Context strip geometry (CSS px). */
-export const CTX = {h: 50, base: 36, H: 32};
-/** Main canvas: wave between `top` and `base`, axis labels under it, album rail lanes below. */
-export const MAIN = {top: 16, base: 112, H: 94, axis: 125, rail: 136, pitch: 20, lanes: 2, get h() { return this.rail + this.lanes * this.pitch; }};
+/** Context strip geometry (CSS px): canvas height, baseline, bar height. */
+export interface CtxGeom { h: number; base: number; H: number }
+/** Main canvas: wave between `top` and `base` (`H` tall), axis labels at `axis`, album rail lanes from `rail`. */
+export interface MainGeom { top: number; base: number; H: number; axis: number; rail: number; pitch: number; lanes: number; h: number }
+
+/** A main canvas with a wave `H` px tall; everything under it moves with it. */
+export function mainGeom(H: number): MainGeom {
+  const top = 16, base = top + H + 2, rail = base + 24, pitch = 20, lanes = 2;
+  return {top, base, H, axis: base + 13, rail, pitch, lanes, h: rail + lanes * pitch};
+}
+export const CTX: CtxGeom = {h: 50, base: 36, H: 32};
+export const MAIN = mainGeom(94);
+const CTX_TALL = CTX, MAIN_TALL = MAIN;
+/**
+ * A short window (under ~800 px, `SHORT_VIEWPORT`): a lower wave and strip, so the map keeps about half the height.
+ * The rail keeps its two lanes.
+ */
+export const CTX_SHORT: CtxGeom = {h: 40, base: 26, H: 22};
+export const MAIN_SHORT = mainGeom(44);
+export const SHORT_VIEWPORT = '(max-height: 799px)';
 
 /** Sizes the backing store for HiDPI only when it changed; returns a context in CSS px, cleared. */
 export function fit(cv: HTMLCanvasElement, h: number) {
@@ -75,7 +91,7 @@ function drawSel(ctx: CanvasRenderingContext2D, x0: number, x1: number, y0: numb
  * The all-years strip over `ext` (the library's core, widened to the view when that reaches outlier dates).
  * Items outside `ext` are announced at its ends ("‹ 3 earlier · 2008") instead of squeezing the axis.
  */
-export function drawContext(cv: HTMLCanvasElement, days: Days | null, ext: Span, view: Span, sel: Span | null) {
+export function drawContext(cv: HTMLCanvasElement, days: Days | null, ext: Span, view: Span, sel: Span | null, CTX: CtxGeom = CTX_TALL) {
   const {ctx, w} = fit(cv, CTX.h);
   if (!days || w <= 0) return;
   const [T0, T1] = ext, sc = (T1 - T0) / w, end = days.t0 + days.nd * DAY;
@@ -120,7 +136,7 @@ export interface MainState {
 }
 
 /** Draws the zoomed wave, axis, album rail and selection; returns the rail hit boxes. */
-export function drawMain(cv: HTMLCanvasElement, s: MainState): RailHit[] {
+export function drawMain(cv: HTMLCanvasElement, s: MainState, MAIN: MainGeom = MAIN_TALL): RailHit[] {
   const {ctx, w} = fit(cv, MAIN.h);
   if (w <= 0) return [];
   const [V0, V1] = s.view, span = V1 - V0, sc = span / w, X = (t: number) => (t - V0) / sc;

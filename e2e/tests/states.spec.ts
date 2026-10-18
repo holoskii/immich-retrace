@@ -96,6 +96,17 @@ test('while the landing opens its trip the pill says so, not "Pick a trip"', asy
   await expect(pill(page)).toHaveText('San Sebastián to Huesca', {timeout: 20_000});
 });
 
+test('the landing opens the trip from its members before the library index is in', async ({page}) => {
+  let release!: () => void;
+  const held = new Promise<void>(r => (release = r));
+  await page.route(/\/api\/index\/\d{4}-\d\d$/, async r => { await held; await r.continue(); });
+  await page.goto('/');
+  await expect(pill(page)).toHaveText('San Sebastián to Huesca', {timeout: 15_000});
+  await expect.poll(() => new URL(page.url()).searchParams.has('at'), {timeout: 15_000}).toBe(true);
+  await expect(page.locator('.dock')).toContainText(/Sat,? 7 Sept/);
+  release();
+});
+
 test('the album list failing: Trips says so with Try again (not "No trips here"), and the retry fills it', async ({page}) => {
   let fail = true;
   await page.route('**/api/albums', r => (fail ? r.fulfill(ERROR) : r.continue()));

@@ -114,6 +114,14 @@ describe('classifyTrips', () => {
     expect(albums.filter(f.isTrip).map(a => a.id)).toEqual(['trip', 'dated', 'person', 'picks', 'event', 'tiny']);
     expect(classifyTrips(albums, null).confident).toBe(false);
   });
+  it('all (the demo): every album up to the trip span counts, as on the phone; the scoring itself is unchanged', () => {
+    const all = tripsOf(albums, ix, true);
+    expect(all.confident).toBe(true);
+    expect(albums.filter(all.isTrip).map(a => a.id)).toEqual(['trip', 'dated', 'person', 'picks', 'event', 'tiny']);
+    expect(all.verdicts.get('event')!.trip).toBe(false); // the picker's tooltips still say why
+    expect(tripsOf(albums, ix, true)).toBe(all); // one object per result, for stable deriveds
+    expect(albums.filter(tripsOf(albums, ix).isTrip).map(a => a.id)).toEqual(['trip', 'dated']);
+  });
   it('counts library items on the album days by local time', () => {
     // 23:30 UTC at +2 h is the next local day: inside an album of that day only.
     const l = buildIndex([{

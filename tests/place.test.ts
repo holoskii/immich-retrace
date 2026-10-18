@@ -122,6 +122,14 @@ describe('place selections', () => {
     expect(sameSelection({kind: 'range', t0: 10, t1: 20}, a)).toBe(false);
     expect(sameSelection(a, null)).toBe(false);
   });
+  it('sameSelection: a whole album is its album and mode, whatever offsets converted its days; a narrowed one its span', () => {
+    const w: Selection = {kind: 'album', albumId: 'x', mode: 'members', t0: 10, t1: 20};
+    expect(sameSelection(w, {...w, t0: 10 - 7200e3, t1: 20 - 7200e3})).toBe(true);
+    expect(sameSelection(w, {...w, mode: 'range'})).toBe(false);
+    expect(sameSelection(w, {...w, albumId: 'y'})).toBe(false);
+    expect(sameSelection({...w, sub: true}, {...w, sub: true, t1: 21})).toBe(false);
+    expect(sameSelection(w, {...w, sub: true})).toBe(false);
+  });
   it('placeIndex: the matching rows as an index, cached by value per library index', () => {
     const s: Extract<Selection, {kind: 'place'}> = {kind: 'place', lat: P[0], lon: P[1], r: 200, t0: D('2024-07-06'), t1: D('2024-07-10')};
     const p = placeIndex(s, lib);

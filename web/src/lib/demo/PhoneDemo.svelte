@@ -14,7 +14,7 @@
   /** `landed`: the landing is settled; `picked`: it opened the trip (the shell pulses Play once). */
   let {config, landing, landed}: {config: DemoConfig; landing: boolean; landed?: (picked: boolean) => void} = $props();
 
-  landOnTrip({trip: () => config.trip, landing: () => landing, landed: p => landed?.(p)});
+  landOnTrip({trip: () => config.trip, album: () => config.album ?? null, landing: () => landing, landed: p => landed?.(p)});
 
   onMount(() => {
     hooks.lightboxPanel = DemoCredit;

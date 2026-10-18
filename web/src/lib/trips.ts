@@ -169,10 +169,22 @@ export function classifyTrips(albums: AlbumSummary[], ix: IndexColumns | null): 
 }
 
 let memo: {albums: AlbumSummary[]; ix: IndexColumns | null; trips: Trips} | null = null;
-/** `classifyTrips`, cached for the last (albums, index) pair: the rail, the picker and zoom names share one result. */
-export function tripsOf(albums: AlbumSummary[], ix: IndexColumns | null): Trips {
+/**
+ * `classifyTrips`, cached for the last (albums, index) pair: the rail, the picker and zoom names share one result.
+ * `all` (hooks.allTrips, the demo): every album up to TRIP_DAYS counts, as on the phone's Trips tab; the verdicts stay
+ * for the picker's tooltips.
+ */
+export function tripsOf(albums: AlbumSummary[], ix: IndexColumns | null, all = false): Trips {
   if (memo?.albums !== albums || memo.ix !== ix) memo = {albums, ix, trips: classifyTrips(albums, ix)};
-  return memo.trips;
+  return all ? allTrips(memo.trips) : memo.trips;
+}
+
+const everyShort = new WeakMap<Trips, Trips>();
+/** `t` with every album up to TRIP_DAYS a trip (and the tab saying "trips"): one object per `t`, for stable deriveds. */
+function allTrips(t: Trips): Trips {
+  let a = everyShort.get(t);
+  if (!a) everyShort.set(t, a = {...t, confident: true, isTrip: shortAlbum});
+  return a;
 }
 
 /** One line on why a candidate counts as a trip or not, for tooltips: "far from home 9 of 9 days · 97% of the photos then · Morocco". */

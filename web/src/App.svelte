@@ -25,7 +25,8 @@
   <div>
     {#if config.demo}
       {@const demo = config.demo}
-      {#await loadDemo() then {default: Demo}}<Demo config={demo} {landing} />{/await}
+      <!-- The banner's line is reserved while the chunk loads: nothing below moves when it arrives. -->
+      {#await loadDemo()}<div class="demo-slot"></div>{:then {default: Demo}}<Demo config={demo} {landing} />{/await}
     {/if}
   </div>
   <header><Overview /></header>
@@ -48,7 +49,9 @@
 
 <style>
   /* First row: the demo banner (empty, so zero height, on a normal deployment). */
-  .app { height: 100%; display: grid; grid-template-rows: auto auto 1fr; }
+  /* minmax(0, 1fr): one-line rows (the banner, a short window's readout) ellipsise instead of widening the page. */
+  .app { height: 100%; display: grid; grid-template-rows: auto auto 1fr; grid-template-columns: minmax(0, 1fr); --demo-banner-h: 34px; }
+  .demo-slot { height: var(--demo-banner-h); }
   main { min-height: 0; }
   .placeholder {
     height: 100%; display: flex; gap: 12px; align-items: center; justify-content: center;

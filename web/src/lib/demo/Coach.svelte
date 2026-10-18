@@ -1,5 +1,5 @@
 <script lang="ts">
-  // The demo's 3-step coach mark (wave → time strip → photo card): a ring around the target and a
+  // The demo's 3-step coach mark (Play → photo card → timeline): a ring around the target and a
   // bubble beside it, following the target every frame while open (the card moves with the camera).
   // Esc, "Skip" or "Done" end it and remember that (tour.ts); the `?` overlay starts it again.
   import {selection} from '../selection.svelte.ts';

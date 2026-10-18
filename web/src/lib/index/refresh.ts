@@ -223,6 +223,10 @@ export async function fetchAlbums(ctx: Ctx, lib: string): Promise<AlbumSummary[]
   return a;
 }
 
+/** An album's members from the network alone (a landing's prefetch, before the library id or the album list is known). */
+export const fetchMembers = (ctx: Omit<Ctx, 'cache'>, albumId: string) =>
+  getJson<AlbumMembers>(ctx as Ctx, `/api/albums/${encodeURIComponent(albumId)}/assets`);
+
 /** An album's members (incl. other users' assets in shared albums), from cache while its version is unchanged. */
 export async function albumMembers(ctx: Ctx, lib: string, album: AlbumSummary): Promise<LibraryIndex> {
   let m = await ctx.cache.members(lib, album.id);

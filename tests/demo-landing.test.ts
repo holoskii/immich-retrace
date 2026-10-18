@@ -1,13 +1,13 @@
 // Demo mode (plan E11): the server flag and credits endpoints, the landing's trip and photo, the tour,
 // Play's timing, and the hints that depend on what is on screen.
-import {describe, expect, it} from 'vitest';
-import {mkdtempSync, rmSync, writeFileSync} from 'node:fs';
+import {describe, expect, it, vi} from 'vitest';
+import {mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import type {AlbumSummary, AssetColumns} from '../shared/api.ts';
-import {REPO_URL, type DemoCredit} from '../shared/demo.ts';
+import {matchTrip, REPO_URL, type DemoCredit} from '../shared/demo.ts';
 import {ConfigError, configFromEnv} from '../server/config.ts';
-import {acceptsGzip, DEFAULT_DEMO_TRIP, demoCredits, demoFlag, demoFromEnv, demoRoutes, fileTitle, loadDemoCredits, OG_ASSET_TITLE, publicOrigin, withLinkPreview, type ManifestAsset} from '../server/demo.ts';
+import {acceptsGzip, DEFAULT_DEMO_TRIP, demoCredits, demoFlag, demoFromEnv, demoRoutes, fileTitle, loadDemoCredits, OG_ASSET_TITLE, OG_IMAGE, publicOrigin, tripResolver, withLinkPreview, type ManifestAsset} from '../server/demo.ts';
 import {createApp} from '../server/app.ts';
 import {ImmichClient} from '../server/immich.ts';
 import {gunzipSync} from 'node:zlib';
@@ -21,6 +21,22 @@ import {noSelectionHint, overviewHint, railAlbums} from '../web/src/lib/overview
 import {SHORTCUTS} from '../web/src/lib/shortcuts.ts';
 
 const DAY = 86400e3, M = 60e3, T0 = Date.UTC(2024, 8, 6);
+
+const U1 = '00000000-0000-5000-8000-0000000000a1', U2 = '00000000-0000-5000-8000-0000000000a2', U3 = '00000000-0000-5000-8000-0000000000a3';
+const stubAlbum = (id: string, name: string, count: number) =>
+  ({id, name, start: T0, end: T0 + DAY, count, shared: false, cover: null, version: '1'}) as AlbumSummary;
+/** An Immich whose /albums lists `albums` (as Immich's own shape: the adapter parses it). */
+function albumsImmich(albums: AlbumSummary[]) {
+  const fetchImpl = (async (input: string | URL | Request) => {
+    const u = new URL(String(input));
+    const body = u.pathname.endsWith('/server/ping') ? {res: 'pong'} : u.pathname.endsWith('/albums') && u.searchParams.get('shared') !== 'true' ? albums.map(a => ({
+      id: a.id, albumName: a.name, assetCount: a.count, shared: false, albumThumbnailAssetId: null, updatedAt: '2024-09-11T00:00:00.000Z',
+      startDate: a.start == null ? undefined : new Date(a.start).toISOString(), endDate: a.end == null ? undefined : new Date(a.end).toISOString(),
+    })) : [];
+    return new Response(JSON.stringify(body), {status: 200, headers: {'content-type': 'application/json'}});
+  }) as typeof fetch;
+  return {immich: new ImmichClient({baseUrl: 'http://stub:2283', apiKey: 'demo', fetch: fetchImpl, pollMs: 1, wakeTimeoutMs: 10})};
+}
 
 /** demoFromEnv with a recorded manifest path instead of reading the file. */
 function demoWith(env: Record<string, string>, assets: ManifestAsset[] = []) {
@@ -39,11 +55,13 @@ describe('demo config (server/demo.ts)', () => {
     expect(configFromEnv({DEMO: '1'}).demo).toBeNull(); // the core config knows nothing of it
   });
 
-  it('carries the trip and the repository, and never an Immich link', () => {
+  it('carries the trip, its album id and the repository, and never an Immich link', async () => {
     const {demo, paths} = demoWith({DEMO: '1'});
     expect(paths).toEqual(['demo/manifest.json']);
-    expect(demo!.viewer(configFromEnv({IMMICH_PUBLIC_URL: 'https://photos.example.com'})))
-      .toMatchObject({immichPublicUrl: null, demo: {trip: DEFAULT_DEMO_TRIP, repoUrl: REPO_URL}});
+    const albums = [stubAlbum(U1, 'Pyrenees, 14–27 Jul 2024', 97), stubAlbum(U2, 'San Sebastián to Huesca, 6–10 Sep 2024', 194),
+      {...stubAlbum(U3, 'Empty', 0), start: null, end: null}];
+    const viewer = demo!.viewer(configFromEnv({IMMICH_PUBLIC_URL: 'https://photos.example.com'}), albumsImmich(albums).immich);
+    expect(await viewer()).toEqual({mapStyleUrl: expect.any(String), immichPublicUrl: null, demo: {trip: DEFAULT_DEMO_TRIP, repoUrl: REPO_URL, album: U2}});
     const custom = demoWith({DEMO: '1', DEMO_TRIP: 'Alsace', REPO_URL: 'https://example.org/iv', DEMO_MANIFEST: '/data/manifest.json'});
     expect(custom.demo!.config).toEqual({trip: 'Alsace', repoUrl: 'https://example.org/iv'});
     expect(custom.paths).toEqual(['/data/manifest.json']);
@@ -67,6 +85,46 @@ describe('demo config (server/demo.ts)', () => {
   });
 });
 
+describe('the demo trip\'s album id (server)', () => {
+  it('matches like the browser: id, then a part of the name, then the biggest album', () => {
+    const albums = [stubAlbum('a1', 'Pamplona', 120), stubAlbum('a2', 'San Sebastián to Huesca', 194), stubAlbum('a3', 'Lisbon', 300)];
+    expect(matchTrip(albums, 'a1')?.id).toBe('a1');
+    expect(matchTrip(albums, 'SAN SEBASTIAN')?.id).toBe('a2');
+    expect(matchTrip(albums, 'Atlantis')?.id).toBe('a3');
+    expect(matchTrip([], 'x')).toBeNull();
+  });
+
+  it('is looked up once and kept; a slow list answers null in time, a failed one is tried again', async () => {
+    let calls = 0, fail = true, release = () => {};
+    const resolve = tripResolver(async () => {
+      calls++;
+      if (fail) { fail = false; throw new Error('down'); }
+      await new Promise<void>(ok => (release = ok));
+      return [stubAlbum(U2, 'San Sebastián to Huesca', 194)];
+    }, 'San Sebastián', 20);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(await resolve()).toBeNull(); // failed
+    expect(await resolve()).toBeNull(); // tried again, still running after 20 ms
+    release();
+    expect(await resolve()).toBe(U2); // the same lookup, now done
+    expect(await resolve()).toBe(U2);
+    expect(calls).toBe(2);
+    warn.mockRestore();
+  });
+
+  it('/api/config answers with it (and without it while the album list is down)', async () => {
+    const {demo} = demoWith({DEMO: '1'});
+    const up = createApp(albumsImmich([stubAlbum(U2, 'San Sebastián to Huesca', 194)]).immich, demo!.viewer(configFromEnv({}), albumsImmich([stubAlbum(U2, 'San Sebastián to Huesca', 194)]).immich));
+    expect(await (await up.request('/api/config')).json()).toMatchObject({demo: {album: U2}});
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const down = new ImmichClient({baseUrl: 'http://stub:2283', apiKey: 'demo', pollMs: 1, wakeTimeoutMs: 10,
+      fetch: (async () => { throw new TypeError('fetch failed', {cause: {code: 'ECONNREFUSED'}}); }) as typeof fetch});
+    const app = createApp(down, demoWith({DEMO: '1'}).demo!.viewer(configFromEnv({}), down));
+    expect(await (await app.request('/api/config')).json()).toMatchObject({demo: {trip: DEFAULT_DEMO_TRIP, album: null}});
+    warn.mockRestore();
+  });
+});
+
 describe('demo credits (server)', () => {
   const asset: ManifestAsset = {
     id: '00000000-0000-5000-8000-000000000001', kind: 'photo', title: 'File:Cases <Ramos>, Barcelona 01.jpg', author: 'Kent Wang',
@@ -78,7 +136,7 @@ describe('demo credits (server)', () => {
 
   const demoApp = (assets: ManifestAsset[]) => {
     const {demo} = demoWith({DEMO: '1'}, assets);
-    return createApp(immich, demo!.viewer(configFromEnv({})), demo!.routes);
+    return createApp(immich, demo!.viewer(configFromEnv({}), immich), demo!.routes);
   };
 
   it('serves one asset\'s attribution, cacheable, and 404s unknown ids', async () => {
@@ -141,10 +199,16 @@ describe('demo credits (server)', () => {
     expect(fileTitle('File:Statue of King Philip IV of Spain (Bernini) 02.jpg')).toBe('Statue of King Philip IV of Spain (Bernini) 02');
   });
 
-  it('serves the page with a link preview: a credited sample photo, absolute URLs, escaped', async () => {
+  it('serves the page with a link preview: the product image, its photo credited, absolute URLs, escaped', async () => {
     const m = loadManifest(), credits = demoCredits(m.assets);
-    expect(credits.og?.id).toBe(m.assets.find(x => x.title === OG_ASSET_TITLE)!.id);
-    expect(credits.og?.credit).toBe('Photo: Kent Wang, CC BY 4.0, via Wikimedia Commons');
+    expect(m.assets.some(x => x.title === OG_ASSET_TITLE)).toBe(true);
+    expect(credits.og?.credit).toBe('Photo in the preview: Kent Wang, CC BY-SA 4.0, via Wikimedia Commons');
+    expect(demoCredits([]).og).toBeNull();
+    // The static image the tags point at: 1200×630 (JPEG SOF0 header), under 200 kB.
+    const jpg = readFileSync(new URL('../web/public/og.jpg', import.meta.url));
+    expect(jpg.length).toBeLessThan(200_000);
+    const sof = jpg.indexOf(Buffer.from([0xff, 0xc0]));
+    expect([jpg.readUInt16BE(sof + 7), jpg.readUInt16BE(sof + 5)]).toEqual([OG_IMAGE.width, OG_IMAGE.height]);
     const dir = mkdtempSync(join(tmpdir(), 'demo-web-'));
     try {
       writeFileSync(join(dir, 'index.html'), '<!doctype html><html><head><title>Retrace</title></head><body></body></html>');
@@ -154,8 +218,11 @@ describe('demo credits (server)', () => {
       const html = await res.text();
       expect(html).toContain('<meta property="og:title" content="Retrace for Immich: live demo">');
       expect(html).toContain('<meta property="og:url" content="https://demo.example/">');
-      expect(html).toMatch(new RegExp(`<meta property="og:image" content="https://demo\\.example/api/assets/${credits.og!.id}/thumbnail\\?size=preview&amp;c=`));
-      expect(html).toContain('Kent Wang, CC BY 4.0');
+      expect(html).toContain('<meta property="og:image" content="https://demo.example/og.jpg">');
+      expect(html).toContain('<meta property="og:image:width" content="1200">');
+      expect(html).toContain('<meta property="og:image:height" content="630">');
+      expect(html).toContain('<meta name="twitter:card" content="summary_large_image">');
+      expect(html).toContain('Kent Wang, CC BY-SA 4.0');
       expect(html.indexOf('og:title')).toBeLessThan(html.indexOf('</head>'));
       // A strange Host gets no absolute URLs at all.
       const odd = await (await app.request('/index.html', {headers: {host: 'x"><script>'}})).text();
@@ -242,8 +309,9 @@ describe('landing', () => {
 });
 
 describe('tour', () => {
-  it('has three steps: wave, time strip, card', () => {
-    expect(TOUR.map(s => s.target)).toEqual(['canvas.main', '.strip .track', '.marker .card']);
+  it('has three steps: Play first, then the photo card, then the timeline', () => {
+    expect(TOUR.map(s => s.target)).toEqual(['.strip .play', '.marker .card', 'canvas.main']);
+    expect(TOUR[0].text).toMatch(/Space/);
   });
 
   it('puts the bubble below the target, above when there is no room, inside the viewport', () => {

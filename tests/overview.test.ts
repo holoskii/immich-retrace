@@ -9,7 +9,8 @@ import {
 } from '../web/src/lib/selection.svelte.ts';
 import {library} from '../web/src/lib/index/store.svelte.ts';
 import type {AlbumSummary} from '../shared/api.ts';
-import {dayAround, fDays, zoomSpan} from '../web/src/lib/nav.ts';
+import {dayAround, fDays, shortName, zoomSpan} from '../web/src/lib/nav.ts';
+import {CTX, CTX_SHORT, MAIN, MAIN_SHORT} from '../web/src/lib/overview/draw.ts';
 import {nameHasDates} from '../web/src/lib/albums.ts';
 import {shortAlbum} from '../web/src/lib/trips.ts';
 
@@ -305,6 +306,11 @@ describe('URL', () => {
     expect(urlReady(q, true, [], true)).toBe(true);
     expect(urlReady(new URLSearchParams('from=2024-05-01&to=2024-05-02'), true, [], false)).toBe(true);
   });
+  it('a URL without viewer state is ready at once, before the index (a landing opens its trip from the members)', () => {
+    expect(urlReady(new URLSearchParams(''), false, [], false)).toBe(true);
+    expect(urlReady(new URLSearchParams('utm_source=x'), false, [], false)).toBe(true);
+    expect(urlReady(new URLSearchParams('from=2024-05-01&to=2024-05-02'), false, [], true)).toBe(false);
+  });
   it('an album that isn\'t there resolves to no selection and drops a pending lb', () => {
     vi.stubGlobal('location', {search: '?album=gone&lb=x'});
     try {
@@ -398,6 +404,25 @@ describe('writeUrl history', () => {
     writeUrl('commit', at + H);
     expect(h.entries.at(-1)!.href).toBe(`http://x/?from=2024-01-01&to=2024-01-04&at=${at + H}`);
     expect(h.entries.length).toBe(2);
+  });
+});
+
+describe('short viewport geometry', () => {
+  it('a lower wave moves the axis and rail with it; the rail keeps its lanes', () => {
+    expect(MAIN).toMatchObject({top: 16, base: 112, H: 94, axis: 125, rail: 136, h: 176}); // as before short windows
+    expect(MAIN_SHORT).toMatchObject({base: 62, axis: 75, rail: 86, lanes: 2, h: 126});
+    expect(MAIN.h - MAIN_SHORT.h + CTX.h - CTX_SHORT.h).toBe(60);
+    // The strip's year labels (baseline + 13) stay inside its canvas.
+    for (const g of [CTX, CTX_SHORT]) expect(g.base + 13).toBeLessThanOrEqual(g.h);
+  });
+});
+
+describe('shortName (navigation)', () => {
+  it('drops the dates an album name ends with, keeps any other name', () => {
+    const s = D('2024-09-06'), e = D('2024-09-10');
+    expect(shortName({name: 'San Sebastián to Huesca, 6–10 Sep 2024', start: s, end: e})).toBe('San Sebastián to Huesca');
+    expect(shortName({name: '2024_Paris, Summer 2024', start: s, end: e})).toBe('Paris, Summer 2024');
+    expect(shortName({name: 'Lisbon & Queluz', start: null, end: null})).toBe('Lisbon & Queluz');
   });
 });
 
