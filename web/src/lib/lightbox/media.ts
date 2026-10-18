@@ -13,6 +13,14 @@ export function thumbUrl(id: string, thumbhash: string | null | undefined, size:
   return `/api/assets/${id}/thumbnail?${q}`;
 }
 
+/**
+ * Which demo rate limit a media URL counts against: thumbnails (small, many: the grid) or everything else (previews,
+ * video). The same rule as the Caddyfile's thumbnail matcher: the relay path with `size=thumbnail` first, as `thumbUrl`
+ * writes it; anything else counts as a preview.
+ */
+export type MediaKind = 'thumbnail' | 'preview';
+export const mediaKind = (url: string): MediaKind => (/\/api\/assets\/[^/?]+\/thumbnail\?size=thumbnail(&|$)/.test(url) ? 'thumbnail' : 'preview');
+
 /** Playback URL (Range supported). Immich serves the transcode, or the original when there is none. */
 export const videoUrl = (id: string) => `/api/assets/${id}/video`;
 
@@ -56,8 +64,8 @@ export interface RateWindow { events: number; ms: number; background?: number }
 export interface QueueOptions {
   /** Requests in flight at once. */
   concurrency: number;
-  /** The start rate to stay under, read before every start; null: none. */
-  window: () => RateWindow | null;
+  /** The start rate to stay under for one kind of media (`mediaKind`), read before every start; null: none. */
+  window: (kind: MediaKind) => RateWindow | null;
   /** 429 answers retried per request before it fails. */
   retries?: number;
   fetch?: typeof fetch;
@@ -65,7 +73,7 @@ export interface QueueOptions {
 }
 
 interface Job {
-  url: string; high: boolean; explicit: boolean; tries: number; signal?: AbortSignal; onStart?: () => void;
+  url: string; kind: MediaKind; high: boolean; explicit: boolean; tries: number; signal?: AbortSignal; onStart?: () => void;
   resolve: (b: Blob) => void; reject: (e: unknown) => void;
 }
 
@@ -81,18 +89,20 @@ export function retryDelay(header: string | null, now: number, tries: number) {
 const rank = (j: Job) => (j.explicit ? 2 : j.high ? 1 : 0);
 
 /**
- * Thumbnail and preview loads: at most `concurrency` in flight, request starts kept under `window` (part of it
- * reserved for explicit loads: the photo the visitor opened, the card resting on a photo, so they never wait behind
- * grid or preload starts), a 429 pauses the whole queue (Retry-After) and retries the request first. `load` resolves with the body; an `AbortSignal`
+ * Thumbnail and preview loads: at most `concurrency` in flight, request starts kept under each kind's `window` (part
+ * of it reserved for explicit loads: the photo the visitor opened, the card resting on a photo, so they never wait
+ * behind grid or preload starts). The kinds are limited apart, as the proxy does: previews waiting for their window
+ * don't hold up thumbnails, nor the other way round. A 429 pauses that kind's loads (Retry-After) and retries the
+ * request first. `load` resolves with the body; an `AbortSignal`
  * drops a request still waiting, or cancels it in flight (a photo scrolled past, a lightbox stepped on).
  */
 export class MediaQueue {
   private opts: Required<QueueOptions>;
   private queue: Job[] = [];
   private active = 0;
-  /** Starts inside the current window, oldest first (`bg`: not an explicit load). */
-  private starts: {t: number; bg: boolean}[] = [];
-  private pausedUntil = 0;
+  /** Per kind: starts inside the current window, oldest first (`bg`: not an explicit load). */
+  private starts: Record<MediaKind, {t: number; bg: boolean}[]> = {thumbnail: [], preview: []};
+  private pausedUntil: Record<MediaKind, number> = {thumbnail: 0, preview: 0};
   private timer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(opts: QueueOptions) {
@@ -117,7 +127,7 @@ export class MediaQueue {
       };
       const done = () => signal?.removeEventListener('abort', onAbort);
       const job: Job = {
-        url, high: high || explicit, explicit, tries: 0, signal, onStart,
+        url, kind: mediaKind(url), high: high || explicit, explicit, tries: 0, signal, onStart,
         resolve: b => { done(); resolve(b); },
         reject: e => { done(); reject(e); },
       };
@@ -150,25 +160,42 @@ export class MediaQueue {
     this.timer = setTimeout(() => { this.timer = undefined; this.pump(); }, Math.max(0, ms));
   }
 
+  /**
+   * When a load of `kind` could start (`explicit`: one that may use the reserve): 0 now, else the time it may.
+   * Drops the starts that left the window.
+   */
+  private freeAt(kind: MediaKind, explicit: boolean, t: number): number {
+    if (t < this.pausedUntil[kind]) return this.pausedUntil[kind];
+    const w = this.opts.window(kind);
+    if (!w) return 0;
+    const starts = this.starts[kind];
+    while (starts.length && starts[0].t <= t - w.ms) starts.shift();
+    if (starts.length >= w.events) return starts[0].t + w.ms;
+    if (explicit) return 0;
+    // The background share is spent: only an explicit load may start, else wait for a background start to age out.
+    const bg = starts.filter(s => s.bg);
+    return bg.length >= (w.background ?? w.events) ? bg[0].t + w.ms : 0;
+  }
+
   private pump() {
-    const {concurrency, window, now} = this.opts;
+    const {concurrency, now} = this.opts;
     while (this.active < concurrency && this.queue.length) {
       const t = now();
-      if (t < this.pausedUntil) { this.wake(this.pausedUntil - t); return; }
-      const w = window();
-      let i = 0;
-      if (w) {
-        while (this.starts.length && this.starts[0].t <= t - w.ms) this.starts.shift();
-        if (this.starts.length >= w.events) { this.wake(this.starts[0].t + w.ms - t); return; }
-        const bg = this.starts.filter(s => s.bg);
-        if (!this.queue[0].explicit && bg.length >= (w.background ?? w.events)) {
-          // The background share is spent: only an explicit load may start, else wait for a background start to age out.
-          i = this.queue.findIndex(j => j.explicit);
-          if (i < 0) { this.wake(bg[0].t + w.ms - t); return; }
-        }
-        this.starts.push({t, bg: !this.queue[i].explicit});
+      // The first job in queue order whose kind may start one now; a blocked kind doesn't hold up the other.
+      const free = new Map<string, number>();
+      let i = -1, next = Infinity;
+      for (let k = 0; k < this.queue.length; k++) {
+        const j = this.queue[k], key = `${j.kind}:${j.explicit}`;
+        let at = free.get(key);
+        if (at === undefined) free.set(key, at = this.freeAt(j.kind, j.explicit, t));
+        if (at === 0) { i = k; break; }
+        next = Math.min(next, at);
+        if (free.size === 4) break; // every kind and class blocked: nothing further can start
       }
-      void this.run(this.queue.splice(i, 1)[0]);
+      if (i < 0) { this.wake(next - t); return; }
+      const job = this.queue.splice(i, 1)[0];
+      if (this.opts.window(job.kind)) this.starts[job.kind].push({t, bg: !job.explicit});
+      void this.run(job);
     }
   }
 
@@ -178,9 +205,9 @@ export class MediaQueue {
     try {
       const res = await this.opts.fetch(job.url, {signal: job.signal});
       if (res.status === 429) {
-        // Every 429 pauses the whole queue, the last try's too: the next request would only be refused as well.
+        // Every 429 pauses this kind's loads, the last try's too: the next one would only be refused as well.
         const t = this.opts.now();
-        this.pausedUntil = Math.max(this.pausedUntil, t + retryDelay(res.headers.get('retry-after'), t, job.tries + 1));
+        this.pausedUntil[job.kind] = Math.max(this.pausedUntil[job.kind], t + retryDelay(res.headers.get('retry-after'), t, job.tries + 1));
         if (job.tries < this.opts.retries) {
           void res.body?.cancel();
           job.tries++;
@@ -201,14 +228,20 @@ export class MediaQueue {
 }
 
 /**
- * The demo's media rate limit is 60 requests per 20 s per visitor (Caddy `(public_site)`, docs/demo-hardening.md);
- * 50 leaves room for video and the failure probes, which don't queue. Grid cells, preloads and Play's card
- * prefetches share 35 of them; the other 15 are kept for explicit loads (the lightbox's photo, the card at rest).
+ * The demo's media rate limits per visitor (Caddy `(public_site)`, docs/demo-hardening.md), each kind its own:
+ * - thumbnails 240 per 20 s: 200 leaves room for the `<img>` thumbnails that don't queue (trip covers, the card's
+ *   first photo) and the failure probes. Grid cells and Play's card prefetches share 180; 20 are kept for explicit
+ *   loads (the card at rest).
+ * - previews and video 60 per 20 s: 50 leaves room for video and the failure probes, which don't queue. Preloaded
+ *   neighbours share 35; the other 15 are kept for explicit loads (the lightbox's photo on show).
  */
-export const DEMO_MEDIA_WINDOW: RateWindow = {events: 50, ms: 20_000, background: 35};
+export const DEMO_MEDIA_WINDOWS: Record<MediaKind, RateWindow> = {
+  thumbnail: {events: 200, ms: 20_000, background: 180},
+  preview: {events: 50, ms: 20_000, background: 35},
+};
 
-/** The app's queue: 6 in flight (a browser's HTTP/1.1 limit per host), the demo's rate on the demo only. */
-export const mediaQueue = new MediaQueue({concurrency: 6, window: () => (config.demo ? DEMO_MEDIA_WINDOW : null)});
+/** The app's queue: 6 in flight (a browser's HTTP/1.1 limit per host), the demo's rates on the demo only. */
+export const mediaQueue = new MediaQueue({concurrency: 6, window: kind => (config.demo ? DEMO_MEDIA_WINDOWS[kind] : null)});
 
 /** One preview held by a PreviewSet: its object URL once loaded, or why it couldn't be. */
 export interface HeldPreview { src: string | null; error: unknown }

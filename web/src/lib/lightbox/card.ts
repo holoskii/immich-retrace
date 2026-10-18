@@ -37,8 +37,9 @@ async function prepareBlob(b: Blob) {
 }
 
 /**
- * The demo's pacing for a card's loads during a scrub, and for Play's prefetches: about the background share of
- * DEMO_MEDIA_WINDOW (35 starts / 20 s) spread evenly, rather than spent in the first seconds and then nothing.
+ * The demo's pacing for a card's loads during a scrub, and for Play's prefetches: spread evenly rather than spent in the
+ * first seconds and then nothing. Set when thumbnails shared the preview window (35 background starts / 20 s); they now
+ * have their own (DEMO_MEDIA_WINDOWS.thumbnail, 180), so these are well inside it.
  */
 export const CARD_REST_MS = 120, CARD_GAP_MS = 500, CARD_AHEAD_MS = 600;
 

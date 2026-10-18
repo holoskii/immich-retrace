@@ -1,5 +1,5 @@
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
-import {MediaQueue, MediaStatusError, PreviewSet, retryDelay, type RateWindow} from '../web/src/lib/lightbox/media.ts';
+import {DEMO_MEDIA_WINDOWS, MediaQueue, MediaStatusError, mediaKind, PreviewSet, retryDelay, thumbUrl, videoUrl, type RateWindow} from '../web/src/lib/lightbox/media.ts';
 
 /** A fetch whose answers the test hands out by hand; records every request (and whether it was aborted). */
 function fakeFetch() {
@@ -55,7 +55,7 @@ describe('MediaQueue', () => {
     expect(calls.map(c => c.url)).toEqual(['a', 'b', 'c']);
   });
 
-  it('on 429 pauses the whole queue for Retry-After, then retries that request first', async () => {
+  it('on 429 pauses that kind\'s loads for Retry-After, then retries that request first', async () => {
     const {f, calls} = fakeFetch(), q = queue(f, {concurrency: 1});
     const a = q.load('a');
     void q.load('b');
@@ -151,6 +151,69 @@ describe('MediaQueue reserve', () => {
     for (const u of ['a', 'b', 'c']) void q.load(u);
     await flush();
     expect(calls.map(x => x.url)).toEqual(['a', 'b']);
+  });
+});
+
+describe('MediaQueue kinds', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  const ID = '0b6f2c1e-4d5a-4f3b-9c7d-8e1a2b3c4d5e';
+  const T = (n: number) => thumbUrl(`${ID.slice(0, -2)}${String(n).padStart(2, '0')}`, 'ab+/c=');
+  const P = (n: number) => thumbUrl(`${ID.slice(0, -2)}${String(n).padStart(2, '0')}`, 'ab+/c=', 'preview');
+
+  it('classifies as the Caddyfile does: thumbUrl thumbnails, everything else as a preview', () => {
+    expect(mediaKind(thumbUrl(ID, null))).toBe('thumbnail');
+    expect(mediaKind(thumbUrl(ID, 'ab+/c='))).toBe('thumbnail');
+    expect(mediaKind(thumbUrl(ID, 'x', 'preview'))).toBe('preview');
+    expect(mediaKind(videoUrl(ID))).toBe('preview');
+    expect(mediaKind(`/api/assets/${ID}/thumbnail`)).toBe('preview'); // no size: the proxy can't tell, nor do we
+    expect(mediaKind(`/api/assets/${ID}/thumbnail?size=thumbnails`)).toBe('preview');
+  });
+
+  it('limits thumbnails and previews apart: one kind waiting for its window does not hold up the other', async () => {
+    const windows: Record<string, RateWindow> = {thumbnail: {events: 3, ms: 1000}, preview: {events: 1, ms: 1000}};
+    const {f, calls} = fakeFetch(), q = new MediaQueue({concurrency: 6, window: k => windows[k], fetch: f, now: () => Date.now()});
+    for (const u of [P(1), P(2), T(1), T(2), T(3), T(4)]) void q.load(u);
+    await flush();
+    expect(calls.map(c => c.url)).toEqual([P(1), T(1), T(2), T(3)]);
+    calls.forEach(c => c.answer());
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(calls.map(c => c.url)).toEqual([P(1), T(1), T(2), T(3), P(2), T(4)]);
+  });
+
+  it('keeps each kind\'s reserve for explicit loads of that kind', async () => {
+    const windows: Record<string, RateWindow> = {thumbnail: {events: 2, ms: 1000, background: 1}, preview: {events: 2, ms: 1000, background: 1}};
+    const {f, calls} = fakeFetch(), q = new MediaQueue({concurrency: 6, window: k => windows[k], fetch: f, now: () => Date.now()});
+    for (const u of [T(1), T(2), P(1), P(2)]) void q.load(u);
+    await flush();
+    expect(calls.map(c => c.url)).toEqual([T(1), P(1)]);
+    void q.load(T(9), {explicit: true}); void q.load(P(9), {explicit: true});
+    await flush();
+    expect(calls.map(c => c.url)).toEqual([T(1), P(1), T(9), P(9)]);
+  });
+
+  it('a 429 pauses only its own kind', async () => {
+    const {f, calls} = fakeFetch(), q = new MediaQueue({concurrency: 1, window: () => null, fetch: f, now: () => Date.now()});
+    void q.load(P(1)); void q.load(P(2)); void q.load(T(1));
+    await flush();
+    calls[0].answer(429, {'retry-after': '5'});
+    await flush();
+    expect(calls.map(c => c.url)).toEqual([P(1), T(1)]); // previews wait 5 s, the thumbnail goes now
+    calls[1].answer();
+    await vi.advanceTimersByTimeAsync(4999);
+    expect(calls).toHaveLength(2);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(calls.map(c => c.url)).toEqual([P(1), T(1), P(1)]);
+  });
+
+  it('the demo windows stay under the proxy\'s per-IP limits (240 thumbnails, 60 previews per 20 s)', () => {
+    const {thumbnail: t, preview: p} = DEMO_MEDIA_WINDOWS;
+    expect(t.ms).toBe(20_000); expect(p.ms).toBe(20_000);
+    expect(t.events).toBeLessThanOrEqual(240 - 30);
+    expect(p.events).toBeLessThanOrEqual(60 - 10);
+    expect(t.background!).toBeLessThan(t.events);
+    expect(p.background!).toBeLessThan(p.events);
   });
 });
 
