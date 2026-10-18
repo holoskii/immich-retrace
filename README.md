@@ -7,9 +7,11 @@ reconstructed from your photos alone (no GPS tracker needed):
 - a map of the selected period: the route through the photo locations, coloured by time, with
   clustered photo pins and a time scrubber that a follow camera tracks smoothly (or press Play to step
   through the photos);
-- a lightbox with photos and videos, stepping through the selection in time order.
+- a lightbox with photos and videos, stepping through the selection in time order;
+- a place selection from the map: only the photos taken around one spot (`near=` links).
 
-It reads Immich through its API with one API key and never writes to it. Desktop browsers only for now.
+It reads Immich through its API with one API key and never writes to it. Made for desktop browsers;
+phones get a touch lightbox, and the public demo opens a phone layout (Map · Photos · Trips).
 
 **Not affiliated with Immich.** This is an independent project; "Immich" is used only to say what it
 works with.

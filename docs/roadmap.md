@@ -15,8 +15,10 @@ Everything that is still open. Decisions and architecture are in [AGENTS.md](../
    - old `?from=…&to=…` links (read as local days) still land on the right photos
    - at low zoom with two world copies, pan across the date line: the card sits by the marker
    Then the final pedantic UI review.
-2. Verify shared albums end to end (see below).
-3. Release:
+2. Phone demo on real devices: phase 4 of [mobile/demo-scope.md](mobile/demo-scope.md) (one iPhone,
+   one cheap Android, the link opened from Telegram/WhatsApp).
+3. Verify shared albums end to end (see below).
+4. Release:
    - Set the repo URL: `REPO_URL` in `shared/demo.ts`, `USER_AGENT` in `demo/commons.ts`, the
      clone line in the README.
    - Prebuilt image on GHCR (`ghcr.io/<owner>/immich-retrace`), published by CI; the README's
@@ -28,6 +30,8 @@ Everything that is still open. Decisions and architecture are in [AGENTS.md](../
      `work/config.json`, `[LINK]` in `share-copy.txt`) and listen to the audio. Known weak spots:
      the trip-pick shot is dark after the click, the hook has no basemap.
    - Where to announce it, in what order: [outreach.md](outreach.md).
+   - After going public, watch `sudo demo-report` for the first days and tighten the deliberately
+     relaxed media limits from data ([demo-hardening.md](demo-hardening.md)).
 
 ## Demo: proper public deployment
 
@@ -87,9 +91,9 @@ Smaller known gaps:
 - Full keyboard access: context strip, album bars, pins and clusters.
 - Index freshness: a refresh interval, manual Refresh and "last checked" instead of refetching on
   every visit.
-- Mobile layout. There are no width breakpoints: at 390 px the page renders 543 px wide
-  (`.readout { flex: 1 1 420px }`?), the lightbox leaves about 55 px for the photo, info is
-  hover-only, brush grips are small.
+- Phone layout for owner mode. The demo has its own phone shell (`web/src/lib/mobile/`) and every
+  phone gets the touch lightbox, but an owner on a phone still gets the desktop shell, which has no
+  width breakpoints (overview, brush grips and hover-only info don't fit a phone).
 - Per-user mode: each user's own API key kept server-side behind an HttpOnly session.
 - Server-side tile cache (only helps across devices; the browser already caches tiles for 31 days).
 - Demo: "Lisbon & Queluz, Jan 2026" scores as home for the trip heuristic (the photographer lives there
